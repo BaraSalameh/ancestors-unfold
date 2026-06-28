@@ -111,16 +111,12 @@ function layout(members: FamilyMember[], collapsed: Set<string>, onOpen: (id: st
     const pos = g.node(id);
     const spouseId = spousePairs.get(id);
     const spouse = spouseId ? members.find((x) => x.id === spouseId) : undefined;
-    const hasKids = (childrenMap.get(id)?.length ?? 0) > 0 || (spouseId && (childrenMap.get(spouseId)?.length ?? 0) > 0);
     return {
       id,
       type: "member",
       position: { x: pos.x - pos.width / 2, y: pos.y - pos.height / 2 },
       data: { member: m, spouse, highlighted: highlightId === id || highlightId === spouseId, onOpen },
       draggable: false,
-      // mark collapsibility via data unused; controls via overlay button
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      _hasKids: hasKids as any,
     };
   });
 
