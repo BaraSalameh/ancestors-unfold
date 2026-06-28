@@ -137,8 +137,29 @@
     border-color: var(--color-border);
   }
 
+  html {
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  html[dir="rtl"] {
+    font-family: "Amiri", "Inter", system-ui, sans-serif;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
 }
+
+/* react-flow theme glue */
+.react-flow__minimap,
+.react-flow__controls button {
+  background-color: var(--color-card) !important;
+  color: var(--color-card-foreground) !important;
+  border-color: var(--color-border) !important;
+}
+.react-flow__controls button:hover {
+  background-color: var(--color-accent) !important;
+}
+.react-flow__attribution { display: none; }
+
