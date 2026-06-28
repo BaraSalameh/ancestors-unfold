@@ -1,29 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { FamilyTree } from "@/components/FamilyTree";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Your App" },
-      { name: "description", content: "Replace this with a one-sentence description of your app." },
-      { property: "og:title", content: "Your App" },
-      { property: "og:description", content: "Replace this with a one-sentence description of your app." },
+      { title: "Family Tree Hub" },
+      { name: "description", content: "Interactive bilingual family tree builder with full member management." },
+      { property: "og:title", content: "Family Tree Hub" },
+      { property: "og:description", content: "Visualize, build, and explore your family across generations." },
     ],
   }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="h-[calc(100vh-3.5rem)] w-full">
+      <FamilyTree />
     </div>
   );
 }
