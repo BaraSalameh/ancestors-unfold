@@ -136,7 +136,7 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
             <div className="h-0.5 w-6 bg-gradient-to-r from-pink-400 to-rose-500" />
             <div className="flex items-center gap-1 rounded-full border border-pink-300/60 bg-pink-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-pink-600 shadow-sm dark:border-pink-500/30 dark:bg-pink-500/10 dark:text-pink-300">
               <Heart className="h-2.5 w-2.5 fill-current" />
-              {useI18n().t("spouse")}
+              {t("spouse")}
             </div>
             <div className="h-0.5 w-6 bg-gradient-to-r from-rose-500 to-pink-400" />
           </div>
