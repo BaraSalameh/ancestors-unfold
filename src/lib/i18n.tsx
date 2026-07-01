@@ -76,7 +76,7 @@ const dict: Dict = {
   link_removed: { en: "Relationship removed", ar: "تم إزالة العلاقة" },
   cannot_link_self: { en: "A member cannot be their own parent", ar: "لا يمكن أن يكون الفرد والد نفسه" },
   cannot_link_cycle: { en: "This would create a cycle in the tree", ar: "سيؤدي هذا إلى حلقة في الشجرة" },
-  connect_hint: { en: "Drag from a parent's bottom dot onto a child's top dot to link them.", ar: "اسحب من النقطة السفلية للوالد إلى النقطة العلوية للابن لربطهما." },
+  connect_hint: { en: "Drag from a parent's bottom dot onto a child's top dot to link them. Solid line = mother, dashed line = father.", ar: "اسحب من النقطة السفلية للوالد إلى النقطة العلوية للابن. الخط المتصل = الأم، المتقطع = الأب." },
 };
 
 interface I18nCtx {
