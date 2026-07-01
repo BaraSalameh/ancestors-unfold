@@ -196,8 +196,8 @@ function Inner() {
   );
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => layout(members, collapsed, onOpen, highlightId, t),
-    [members, collapsed, onOpen, highlightId, t],
+    () => layout(members, collapsed, onOpen, highlightId),
+    [members, collapsed, onOpen, highlightId],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
