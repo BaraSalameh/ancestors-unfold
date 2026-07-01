@@ -229,9 +229,7 @@ function Inner() {
       }
       const key = parent.gender === "male" ? "father_id" : "mother_id";
       familyStore.update(child.id, { [key]: parent.id } as any);
-      toast.success(
-        `${displayName(parent, lang)} → ${parent.gender === "male" ? t("father_label") : t("mother_label")} · ${displayName(child, lang)}`,
-      );
+      toast.success(`${displayName(parent, lang)} → ${displayName(child, lang)}`);
     },
     [t, lang],
   );
