@@ -110,6 +110,7 @@ function Card({
 function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
   const { member, spouse, highlighted, onOpen } = data;
   const th = genderTheme(member.gender);
+  const { t } = useI18n();
 
   return (
     <div className="relative">
