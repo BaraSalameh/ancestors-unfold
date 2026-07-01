@@ -28,12 +28,17 @@ const NODE_W = 280;
 const NODE_H = 130;
 const nodeTypes = { member: MemberNode };
 
+function yearOf(m: FamilyMember): number | null {
+  const y = m.birth_date?.slice(0, 4);
+  const n = y ? parseInt(y, 10) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 function layout(
   members: FamilyMember[],
   collapsed: Set<string>,
   onOpen: (id: string) => void,
   highlightId: string | null,
-  t: (k: any) => string,
 ) {
   const childrenMap = new Map<string, string[]>();
   for (const m of members) {
@@ -55,93 +60,96 @@ function layout(
   };
   for (const c of collapsed) walk(c);
 
-  const spousePairs = new Map<string, string>();
-  const renderedAsSpouse = new Set<string>();
-  for (const m of members) {
-    if (hidden.has(m.id) || renderedAsSpouse.has(m.id)) continue;
-    if (!m.spouse_id) continue;
-    const sp = members.find((x) => x.id === m.spouse_id);
-    if (!sp || hidden.has(sp.id)) continue;
-    if (renderedAsSpouse.has(sp.id) || spousePairs.has(sp.id)) continue;
-    const mHasParent = !!m.father_id || !!m.mother_id;
-    const sHasParent = !!sp.father_id || !!sp.mother_id;
-    let primary = m,
-      secondary = sp;
-    if (sHasParent && !mHasParent) {
-      primary = sp;
-      secondary = m;
-    } else if (mHasParent === sHasParent && sp.gender === "male" && m.gender !== "male") {
-      primary = sp;
-      secondary = m;
-    }
-    spousePairs.set(primary.id, secondary.id);
-    renderedAsSpouse.add(secondary.id);
-  }
-
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "TB", nodesep: 100, ranksep: 140, marginx: 40, marginy: 40 });
+  g.setGraph({ rankdir: "TB", nodesep: 80, ranksep: 140, marginx: 40, marginy: 40 });
   g.setDefaultEdgeLabel(() => ({}));
 
-  const renderedIds = members
-    .filter((m) => !hidden.has(m.id) && !renderedAsSpouse.has(m.id))
-    .map((m) => m.id);
-
-  for (const id of renderedIds) {
-    const hasSpouse = spousePairs.has(id);
-    g.setNode(id, { width: hasSpouse ? NODE_W * 2 + 90 : NODE_W, height: NODE_H });
-  }
+  const renderedIds = members.filter((m) => !hidden.has(m.id)).map((m) => m.id);
+  for (const id of renderedIds) g.setNode(id, { width: NODE_W, height: NODE_H });
 
   const edges: Edge[] = [];
   const memberById = new Map(members.map((m) => [m.id, m]));
 
   for (const m of members) {
-    if (hidden.has(m.id) || renderedAsSpouse.has(m.id)) continue;
+    if (hidden.has(m.id)) continue;
     for (const parentId of [m.father_id, m.mother_id]) {
-      if (!parentId) continue;
-      let renderedParent = parentId;
-      if (renderedAsSpouse.has(parentId)) {
-        for (const [p, s] of spousePairs) if (s === parentId) { renderedParent = p; break; }
-      }
-      if (!renderedIds.includes(renderedParent)) continue;
+      if (!parentId || !renderedIds.includes(parentId)) continue;
       const parent = memberById.get(parentId);
       const isFather = parent?.gender === "male";
       const color = isFather ? "#0ea5e9" : "#ec4899";
-      g.setEdge(renderedParent, m.id);
+      g.setEdge(parentId, m.id);
       edges.push({
         id: `${parentId}->${m.id}`,
-        source: renderedParent,
+        source: parentId,
         target: m.id,
         sourceHandle: "child-out",
         targetHandle: "parent-in",
         type: "smoothstep",
-        animated: false,
-        label: isFather ? t("father_label") : t("mother_label"),
-        labelStyle: { fill: color, fontWeight: 600, fontSize: 10 },
-        labelBgStyle: { fill: "hsl(var(--background))", fillOpacity: 0.9 },
-        labelBgPadding: [4, 2],
-        labelBgBorderRadius: 4,
-        style: { stroke: color, strokeWidth: 2, strokeOpacity: 0.7 },
-        markerEnd: { type: MarkerType.ArrowClosed, color },
+        style: isFather
+          ? { stroke: color, strokeWidth: 1.5, strokeOpacity: 0.55, strokeDasharray: "6 4" }
+          : { stroke: color, strokeWidth: 2.25, strokeOpacity: 0.9 },
+        markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 },
         data: { parentId, childId: m.id },
       });
     }
   }
 
+  // spouse "married to" edges (dotted, no arrow) — for reference; supports many
+  const spouseSeen = new Set<string>();
+  for (const m of members) {
+    if (hidden.has(m.id) || !m.spouse_id) continue;
+    const sp = memberById.get(m.spouse_id);
+    if (!sp || hidden.has(sp.id)) continue;
+    const key = [m.id, sp.id].sort().join("~");
+    if (spouseSeen.has(key)) continue;
+    spouseSeen.add(key);
+    edges.push({
+      id: `spouse:${key}`,
+      source: m.id,
+      target: sp.id,
+      sourceHandle: "spouse-r",
+      targetHandle: "spouse-l",
+      type: "straight",
+      style: { stroke: "#a855f7", strokeWidth: 1.5, strokeDasharray: "2 4", strokeOpacity: 0.7 },
+    });
+  }
+
   dagre.layout(g);
+
+  // Align generations by time period: override Y using birth year when available.
+  // Bucket by 25-year cohorts so siblings/cousins align.
+  const COHORT = 25;
+  const ROW_H = 260;
+  const years = renderedIds
+    .map((id) => yearOf(memberById.get(id)!))
+    .filter((y): y is number => y !== null);
+  const minYear = years.length ? Math.min(...years) : 1900;
+  const baseYearBucket = Math.floor(minYear / COHORT);
+
+  const bucketFor = (m: FamilyMember): number | null => {
+    const y = yearOf(m);
+    if (y !== null) return Math.floor(y / COHORT) - baseYearBucket;
+    // fall back: one deeper than max parent bucket
+    const parents = [m.father_id, m.mother_id]
+      .map((pid) => (pid ? memberById.get(pid) : undefined))
+      .filter(Boolean) as FamilyMember[];
+    const parentBuckets = parents.map(bucketFor).filter((b): b is number => b !== null);
+    if (parentBuckets.length) return Math.max(...parentBuckets) + 1;
+    return null;
+  };
 
   const nodes: Node<MemberNodeData>[] = renderedIds.map((id) => {
     const m = memberById.get(id)!;
     const pos = g.node(id);
-    const spouseId = spousePairs.get(id);
-    const spouse = spouseId ? memberById.get(spouseId) : undefined;
+    const b = bucketFor(m);
+    const y = b !== null ? b * ROW_H : pos.y - pos.height / 2;
     return {
       id,
       type: "member",
-      position: { x: pos.x - pos.width / 2, y: pos.y - pos.height / 2 },
+      position: { x: pos.x - pos.width / 2, y },
       data: {
         member: m,
-        spouse,
-        highlighted: highlightId === id || highlightId === spouseId,
+        highlighted: highlightId === id,
         onOpen,
       },
       draggable: false,
@@ -150,6 +158,7 @@ function layout(
 
   return { nodes, edges };
 }
+
 
 function isDescendant(members: FamilyMember[], ancestorId: string, targetId: string): boolean {
   // returns true if targetId is a descendant of ancestorId
