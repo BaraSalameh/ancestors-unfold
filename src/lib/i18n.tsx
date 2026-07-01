@@ -69,6 +69,14 @@ const dict: Dict = {
   no_results: { en: "No matching members", ar: "لا توجد نتائج" },
   basic_info: { en: "Basic Information", ar: "المعلومات الأساسية" },
   not_found: { en: "Member not found", ar: "الفرد غير موجود" },
+  parent_label: { en: "Parent", ar: "والد" },
+  father_label: { en: "Father", ar: "الأب" },
+  mother_label: { en: "Mother", ar: "الأم" },
+  link_updated: { en: "Relationship updated", ar: "تم تحديث العلاقة" },
+  link_removed: { en: "Relationship removed", ar: "تم إزالة العلاقة" },
+  cannot_link_self: { en: "A member cannot be their own parent", ar: "لا يمكن أن يكون الفرد والد نفسه" },
+  cannot_link_cycle: { en: "This would create a cycle in the tree", ar: "سيؤدي هذا إلى حلقة في الشجرة" },
+  connect_hint: { en: "Drag from a parent's bottom dot onto a child's top dot to link them.", ar: "اسحب من النقطة السفلية للوالد إلى النقطة العلوية للابن لربطهما." },
 };
 
 interface I18nCtx {
