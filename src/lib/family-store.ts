@@ -89,6 +89,20 @@ export const familyStore = {
     emit();
     return member;
   },
+  setPosition(id: string, pos: { x: number; y: number } | null): void {
+    state = state.map((m) =>
+      m.id === id
+        ? { ...m, pos_x: pos?.x, pos_y: pos?.y }
+        : m,
+    );
+    save();
+    emit();
+  },
+  clearPositions(): void {
+    state = state.map((m) => ({ ...m, pos_x: undefined, pos_y: undefined }));
+    save();
+    emit();
+  },
   update(id: string, patch: Partial<MemberInput>): void {
     const now = new Date().toISOString();
     state = state.map((m) => (m.id === id ? { ...m, ...patch, updated_at: now } : m));

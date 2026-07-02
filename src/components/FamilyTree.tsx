@@ -14,7 +14,7 @@ import ReactFlow, {
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
-import { Search, X, Info } from "lucide-react";
+import { Search, X, Info, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -179,21 +179,24 @@ function layout(
     const m = memberById.get(id)!;
     const pos = g.node(id);
     const b = bucketFor(m);
-    const y = b !== null ? b * ROW_H : pos.y - pos.height / 2;
+    const autoY = b !== null ? b * ROW_H : pos.y - pos.height / 2;
+    const autoX = pos.x - pos.width / 2;
+    const hasCustom = typeof m.pos_x === "number" && typeof m.pos_y === "number";
     return {
       id,
       type: "member",
-      position: { x: pos.x - pos.width / 2, y },
+      position: hasCustom ? { x: m.pos_x!, y: m.pos_y! } : { x: autoX, y: autoY },
       data: {
         member: m,
         highlighted: highlightId === id,
         onOpen,
       },
-      draggable: false,
+      draggable: true,
     };
   });
 
   // Place spouses side-by-side: same Y, husband on left, wife on right.
+  // Skip pairs where either partner has been manually positioned.
   const SPOUSE_GAP = 80;
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const pairSeen = new Set<string>();
@@ -206,6 +209,12 @@ function layout(
     if (pairSeen.has(key)) continue;
     pairSeen.add(key);
     const ma = memberById.get(a.id)!;
+    const mb = memberById.get(b.id)!;
+    if (
+      typeof ma.pos_x === "number" ||
+      typeof mb.pos_x === "number"
+    )
+      continue;
     const [left, right] = ma.gender === "male" ? [a, b] : [b, a];
     const centerX = (a.position.x + b.position.x) / 2 + NODE_W / 2;
     const y = Math.max(a.position.y, b.position.y);
@@ -338,6 +347,18 @@ function Inner() {
     [t],
   );
 
+  const onNodeDragStop = useCallback((_e: unknown, node: Node) => {
+    if (node.type !== "member") return;
+    familyStore.setPosition(node.id, { x: node.position.x, y: node.position.y });
+  }, []);
+
+  const onAutoLayout = useCallback(() => {
+    familyStore.clearPositions();
+    didFit.current = false;
+    requestAnimationFrame(() => fitView({ padding: 0.2, duration: 400 }));
+    toast.success(t("auto_layout_done"));
+  }, [fitView, t]);
+
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
@@ -412,11 +433,21 @@ function Inner() {
             </div>
           )}
         </div>
-        <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-card/90 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
-          <Info className="h-3 w-3" />
-          {t("connect_hint")}
+        <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2">
+          <div className="inline-flex items-center gap-2 rounded-full border bg-card/90 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
+            <Info className="h-3 w-3" />
+            {t("connect_hint")}
+          </div>
+          <Button size="sm" variant="secondary" onClick={onAutoLayout} className="gap-1.5 shadow-sm">
+            <LayoutGrid className="h-3.5 w-3.5" />
+            {t("auto_layout")}
+          </Button>
         </div>
       </div>
+
+
+
+
 
       <ReactFlow
         nodes={nodes}
@@ -425,12 +456,14 @@ function Inner() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onEdgesDelete={onEdgesDelete}
+        onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
         minZoom={0.1}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
         connectionLineStyle={{ stroke: "#0ea5e9", strokeWidth: 2, strokeDasharray: "6 4" }}
-        defaultEdgeOptions={{ type: "smoothstep" }}
+        defaultEdgeOptions={{ type: "smoothstep", focusable: true, deletable: true }}
+        deleteKeyCode={["Backspace", "Delete"]}
         fitView
       >
         <Background gap={24} className="!bg-background" />
