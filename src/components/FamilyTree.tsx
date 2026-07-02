@@ -14,7 +14,7 @@ import ReactFlow, {
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
-import { Search, X, Info } from "lucide-react";
+import { Search, X, Info, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
