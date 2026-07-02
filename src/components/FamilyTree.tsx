@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MemberNode, type MemberNodeData } from "./MemberNode";
+import { UnionNode } from "./UnionNode";
 import { familyStore, useFamily } from "@/lib/family-store";
 import { displayName, useI18n } from "@/lib/i18n";
 import { useNavigate } from "@tanstack/react-router";
@@ -26,7 +27,7 @@ import type { FamilyMember } from "@/lib/family-types";
 
 const NODE_W = 280;
 const NODE_H = 130;
-const nodeTypes = { member: MemberNode };
+const nodeTypes = { member: MemberNode, union: UnionNode };
 
 function yearOf(m: FamilyMember): number | null {
   const y = m.birth_date?.slice(0, 4);
