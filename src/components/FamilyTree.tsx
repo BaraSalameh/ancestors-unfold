@@ -433,11 +433,18 @@ function Inner() {
             </div>
           )}
         </div>
-        <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-card/90 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
-          <Info className="h-3 w-3" />
-          {t("connect_hint")}
+        <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2">
+          <div className="inline-flex items-center gap-2 rounded-full border bg-card/90 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
+            <Info className="h-3 w-3" />
+            {t("connect_hint")}
+          </div>
+          <Button size="sm" variant="secondary" onClick={onAutoLayout} className="gap-1.5 shadow-sm">
+            <LayoutGrid className="h-3.5 w-3.5" />
+            {t("auto_layout")}
+          </Button>
         </div>
       </div>
+
 
 
 
