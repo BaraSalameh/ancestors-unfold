@@ -439,26 +439,8 @@ function Inner() {
         </div>
       </div>
 
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-card/90 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
-          <Info className="h-3 w-3" />
-          {t("connect_hint")}
-        </div>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={onAutoLayout}
-          className="pointer-events-auto gap-1.5 shadow-sm"
-        >
-          <LayoutGrid className="h-3.5 w-3.5" />
-          {t("auto_layout")}
-        </Button>
-      </div>
+
+
 
       <ReactFlow
         nodes={nodes}
