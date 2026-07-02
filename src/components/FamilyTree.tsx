@@ -179,21 +179,24 @@ function layout(
     const m = memberById.get(id)!;
     const pos = g.node(id);
     const b = bucketFor(m);
-    const y = b !== null ? b * ROW_H : pos.y - pos.height / 2;
+    const autoY = b !== null ? b * ROW_H : pos.y - pos.height / 2;
+    const autoX = pos.x - pos.width / 2;
+    const hasCustom = typeof m.pos_x === "number" && typeof m.pos_y === "number";
     return {
       id,
       type: "member",
-      position: { x: pos.x - pos.width / 2, y },
+      position: hasCustom ? { x: m.pos_x!, y: m.pos_y! } : { x: autoX, y: autoY },
       data: {
         member: m,
         highlighted: highlightId === id,
         onOpen,
       },
-      draggable: false,
+      draggable: true,
     };
   });
 
   // Place spouses side-by-side: same Y, husband on left, wife on right.
+  // Skip pairs where either partner has been manually positioned.
   const SPOUSE_GAP = 80;
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const pairSeen = new Set<string>();
@@ -206,6 +209,12 @@ function layout(
     if (pairSeen.has(key)) continue;
     pairSeen.add(key);
     const ma = memberById.get(a.id)!;
+    const mb = memberById.get(b.id)!;
+    if (
+      typeof ma.pos_x === "number" ||
+      typeof mb.pos_x === "number"
+    )
+      continue;
     const [left, right] = ma.gender === "male" ? [a, b] : [b, a];
     const centerX = (a.position.x + b.position.x) / 2 + NODE_W / 2;
     const y = Math.max(a.position.y, b.position.y);
