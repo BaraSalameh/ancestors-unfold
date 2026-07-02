@@ -230,7 +230,7 @@ function layout(
       data: {},
       draggable: false,
       selectable: false,
-    });
+    } as unknown as Node<MemberNodeData>);
   }
 
   return { nodes, edges };
