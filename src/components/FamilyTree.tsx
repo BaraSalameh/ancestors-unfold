@@ -347,6 +347,18 @@ function Inner() {
     [t],
   );
 
+  const onNodeDragStop = useCallback((_e: unknown, node: Node) => {
+    if (node.type !== "member") return;
+    familyStore.setPosition(node.id, { x: node.position.x, y: node.position.y });
+  }, []);
+
+  const onAutoLayout = useCallback(() => {
+    familyStore.clearPositions();
+    didFit.current = false;
+    requestAnimationFrame(() => fitView({ padding: 0.2, duration: 400 }));
+    toast.success(t("auto_layout_done"));
+  }, [fitView, t]);
+
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
@@ -433,13 +445,36 @@ function Inner() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-card/90 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
+          <Info className="h-3 w-3" />
+          {t("connect_hint")}
+        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={onAutoLayout}
+          className="pointer-events-auto gap-1.5 shadow-sm"
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+          {t("auto_layout")}
+        </Button>
+      </div>
+
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
         onEdgesDelete={onEdgesDelete}
+        onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
         minZoom={0.1}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
         connectionLineStyle={{ stroke: "#0ea5e9", strokeWidth: 2, strokeDasharray: "6 4" }}
-        defaultEdgeOptions={{ type: "smoothstep" }}
+        defaultEdgeOptions={{ type: "smoothstep", focusable: true, deletable: true }}
+        deleteKeyCode={["Backspace", "Delete"]}
         fitView
       >
         <Background gap={24} className="!bg-background" />
