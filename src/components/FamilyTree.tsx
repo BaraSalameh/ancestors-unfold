@@ -156,6 +156,26 @@ function layout(
     };
   });
 
+  // Place spouses side-by-side: same Y, husband on left, wife on right.
+  const SPOUSE_GAP = 40;
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const pairSeen = new Set<string>();
+  for (const m of members) {
+    if (!m.spouse_id) continue;
+    const a = nodeById.get(m.id);
+    const b = nodeById.get(m.spouse_id);
+    if (!a || !b) continue;
+    const key = [a.id, b.id].sort().join("~");
+    if (pairSeen.has(key)) continue;
+    pairSeen.add(key);
+    const ma = memberById.get(a.id)!;
+    const [left, right] = ma.gender === "male" ? [a, b] : [b, a];
+    const centerX = (a.position.x + b.position.x) / 2 + NODE_W / 2;
+    const y = Math.max(a.position.y, b.position.y);
+    left.position = { x: centerX - NODE_W - SPOUSE_GAP / 2, y };
+    right.position = { x: centerX + SPOUSE_GAP / 2, y };
+  }
+
   return { nodes, edges };
 }
 
