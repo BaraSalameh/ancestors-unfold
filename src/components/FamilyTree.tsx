@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MemberNode, type MemberNodeData } from "./MemberNode";
+import { UnionNode } from "./UnionNode";
 import { familyStore, useFamily } from "@/lib/family-store";
 import { displayName, useI18n } from "@/lib/i18n";
 import { useNavigate } from "@tanstack/react-router";
@@ -26,7 +27,7 @@ import type { FamilyMember } from "@/lib/family-types";
 
 const NODE_W = 280;
 const NODE_H = 130;
-const nodeTypes = { member: MemberNode };
+const nodeTypes = { member: MemberNode, union: UnionNode };
 
 function yearOf(m: FamilyMember): number | null {
   const y = m.birth_date?.slice(0, 4);
@@ -70,28 +71,65 @@ function layout(
   const edges: Edge[] = [];
   const memberById = new Map(members.map((m) => [m.id, m]));
 
+  // Group children by (father, mother) pair. Children with both parents known
+  // are attached to a shared "union" node between the spouses. Children with
+  // only one known parent connect directly from that parent's card.
+  const pairs = new Map<string, { fatherId: string; motherId: string; children: string[] }>();
+  const singleParentChildren: { parentId: string; childId: string }[] = [];
+
   for (const m of members) {
     if (hidden.has(m.id)) continue;
-    for (const parentId of [m.father_id, m.mother_id]) {
-      if (!parentId || !renderedIds.includes(parentId)) continue;
-      const parent = memberById.get(parentId);
-      const isFather = parent?.gender === "male";
-      const color = isFather ? "#0ea5e9" : "#ec4899";
-      g.setEdge(parentId, m.id);
+    const fId = m.father_id && renderedIds.includes(m.father_id) ? m.father_id : undefined;
+    const mId = m.mother_id && renderedIds.includes(m.mother_id) ? m.mother_id : undefined;
+    if (fId && mId) {
+      const key = `${fId}|${mId}`;
+      if (!pairs.has(key)) pairs.set(key, { fatherId: fId, motherId: mId, children: [] });
+      pairs.get(key)!.children.push(m.id);
+    } else if (fId || mId) {
+      singleParentChildren.push({ parentId: (fId || mId)!, childId: m.id });
+    }
+  }
+
+  const EDGE_COLOR = "#64748b"; // slate-500, neutral solid connector
+  const edgeStyle = { stroke: EDGE_COLOR, strokeWidth: 2, strokeOpacity: 0.9 };
+  const arrow = { type: MarkerType.ArrowClosed, color: EDGE_COLOR, width: 14, height: 14 };
+
+  // Union nodes in dagre + edges union->child
+  for (const [key, p] of pairs) {
+    const uid = `u:${key}`;
+    g.setNode(uid, { width: 20, height: 20 });
+    g.setEdge(p.fatherId, uid);
+    g.setEdge(p.motherId, uid);
+    for (const cId of p.children) {
+      g.setEdge(uid, cId);
       edges.push({
-        id: `${parentId}->${m.id}`,
-        source: parentId,
-        target: m.id,
-        sourceHandle: "child-out",
+        id: `${uid}->${cId}`,
+        source: uid,
+        target: cId,
+        sourceHandle: "u-out",
         targetHandle: "parent-in",
         type: "smoothstep",
-        style: isFather
-          ? { stroke: color, strokeWidth: 1.5, strokeOpacity: 0.55, strokeDasharray: "6 4" }
-          : { stroke: color, strokeWidth: 2.25, strokeOpacity: 0.9 },
-        markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 },
-        data: { parentId, childId: m.id },
+        style: edgeStyle,
+        markerEnd: arrow,
+        data: { parentId: p.fatherId, childId: cId, unionKey: key },
       });
     }
+  }
+
+  // Single-parent children: direct solid edge from that parent
+  for (const { parentId, childId } of singleParentChildren) {
+    g.setEdge(parentId, childId);
+    edges.push({
+      id: `${parentId}->${childId}`,
+      source: parentId,
+      target: childId,
+      sourceHandle: "child-out",
+      targetHandle: "parent-in",
+      type: "smoothstep",
+      style: edgeStyle,
+      markerEnd: arrow,
+      data: { parentId, childId },
+    });
   }
 
   // spouse "married to" edges (dotted, no arrow) — for reference; supports many
@@ -129,7 +167,6 @@ function layout(
   const bucketFor = (m: FamilyMember): number | null => {
     const y = yearOf(m);
     if (y !== null) return Math.floor(y / COHORT) - baseYearBucket;
-    // fall back: one deeper than max parent bucket
     const parents = [m.father_id, m.mother_id]
       .map((pid) => (pid ? memberById.get(pid) : undefined))
       .filter(Boolean) as FamilyMember[];
@@ -157,7 +194,7 @@ function layout(
   });
 
   // Place spouses side-by-side: same Y, husband on left, wife on right.
-  const SPOUSE_GAP = 40;
+  const SPOUSE_GAP = 80;
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const pairSeen = new Set<string>();
   for (const m of members) {
@@ -174,6 +211,26 @@ function layout(
     const y = Math.max(a.position.y, b.position.y);
     left.position = { x: centerX - NODE_W - SPOUSE_GAP / 2, y };
     right.position = { x: centerX + SPOUSE_GAP / 2, y };
+  }
+
+  // Add union nodes positioned between spouse pairs (below their midline).
+  const UNION_SIZE = 20;
+  for (const [key, p] of pairs) {
+    const fatherNode = nodeById.get(p.fatherId);
+    const motherNode = nodeById.get(p.motherId);
+    if (!fatherNode || !motherNode) continue;
+    const midX =
+      (fatherNode.position.x + motherNode.position.x) / 2 + NODE_W / 2 - UNION_SIZE / 2;
+    const y =
+      Math.max(fatherNode.position.y, motherNode.position.y) + NODE_H / 2 - UNION_SIZE / 2;
+    nodes.push({
+      id: `u:${key}`,
+      type: "union",
+      position: { x: midX, y },
+      data: {},
+      draggable: false,
+      selectable: false,
+    } as unknown as Node<MemberNodeData>);
   }
 
   return { nodes, edges };
@@ -257,13 +314,24 @@ function Inner() {
   const onEdgesDelete = useCallback(
     (removed: Edge[]) => {
       for (const e of removed) {
-        const data = e.data as { parentId?: string; childId?: string } | undefined;
-        if (!data?.parentId || !data?.childId) continue;
-        const parent = familyStore.get(data.parentId);
+        const data = e.data as
+          | { parentId?: string; childId?: string; unionKey?: string }
+          | undefined;
+        if (!data?.childId) continue;
         const child = familyStore.get(data.childId);
-        if (!parent || !child) continue;
-        const key = parent.gender === "male" ? "father_id" : "mother_id";
-        familyStore.update(child.id, { [key]: undefined } as any);
+        if (!child) continue;
+        if (data.unionKey) {
+          // union edge: clears both parent links for this child
+          familyStore.update(child.id, {
+            father_id: undefined,
+            mother_id: undefined,
+          } as any);
+        } else if (data.parentId) {
+          const parent = familyStore.get(data.parentId);
+          if (!parent) continue;
+          const key = parent.gender === "male" ? "father_id" : "mother_id";
+          familyStore.update(child.id, { [key]: undefined } as any);
+        }
       }
       if (removed.length) toast.success(t("link_removed"));
     },
