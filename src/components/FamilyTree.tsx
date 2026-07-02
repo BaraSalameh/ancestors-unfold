@@ -314,13 +314,24 @@ function Inner() {
   const onEdgesDelete = useCallback(
     (removed: Edge[]) => {
       for (const e of removed) {
-        const data = e.data as { parentId?: string; childId?: string } | undefined;
-        if (!data?.parentId || !data?.childId) continue;
-        const parent = familyStore.get(data.parentId);
+        const data = e.data as
+          | { parentId?: string; childId?: string; unionKey?: string }
+          | undefined;
+        if (!data?.childId) continue;
         const child = familyStore.get(data.childId);
-        if (!parent || !child) continue;
-        const key = parent.gender === "male" ? "father_id" : "mother_id";
-        familyStore.update(child.id, { [key]: undefined } as any);
+        if (!child) continue;
+        if (data.unionKey) {
+          // union edge: clears both parent links for this child
+          familyStore.update(child.id, {
+            father_id: undefined,
+            mother_id: undefined,
+          } as any);
+        } else if (data.parentId) {
+          const parent = familyStore.get(data.parentId);
+          if (!parent) continue;
+          const key = parent.gender === "male" ? "father_id" : "mother_id";
+          familyStore.update(child.id, { [key]: undefined } as any);
+        }
       }
       if (removed.length) toast.success(t("link_removed"));
     },
