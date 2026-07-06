@@ -1,13 +1,15 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
-import { User, Cake, Sparkles } from "lucide-react";
+import { User, Cake, Sparkles, Heart } from "lucide-react";
 import { displayName, useI18n } from "@/lib/i18n";
 import type { FamilyMember } from "@/lib/family-types";
+import { wifeColorFor } from "@/lib/wife-colors";
 
 export interface MemberNodeData {
   member: FamilyMember;
   highlighted?: boolean;
   onOpen: (id: string) => void;
+  wives?: FamilyMember[]; // ordered wives, only present for husbands
 }
 
 const genderTheme = (g: "male" | "female") =>
@@ -30,7 +32,7 @@ const genderTheme = (g: "male" | "female") =>
       };
 
 function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
-  const { member, highlighted, onOpen } = data;
+  const { member, highlighted, onOpen, wives } = data;
   const th = genderTheme(member.gender);
   const { lang, t } = useI18n();
   const deceased = !!member.death_date;
@@ -119,6 +121,39 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
             </div>
           </div>
         </div>
+
+        {wives && wives.length > 0 && (
+          <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
+            <div className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <Heart className="h-2.5 w-2.5" />
+              {t("spouse")}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {wives.map((w, i) => {
+                const c = wifeColorFor(i);
+                return (
+                  <span
+                    key={w.id}
+                    className="inline-flex max-w-full items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1"
+                    style={{
+                      backgroundColor: `${c.stroke}1a`,
+                      color: c.stroke,
+                      // @ts-expect-error CSS var
+                      "--tw-ring-color": `${c.stroke}55`,
+                    }}
+                    title={displayName(w, lang)}
+                  >
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: c.stroke }}
+                    />
+                    <span className="truncate">{displayName(w, lang)}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </button>
     </div>
   );
