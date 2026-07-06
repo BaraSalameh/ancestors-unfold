@@ -20,7 +20,6 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MemberNode, type MemberNodeData } from "./MemberNode";
-import { UnionNode } from "./UnionNode";
 import { RelationshipEdge } from "./RelationshipEdge";
 import { familyStore, useFamily } from "@/lib/family-store";
 import { displayName, useI18n } from "@/lib/i18n";
@@ -31,7 +30,7 @@ import { computeWivesByHusband, wifeColorFor } from "@/lib/wife-colors";
 const NODE_W = 260;
 const NODE_H = 130;
 const NODE_H_HUSBAND = 190; // taller when wives chips are rendered
-const nodeTypes = { member: MemberNode, union: UnionNode };
+const nodeTypes = { member: MemberNode };
 const edgeTypes = { relationship: RelationshipEdge };
 
 function yearOf(m: FamilyMember): number | null {
