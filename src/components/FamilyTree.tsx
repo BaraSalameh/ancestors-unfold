@@ -11,6 +11,7 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
   MarkerType,
+  updateEdge,
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
@@ -19,15 +20,18 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MemberNode, type MemberNodeData } from "./MemberNode";
-import { UnionNode } from "./UnionNode";
+import { RelationshipEdge } from "./RelationshipEdge";
 import { familyStore, useFamily } from "@/lib/family-store";
 import { displayName, useI18n } from "@/lib/i18n";
 import { useNavigate } from "@tanstack/react-router";
 import type { FamilyMember } from "@/lib/family-types";
+import { computeWivesByHusband, wifeColorFor } from "@/lib/wife-colors";
 
-const NODE_W = 280;
+const NODE_W = 260;
 const NODE_H = 130;
-const nodeTypes = { member: MemberNode, union: UnionNode };
+const NODE_H_HUSBAND = 190; // taller when wives chips are rendered
+const nodeTypes = { member: MemberNode };
+const edgeTypes = { relationship: RelationshipEdge };
 
 function yearOf(m: FamilyMember): number | null {
   const y = m.birth_date?.slice(0, 4);
@@ -61,78 +65,77 @@ function layout(
   };
   for (const c of collapsed) walk(c);
 
+  const wivesByHusband = computeWivesByHusband(members);
+
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "TB", nodesep: 80, ranksep: 140, marginx: 40, marginy: 40 });
+  g.setGraph({ rankdir: "TB", nodesep: 120, ranksep: 180, marginx: 40, marginy: 40 });
   g.setDefaultEdgeLabel(() => ({}));
 
+  const memberById = new Map(members.map((m) => [m.id, m]));
   const renderedIds = members.filter((m) => !hidden.has(m.id)).map((m) => m.id);
-  for (const id of renderedIds) g.setNode(id, { width: NODE_W, height: NODE_H });
+  for (const id of renderedIds) {
+    const m = memberById.get(id)!;
+    const h = wivesByHusband.has(id) ? NODE_H_HUSBAND : NODE_H;
+    void m;
+    g.setNode(id, { width: NODE_W, height: h });
+  }
 
   const edges: Edge[] = [];
-  const memberById = new Map(members.map((m) => [m.id, m]));
 
-  // Group children by (father, mother) pair. Children with both parents known
-  // are attached to a shared "union" node between the spouses. Children with
-  // only one known parent connect directly from that parent's card.
-  const pairs = new Map<string, { fatherId: string; motherId: string; children: string[] }>();
-  const singleParentChildren: { parentId: string; childId: string }[] = [];
+  const DEFAULT_EDGE_COLOR = "#64748b";
+  const mkStyle = (color: string) => ({ stroke: color, strokeWidth: 2, strokeOpacity: 0.95 });
+  const mkArrow = (color: string) => ({
+    type: MarkerType.ArrowClosed,
+    color,
+    width: 16,
+    height: 16,
+  });
 
+  // Parent → child edges. Source card is the husband (father). Color is
+  // determined by the mother's index in the father's wives list, so children
+  // of different mothers get different colored edges. Children with only a
+  // mother connect from the mother's card with the default neutral color.
   for (const m of members) {
     if (hidden.has(m.id)) continue;
     const fId = m.father_id && renderedIds.includes(m.father_id) ? m.father_id : undefined;
     const mId = m.mother_id && renderedIds.includes(m.mother_id) ? m.mother_id : undefined;
-    if (fId && mId) {
-      const key = `${fId}|${mId}`;
-      if (!pairs.has(key)) pairs.set(key, { fatherId: fId, motherId: mId, children: [] });
-      pairs.get(key)!.children.push(m.id);
-    } else if (fId || mId) {
-      singleParentChildren.push({ parentId: (fId || mId)!, childId: m.id });
-    }
-  }
 
-  const EDGE_COLOR = "#64748b"; // slate-500, neutral solid connector
-  const edgeStyle = { stroke: EDGE_COLOR, strokeWidth: 2, strokeOpacity: 0.9 };
-  const arrow = { type: MarkerType.ArrowClosed, color: EDGE_COLOR, width: 14, height: 14 };
-
-  // Union nodes in dagre + edges union->child
-  for (const [key, p] of pairs) {
-    const uid = `u:${key}`;
-    g.setNode(uid, { width: 20, height: 20 });
-    g.setEdge(p.fatherId, uid);
-    g.setEdge(p.motherId, uid);
-    for (const cId of p.children) {
-      g.setEdge(uid, cId);
+    if (fId) {
+      let color = DEFAULT_EDGE_COLOR;
+      if (mId) {
+        const wives = wivesByHusband.get(fId) ?? [];
+        const idx = wives.findIndex((w) => w.id === mId);
+        if (idx >= 0) color = wifeColorFor(idx).stroke;
+      }
+      g.setEdge(fId, m.id);
       edges.push({
-        id: `${uid}->${cId}`,
-        source: uid,
-        target: cId,
-        sourceHandle: "u-out",
+        id: `p:${fId}:${m.id}`,
+        source: fId,
+        target: m.id,
+        sourceHandle: "child-out",
         targetHandle: "parent-in",
-        type: "smoothstep",
-        style: edgeStyle,
-        markerEnd: arrow,
-        data: { parentId: p.fatherId, childId: cId, unionKey: key },
+        type: "relationship",
+        style: mkStyle(color),
+        markerEnd: mkArrow(color),
+        data: { parentId: fId, childId: m.id, kind: "parent" },
+      });
+    } else if (mId) {
+      g.setEdge(mId, m.id);
+      edges.push({
+        id: `p:${mId}:${m.id}`,
+        source: mId,
+        target: m.id,
+        sourceHandle: "child-out",
+        targetHandle: "parent-in",
+        type: "relationship",
+        style: mkStyle(DEFAULT_EDGE_COLOR),
+        markerEnd: mkArrow(DEFAULT_EDGE_COLOR),
+        data: { parentId: mId, childId: m.id, kind: "parent" },
       });
     }
   }
 
-  // Single-parent children: direct solid edge from that parent
-  for (const { parentId, childId } of singleParentChildren) {
-    g.setEdge(parentId, childId);
-    edges.push({
-      id: `${parentId}->${childId}`,
-      source: parentId,
-      target: childId,
-      sourceHandle: "child-out",
-      targetHandle: "parent-in",
-      type: "smoothstep",
-      style: edgeStyle,
-      markerEnd: arrow,
-      data: { parentId, childId },
-    });
-  }
-
-  // spouse "married to" edges (dotted, no arrow) — for reference; supports many
+  // spouse "married to" edges (dotted, no arrow)
   const spouseSeen = new Set<string>();
   for (const m of members) {
     if (hidden.has(m.id) || !m.spouse_id) continue;
@@ -149,15 +152,15 @@ function layout(
       targetHandle: "spouse-l",
       type: "straight",
       style: { stroke: "#a855f7", strokeWidth: 1.5, strokeDasharray: "2 4", strokeOpacity: 0.7 },
+      data: { kind: "spouse" },
     });
   }
 
   dagre.layout(g);
 
-  // Align generations by time period: override Y using birth year when available.
-  // Bucket by 25-year cohorts so siblings/cousins align.
+  // Align generations by time period (25-year cohorts).
   const COHORT = 25;
-  const ROW_H = 260;
+  const ROW_H = 320;
   const years = renderedIds
     .map((id) => yearOf(memberById.get(id)!))
     .filter((y): y is number => y !== null);
@@ -190,13 +193,14 @@ function layout(
         member: m,
         highlighted: highlightId === id,
         onOpen,
+        wives: wivesByHusband.get(id),
       },
       draggable: true,
     };
   });
 
-  // Place spouses side-by-side: same Y, husband on left, wife on right.
-  // Skip pairs where either partner has been manually positioned.
+  // Place spouses side-by-side (husband left, wife right) at the same Y,
+  // unless either partner has been manually positioned.
   const SPOUSE_GAP = 80;
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const pairSeen = new Set<string>();
@@ -210,11 +214,7 @@ function layout(
     pairSeen.add(key);
     const ma = memberById.get(a.id)!;
     const mb = memberById.get(b.id)!;
-    if (
-      typeof ma.pos_x === "number" ||
-      typeof mb.pos_x === "number"
-    )
-      continue;
+    if (typeof ma.pos_x === "number" || typeof mb.pos_x === "number") continue;
     const [left, right] = ma.gender === "male" ? [a, b] : [b, a];
     const centerX = (a.position.x + b.position.x) / 2 + NODE_W / 2;
     const y = Math.max(a.position.y, b.position.y);
@@ -222,32 +222,31 @@ function layout(
     right.position = { x: centerX + SPOUSE_GAP / 2, y };
   }
 
-  // Add union nodes positioned between spouse pairs (below their midline).
-  const UNION_SIZE = 20;
-  for (const [key, p] of pairs) {
-    const fatherNode = nodeById.get(p.fatherId);
-    const motherNode = nodeById.get(p.motherId);
-    if (!fatherNode || !motherNode) continue;
-    const midX =
-      (fatherNode.position.x + motherNode.position.x) / 2 + NODE_W / 2 - UNION_SIZE / 2;
-    const y =
-      Math.max(fatherNode.position.y, motherNode.position.y) + NODE_H / 2 - UNION_SIZE / 2;
-    nodes.push({
-      id: `u:${key}`,
-      type: "union",
-      position: { x: midX, y },
-      data: {},
-      draggable: false,
-      selectable: false,
-    } as unknown as Node<MemberNodeData>);
+  // Collision resolution — enforce a minimum horizontal gap per row, so no
+  // card overlaps another. Rows are grouped by rounded Y so slight vertical
+  // differences (e.g. tall husband cards next to short ones) still count as
+  // the same visual row.
+  const ROW_KEY = (y: number) => Math.round(y / 60) * 60;
+  const rows = new Map<number, Node<MemberNodeData>[]>();
+  for (const n of nodes) {
+    const k = ROW_KEY(n.position.y);
+    if (!rows.has(k)) rows.set(k, []);
+    rows.get(k)!.push(n);
+  }
+  const HGAP = 40;
+  for (const arr of rows.values()) {
+    arr.sort((a, b) => a.position.x - b.position.x);
+    for (let i = 1; i < arr.length; i++) {
+      const prev = arr[i - 1];
+      const minX = prev.position.x + NODE_W + HGAP;
+      if (arr[i].position.x < minX) arr[i].position.x = minX;
+    }
   }
 
   return { nodes, edges };
 }
 
-
 function isDescendant(members: FamilyMember[], ancestorId: string, targetId: string): boolean {
-  // returns true if targetId is a descendant of ancestorId
   const stack = [ancestorId];
   const seen = new Set<string>();
   while (stack.length) {
@@ -273,6 +272,7 @@ function Inner() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const { setCenter, fitView } = useReactFlow();
   const didFit = useRef(false);
+  const edgeUpdateSuccessful = useRef(true);
 
   const onOpen = useCallback(
     (id: string) => {
@@ -308,13 +308,12 @@ function Inner() {
       const parent = familyStore.get(conn.source);
       const child = familyStore.get(conn.target);
       if (!parent || !child) return;
-      // cycle check: parent must not be a descendant of child
       if (isDescendant(familyStore.getAll(), conn.target, conn.source)) {
         toast.error(t("cannot_link_cycle"));
         return;
       }
       const key = parent.gender === "male" ? "father_id" : "mother_id";
-      familyStore.update(child.id, { [key]: parent.id } as any);
+      familyStore.update(child.id, { [key]: parent.id } as Partial<FamilyMember>);
       toast.success(`${displayName(parent, lang)} → ${displayName(child, lang)}`);
     },
     [t, lang],
@@ -322,29 +321,104 @@ function Inner() {
 
   const onEdgesDelete = useCallback(
     (removed: Edge[]) => {
+      let cleared = 0;
       for (const e of removed) {
         const data = e.data as
-          | { parentId?: string; childId?: string; unionKey?: string }
+          | { parentId?: string; childId?: string; kind?: string }
           | undefined;
-        if (!data?.childId) continue;
-        const child = familyStore.get(data.childId);
-        if (!child) continue;
-        if (data.unionKey) {
-          // union edge: clears both parent links for this child
-          familyStore.update(child.id, {
-            father_id: undefined,
-            mother_id: undefined,
-          } as any);
-        } else if (data.parentId) {
-          const parent = familyStore.get(data.parentId);
-          if (!parent) continue;
-          const key = parent.gender === "male" ? "father_id" : "mother_id";
-          familyStore.update(child.id, { [key]: undefined } as any);
+        if (data?.kind === "spouse") {
+          const a = familyStore.get(e.source);
+          const b = familyStore.get(e.target);
+          if (a) familyStore.update(a.id, { spouse_id: undefined } as Partial<FamilyMember>);
+          if (b) familyStore.update(b.id, { spouse_id: undefined } as Partial<FamilyMember>);
+          cleared++;
+          continue;
         }
+        if (!data?.childId || !data?.parentId) continue;
+        const child = familyStore.get(data.childId);
+        const parent = familyStore.get(data.parentId);
+        if (!child || !parent) continue;
+        const key = parent.gender === "male" ? "father_id" : "mother_id";
+        familyStore.update(child.id, { [key]: undefined } as Partial<FamilyMember>);
+        cleared++;
       }
-      if (removed.length) toast.success(t("link_removed"));
+      if (cleared) toast.success(t("link_removed"));
     },
     [t],
+  );
+
+  // Reconnecting an edge's source or target (drag either endpoint to another node).
+  const onEdgeUpdateStart = useCallback(() => {
+    edgeUpdateSuccessful.current = false;
+  }, []);
+
+  const onEdgeUpdate = useCallback(
+    (oldEdge: Edge, newConn: Connection) => {
+      edgeUpdateSuccessful.current = true;
+      if (!newConn.source || !newConn.target) return;
+      const data = oldEdge.data as
+        | { parentId?: string; childId?: string; kind?: string }
+        | undefined;
+
+      // Spouse edge reconnection: just move spouse link.
+      if (data?.kind === "spouse") {
+        const oldA = familyStore.get(oldEdge.source);
+        const oldB = familyStore.get(oldEdge.target);
+        if (oldA) familyStore.update(oldA.id, { spouse_id: undefined } as Partial<FamilyMember>);
+        if (oldB) familyStore.update(oldB.id, { spouse_id: undefined } as Partial<FamilyMember>);
+        familyStore.update(newConn.source, {
+          spouse_id: newConn.target,
+        } as Partial<FamilyMember>);
+        setEdges((es) => updateEdge(oldEdge, newConn, es));
+        toast.success(t("link_updated"));
+        return;
+      }
+
+      if (!data?.parentId || !data?.childId) return;
+      const oldParent = familyStore.get(data.parentId);
+      const oldChild = familyStore.get(data.childId);
+      if (!oldParent || !oldChild) return;
+      const oldRole = oldParent.gender === "male" ? "father_id" : "mother_id";
+
+      const newSource = familyStore.get(newConn.source);
+      const newTarget = familyStore.get(newConn.target);
+      if (!newSource || !newTarget) return;
+      if (newConn.source === newConn.target) {
+        toast.error(t("cannot_link_self"));
+        return;
+      }
+
+      // Determine new (parent, child) mapping from the reconnected endpoints.
+      // The parent is whichever endpoint kept/became the source; the child is
+      // the target. If the user reversed them, treat source as parent still.
+      const newParent = newSource;
+      const newChild = newTarget;
+      if (isDescendant(familyStore.getAll(), newChild.id, newParent.id)) {
+        toast.error(t("cannot_link_cycle"));
+        return;
+      }
+      const newRole = newParent.gender === "male" ? "father_id" : "mother_id";
+
+      // Clear the old parent link on the old child.
+      familyStore.update(oldChild.id, { [oldRole]: undefined } as Partial<FamilyMember>);
+      // Apply the new parent link on the new child.
+      familyStore.update(newChild.id, { [newRole]: newParent.id } as Partial<FamilyMember>);
+      setEdges((es) => updateEdge(oldEdge, newConn, es));
+      toast.success(t("link_updated"));
+    },
+    [setEdges, t],
+  );
+
+  const onEdgeUpdateEnd = useCallback(
+    (_evt: unknown, edge: Edge) => {
+      if (!edgeUpdateSuccessful.current) {
+        // dropped in empty space → delete
+        setEdges((es) => es.filter((e) => e.id !== edge.id));
+        onEdgesDelete([edge]);
+      }
+      edgeUpdateSuccessful.current = true;
+    },
+    [setEdges, onEdgesDelete],
   );
 
   const onNodeDragStop = useCallback((_e: unknown, node: Node) => {
@@ -445,10 +519,6 @@ function Inner() {
         </div>
       </div>
 
-
-
-
-
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -456,13 +526,19 @@ function Inner() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onEdgesDelete={onEdgesDelete}
+        onEdgeUpdate={onEdgeUpdate}
+        onEdgeUpdateStart={onEdgeUpdateStart}
+        onEdgeUpdateEnd={onEdgeUpdateEnd}
         onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        edgesUpdatable
+        edgesFocusable
         minZoom={0.1}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
         connectionLineStyle={{ stroke: "#0ea5e9", strokeWidth: 2, strokeDasharray: "6 4" }}
-        defaultEdgeOptions={{ type: "smoothstep", focusable: true, deletable: true }}
+        defaultEdgeOptions={{ type: "relationship", focusable: true, deletable: true, updatable: true }}
         deleteKeyCode={["Backspace", "Delete"]}
         fitView
       >
