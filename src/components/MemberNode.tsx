@@ -1,9 +1,10 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
-import { User, Cake, Sparkles, Heart } from "lucide-react";
-import { displayName, useI18n } from "@/lib/i18n";
+import { User, Cake, Sparkles, Heart, Unlink, Link2 } from "lucide-react";
+import { displayName, ordinal, useI18n } from "@/lib/i18n";
 import type { FamilyMember } from "@/lib/family-types";
 import { wifeColorFor } from "@/lib/wife-colors";
+import { familyStore } from "@/lib/family-store";
 
 export interface MemberNodeData {
   member: FamilyMember;
@@ -128,27 +129,70 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
               <Heart className="h-2.5 w-2.5" />
               {t("spouse")}
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-col gap-1">
               {wives.map((w, i) => {
                 const c = wifeColorFor(i);
+                const divorced = (member.divorced_from ?? []).includes(w.id);
+                const wBirth = w.birth_date?.slice(0, 4);
+                const wDeath = w.death_date?.slice(0, 4);
+                const years = wBirth ? `${wBirth}${wDeath ? `–${wDeath}` : ""}` : "";
                 return (
-                  <span
+                  <div
                     key={w.id}
-                    className="inline-flex max-w-full items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1"
-                    style={{
-                      backgroundColor: `${c.stroke}1a`,
-                      color: c.stroke,
-                      // @ts-expect-error CSS var
-                      "--tw-ring-color": `${c.stroke}55`,
-                    }}
-                    title={displayName(w, lang)}
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] font-medium ring-1"
+                    style={
+                      divorced
+                        ? {
+                            backgroundColor: "hsl(var(--muted))",
+                            color: "hsl(var(--muted-foreground))",
+                            // @ts-expect-error CSS var
+                            "--tw-ring-color": "hsl(var(--border))",
+                          }
+                        : {
+                            backgroundColor: `${c.stroke}1a`,
+                            color: c.stroke,
+                            // @ts-expect-error CSS var
+                            "--tw-ring-color": `${c.stroke}55`,
+                          }
+                    }
+                    title={`${ordinal(i + 1, lang)} — ${displayName(w, lang)}${years ? ` (${years})` : ""}${
+                      divorced ? ` · ${t("divorced")}` : ""
+                    }`}
                   >
                     <span
                       className="h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: c.stroke }}
+                      style={{ backgroundColor: divorced ? "#94a3b8" : c.stroke }}
                     />
-                    <span className="truncate">{displayName(w, lang)}</span>
-                  </span>
+                    <span className="shrink-0 opacity-70">{ordinal(i + 1, lang)}</span>
+                    <span className={`truncate ${divorced ? "line-through" : ""}`}>
+                      {displayName(w, lang)}
+                    </span>
+                    {years && (
+                      <span className="shrink-0 opacity-70 tabular-nums">{years}</span>
+                    )}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        familyStore.toggleDivorce(member.id, w.id);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.stopPropagation();
+                          familyStore.toggleDivorce(member.id, w.id);
+                        }
+                      }}
+                      title={divorced ? t("mark_married") : t("mark_divorced")}
+                      className="ms-auto inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full opacity-70 transition hover:opacity-100 hover:scale-110"
+                    >
+                      {divorced ? (
+                        <Link2 className="h-2.5 w-2.5" />
+                      ) : (
+                        <Unlink className="h-2.5 w-2.5" />
+                      )}
+                    </span>
+                  </div>
                 );
               })}
             </div>
