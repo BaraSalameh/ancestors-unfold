@@ -114,6 +114,33 @@ export const familyStore = {
     save();
     emit();
   },
+  toggleDivorce(aId: string, bId: string): void {
+    const now = new Date().toISOString();
+    const has = (m: FamilyMember, id: string) => (m.divorced_from ?? []).includes(id);
+    const add = (arr: string[] | undefined, id: string) =>
+      arr && arr.includes(id) ? arr : [...(arr ?? []), id];
+    const remove = (arr: string[] | undefined, id: string) => (arr ?? []).filter((x) => x !== id);
+    const a = state.find((m) => m.id === aId);
+    if (!a) return;
+    const currently = has(a, bId);
+    state = state.map((m) => {
+      if (m.id === aId)
+        return {
+          ...m,
+          divorced_from: currently ? remove(m.divorced_from, bId) : add(m.divorced_from, bId),
+          updated_at: now,
+        };
+      if (m.id === bId)
+        return {
+          ...m,
+          divorced_from: currently ? remove(m.divorced_from, aId) : add(m.divorced_from, aId),
+          updated_at: now,
+        };
+      return m;
+    });
+    save();
+    emit();
+  },
   remove(id: string): void {
     state = state
       .filter((m) => m.id !== id)
@@ -122,10 +149,12 @@ export const familyStore = {
         father_id: m.father_id === id ? undefined : m.father_id,
         mother_id: m.mother_id === id ? undefined : m.mother_id,
         spouse_id: m.spouse_id === id ? undefined : m.spouse_id,
+        divorced_from: m.divorced_from?.filter((x) => x !== id),
       }));
     save();
     emit();
   },
+
   reset() {
     state = SAMPLE;
     save();

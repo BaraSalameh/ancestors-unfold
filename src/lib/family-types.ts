@@ -12,6 +12,8 @@ export interface FamilyMember {
   father_id?: string;
   mother_id?: string;
   spouse_id?: string;
+  /** IDs of previous partners the member has divorced. Symmetric with the other side. */
+  divorced_from?: string[];
   pos_x?: number;
   pos_y?: number;
   created_at: string;
