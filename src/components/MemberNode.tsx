@@ -141,20 +141,19 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                     key={w.id}
                     className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] font-medium ring-1"
                     style={
-                      divorced
+                      (divorced
                         ? {
                             backgroundColor: "hsl(var(--muted))",
                             color: "hsl(var(--muted-foreground))",
-                            // @ts-expect-error CSS var
                             "--tw-ring-color": "hsl(var(--border))",
                           }
                         : {
                             backgroundColor: `${c.stroke}1a`,
                             color: c.stroke,
-                            // @ts-expect-error CSS var
                             "--tw-ring-color": `${c.stroke}55`,
-                          }
+                          }) as React.CSSProperties
                     }
+
                     title={`${ordinal(i + 1, lang)} — ${displayName(w, lang)}${years ? ` (${years})` : ""}${
                       divorced ? ` · ${t("divorced")}` : ""
                     }`}
