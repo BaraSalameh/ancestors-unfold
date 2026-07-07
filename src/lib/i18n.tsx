@@ -79,7 +79,27 @@ const dict: Dict = {
   connect_hint: { en: "Drag between dots to link. Drag cards to move. Click a connector to delete or drag its endpoint to reconnect.", ar: "اسحب بين النقاط للربط. اسحب البطاقات للتحريك. انقر على الرابط لحذفه أو اسحب طرفه لإعادة توصيله." },
   auto_layout: { en: "Auto layout", ar: "ترتيب تلقائي" },
   auto_layout_done: { en: "Layout rearranged", ar: "تمت إعادة الترتيب" },
+  divorced: { en: "Divorced", ar: "مطلقة" },
+  mark_divorced: { en: "Mark as divorced", ar: "وضع علامة مطلقة" },
+  mark_married: { en: "Mark as married", ar: "وضع علامة متزوجة" },
+  select_mother: { en: "Select the mother", ar: "اختر الأم" },
+  select_mother_desc: {
+    en: "This father has more than one wife. Choose which wife is the child's mother.",
+    ar: "لهذا الأب أكثر من زوجة. اختر أيّ زوجة هي أم الطفل.",
+  },
+  unknown_mother: { en: "Unknown / skip", ar: "غير معروفة / تخطٍ" },
 };
+
+export function ordinal(n: number, lang: Lang): string {
+  if (lang === "ar") {
+    const arabic = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة"];
+    return arabic[n - 1] ?? `${n}`;
+  }
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 
 interface I18nCtx {
   lang: Lang;
