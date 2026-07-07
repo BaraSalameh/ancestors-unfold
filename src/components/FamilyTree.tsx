@@ -19,25 +19,29 @@ import { Search, X, Info, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { MemberNode, type MemberNodeData } from "./MemberNode";
 import { RelationshipEdge } from "./RelationshipEdge";
 import { familyStore, useFamily } from "@/lib/family-store";
-import { displayName, useI18n } from "@/lib/i18n";
+import { displayName, ordinal, useI18n } from "@/lib/i18n";
 import { useNavigate } from "@tanstack/react-router";
 import type { FamilyMember } from "@/lib/family-types";
 import { computeWivesByHusband, wifeColorFor } from "@/lib/wife-colors";
 
 const NODE_W = 260;
 const NODE_H = 130;
-const NODE_H_HUSBAND = 190; // taller when wives chips are rendered
+const NODE_H_HUSBAND = 220;
 const nodeTypes = { member: MemberNode };
 const edgeTypes = { relationship: RelationshipEdge };
 
-function yearOf(m: FamilyMember): number | null {
-  const y = m.birth_date?.slice(0, 4);
-  const n = y ? parseInt(y, 10) : NaN;
-  return Number.isFinite(n) ? n : null;
-}
+const DIVORCED_COLOR = "#94a3b8";
 
 function layout(
   members: FamilyMember[],
@@ -45,6 +49,16 @@ function layout(
   onOpen: (id: string) => void,
   highlightId: string | null,
 ) {
+  const memberById = new Map(members.map((m) => [m.id, m]));
+  const wivesByHusband = computeWivesByHusband(members);
+
+  // Any female who appears as a wife inside a husband card is hidden from
+  // the tree (her chip inside the husband card replaces the standalone card).
+  const asWife = new Set<string>();
+  for (const list of wivesByHusband.values()) {
+    for (const w of list) asWife.add(w.id);
+  }
+
   const childrenMap = new Map<string, string[]>();
   for (const m of members) {
     for (const pid of [m.father_id, m.mother_id]) {
@@ -54,7 +68,7 @@ function layout(
       }
     }
   }
-  const hidden = new Set<string>();
+  const hidden = new Set<string>(asWife);
   const walk = (id: string) => {
     for (const k of childrenMap.get(id) ?? []) {
       if (!hidden.has(k)) {
@@ -65,18 +79,13 @@ function layout(
   };
   for (const c of collapsed) walk(c);
 
-  const wivesByHusband = computeWivesByHusband(members);
-
   const g = new dagre.graphlib.Graph();
   g.setGraph({ rankdir: "TB", nodesep: 120, ranksep: 180, marginx: 40, marginy: 40 });
   g.setDefaultEdgeLabel(() => ({}));
 
-  const memberById = new Map(members.map((m) => [m.id, m]));
   const renderedIds = members.filter((m) => !hidden.has(m.id)).map((m) => m.id);
   for (const id of renderedIds) {
-    const m = memberById.get(id)!;
     const h = wivesByHusband.has(id) ? NODE_H_HUSBAND : NODE_H;
-    void m;
     g.setNode(id, { width: NODE_W, height: h });
   }
 
@@ -91,21 +100,24 @@ function layout(
     height: 16,
   });
 
-  // Parent → child edges. Source card is the husband (father). Color is
-  // determined by the mother's index in the father's wives list, so children
-  // of different mothers get different colored edges. Children with only a
-  // mother connect from the mother's card with the default neutral color.
+  // Parent → child edges. Source is the father's card (husband). Color reflects
+  // the mother's index in the father's wife list. If the wife is divorced from
+  // the father, use a neutral gray instead.
   for (const m of members) {
     if (hidden.has(m.id)) continue;
     const fId = m.father_id && renderedIds.includes(m.father_id) ? m.father_id : undefined;
-    const mId = m.mother_id && renderedIds.includes(m.mother_id) ? m.mother_id : undefined;
+    const mId = m.mother_id;
 
     if (fId) {
       let color = DEFAULT_EDGE_COLOR;
       if (mId) {
         const wives = wivesByHusband.get(fId) ?? [];
         const idx = wives.findIndex((w) => w.id === mId);
-        if (idx >= 0) color = wifeColorFor(idx).stroke;
+        if (idx >= 0) {
+          const father = memberById.get(fId);
+          const divorced = father?.divorced_from?.includes(mId);
+          color = divorced ? DIVORCED_COLOR : wifeColorFor(idx).stroke;
+        }
       }
       g.setEdge(fId, m.id);
       edges.push({
@@ -119,7 +131,7 @@ function layout(
         markerEnd: mkArrow(color),
         data: { parentId: fId, childId: m.id, kind: "parent" },
       });
-    } else if (mId) {
+    } else if (mId && renderedIds.includes(mId)) {
       g.setEdge(mId, m.id);
       edges.push({
         id: `p:${mId}:${m.id}`,
@@ -135,7 +147,7 @@ function layout(
     }
   }
 
-  // spouse "married to" edges (dotted, no arrow)
+  // Spouse "married to" edges — only when both endpoints are still visible.
   const spouseSeen = new Set<string>();
   for (const m of members) {
     if (hidden.has(m.id) || !m.spouse_id) continue;
@@ -158,31 +170,27 @@ function layout(
 
   dagre.layout(g);
 
-  // Align generations by time period (25-year cohorts).
-  const COHORT = 25;
-  const ROW_H = 320;
-  const years = renderedIds
-    .map((id) => yearOf(memberById.get(id)!))
-    .filter((y): y is number => y !== null);
-  const minYear = years.length ? Math.min(...years) : 1900;
-  const baseYearBucket = Math.floor(minYear / COHORT);
-
-  const bucketFor = (m: FamilyMember): number | null => {
-    const y = yearOf(m);
-    if (y !== null) return Math.floor(y / COHORT) - baseYearBucket;
-    const parents = [m.father_id, m.mother_id]
-      .map((pid) => (pid ? memberById.get(pid) : undefined))
-      .filter(Boolean) as FamilyMember[];
-    const parentBuckets = parents.map(bucketFor).filter((b): b is number => b !== null);
-    if (parentBuckets.length) return Math.max(...parentBuckets) + 1;
-    return null;
+  // Generation depth — sons, cousins, second cousins etc. share a level.
+  const ROW_H = 340;
+  const genCache = new Map<string, number>();
+  const genOf = (id: string, seen = new Set<string>()): number => {
+    if (genCache.has(id)) return genCache.get(id)!;
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    const m = memberById.get(id);
+    if (!m) return 0;
+    const parents: number[] = [];
+    if (m.father_id && memberById.has(m.father_id)) parents.push(genOf(m.father_id, seen) + 1);
+    if (m.mother_id && memberById.has(m.mother_id)) parents.push(genOf(m.mother_id, seen) + 1);
+    const g = parents.length ? Math.max(...parents) : 0;
+    genCache.set(id, g);
+    return g;
   };
 
   const nodes: Node<MemberNodeData>[] = renderedIds.map((id) => {
     const m = memberById.get(id)!;
     const pos = g.node(id);
-    const b = bucketFor(m);
-    const autoY = b !== null ? b * ROW_H : pos.y - pos.height / 2;
+    const autoY = genOf(id) * ROW_H;
     const autoX = pos.x - pos.width / 2;
     const hasCustom = typeof m.pos_x === "number" && typeof m.pos_y === "number";
     return {
@@ -199,37 +207,10 @@ function layout(
     };
   });
 
-  // Place spouses side-by-side (husband left, wife right) at the same Y,
-  // unless either partner has been manually positioned.
-  const SPOUSE_GAP = 80;
-  const nodeById = new Map(nodes.map((n) => [n.id, n]));
-  const pairSeen = new Set<string>();
-  for (const m of members) {
-    if (!m.spouse_id) continue;
-    const a = nodeById.get(m.id);
-    const b = nodeById.get(m.spouse_id);
-    if (!a || !b) continue;
-    const key = [a.id, b.id].sort().join("~");
-    if (pairSeen.has(key)) continue;
-    pairSeen.add(key);
-    const ma = memberById.get(a.id)!;
-    const mb = memberById.get(b.id)!;
-    if (typeof ma.pos_x === "number" || typeof mb.pos_x === "number") continue;
-    const [left, right] = ma.gender === "male" ? [a, b] : [b, a];
-    const centerX = (a.position.x + b.position.x) / 2 + NODE_W / 2;
-    const y = Math.max(a.position.y, b.position.y);
-    left.position = { x: centerX - NODE_W - SPOUSE_GAP / 2, y };
-    right.position = { x: centerX + SPOUSE_GAP / 2, y };
-  }
-
-  // Collision resolution — enforce a minimum horizontal gap per row, so no
-  // card overlaps another. Rows are grouped by rounded Y so slight vertical
-  // differences (e.g. tall husband cards next to short ones) still count as
-  // the same visual row.
-  const ROW_KEY = (y: number) => Math.round(y / 60) * 60;
+  // Collision resolution — enforce min horizontal gap per generation row.
   const rows = new Map<number, Node<MemberNodeData>[]>();
   for (const n of nodes) {
-    const k = ROW_KEY(n.position.y);
+    const k = Math.round(n.position.y / 40) * 40;
     if (!rows.has(k)) rows.set(k, []);
     rows.get(k)!.push(n);
   }
@@ -274,6 +255,12 @@ function Inner() {
   const didFit = useRef(false);
   const edgeUpdateSuccessful = useRef(true);
 
+  const [motherPicker, setMotherPicker] = useState<{
+    fatherId: string;
+    childId: string;
+    wives: FamilyMember[];
+  } | null>(null);
+
   const onOpen = useCallback(
     (id: string) => {
       navigate({ to: "/member/$id", params: { id } });
@@ -312,8 +299,21 @@ function Inner() {
         toast.error(t("cannot_link_cycle"));
         return;
       }
-      const key = parent.gender === "male" ? "father_id" : "mother_id";
-      familyStore.update(child.id, { [key]: parent.id } as Partial<FamilyMember>);
+
+      // If the parent is a male with more than one wife, ask which wife is
+      // the child's mother before wiring the parent link.
+      if (parent.gender === "male") {
+        const wives = computeWivesByHusband(familyStore.getAll()).get(parent.id) ?? [];
+        if (wives.length > 1) {
+          setMotherPicker({ fatherId: parent.id, childId: child.id, wives });
+          return;
+        }
+        const patch: Partial<FamilyMember> = { father_id: parent.id };
+        if (wives.length === 1) patch.mother_id = wives[0].id;
+        familyStore.update(child.id, patch);
+      } else {
+        familyStore.update(child.id, { mother_id: parent.id } as Partial<FamilyMember>);
+      }
       toast.success(`${displayName(parent, lang)} → ${displayName(child, lang)}`);
     },
     [t, lang],
@@ -347,7 +347,6 @@ function Inner() {
     [t],
   );
 
-  // Reconnecting an edge's source or target (drag either endpoint to another node).
   const onEdgeUpdateStart = useCallback(() => {
     edgeUpdateSuccessful.current = false;
   }, []);
@@ -360,7 +359,6 @@ function Inner() {
         | { parentId?: string; childId?: string; kind?: string }
         | undefined;
 
-      // Spouse edge reconnection: just move spouse link.
       if (data?.kind === "spouse") {
         const oldA = familyStore.get(oldEdge.source);
         const oldB = familyStore.get(oldEdge.target);
@@ -387,10 +385,6 @@ function Inner() {
         toast.error(t("cannot_link_self"));
         return;
       }
-
-      // Determine new (parent, child) mapping from the reconnected endpoints.
-      // The parent is whichever endpoint kept/became the source; the child is
-      // the target. If the user reversed them, treat source as parent still.
       const newParent = newSource;
       const newChild = newTarget;
       if (isDescendant(familyStore.getAll(), newChild.id, newParent.id)) {
@@ -399,9 +393,7 @@ function Inner() {
       }
       const newRole = newParent.gender === "male" ? "father_id" : "mother_id";
 
-      // Clear the old parent link on the old child.
       familyStore.update(oldChild.id, { [oldRole]: undefined } as Partial<FamilyMember>);
-      // Apply the new parent link on the new child.
       familyStore.update(newChild.id, { [newRole]: newParent.id } as Partial<FamilyMember>);
       setEdges((es) => updateEdge(oldEdge, newConn, es));
       toast.success(t("link_updated"));
@@ -412,7 +404,6 @@ function Inner() {
   const onEdgeUpdateEnd = useCallback(
     (_evt: unknown, edge: Edge) => {
       if (!edgeUpdateSuccessful.current) {
-        // dropped in empty space → delete
         setEdges((es) => es.filter((e) => e.id !== edge.id));
         onEdgesDelete([edge]);
       }
@@ -432,6 +423,19 @@ function Inner() {
     requestAnimationFrame(() => fitView({ padding: 0.2, duration: 400 }));
     toast.success(t("auto_layout_done"));
   }, [fitView, t]);
+
+  const pickMother = (wifeId: string | null) => {
+    if (!motherPicker) return;
+    const patch: Partial<FamilyMember> = { father_id: motherPicker.fatherId };
+    if (wifeId) patch.mother_id = wifeId;
+    familyStore.update(motherPicker.childId, patch);
+    const father = familyStore.get(motherPicker.fatherId);
+    const child = familyStore.get(motherPicker.childId);
+    if (father && child) {
+      toast.success(`${displayName(father, lang)} → ${displayName(child, lang)}`);
+    }
+    setMotherPicker(null);
+  };
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -575,6 +579,53 @@ function Inner() {
             })}
         </div>
       </div>
+
+      <Dialog open={!!motherPicker} onOpenChange={(o) => !o && setMotherPicker(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("select_mother")}</DialogTitle>
+            <DialogDescription>{t("select_mother_desc")}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            {motherPicker?.wives.map((w, i) => {
+              const c = wifeColorFor(i);
+              const father = motherPicker && familyStore.get(motherPicker.fatherId);
+              const divorced = father?.divorced_from?.includes(w.id);
+              return (
+                <button
+                  key={w.id}
+                  onClick={() => pickMother(w.id)}
+                  className="flex items-center gap-3 rounded-md border p-3 text-start hover:bg-accent"
+                >
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full ring-2 ring-background"
+                    style={{ backgroundColor: divorced ? DIVORCED_COLOR : c.stroke }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium">
+                      <span className="opacity-60 me-1">{ordinal(i + 1, lang)}</span>
+                      {displayName(w, lang)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {w.birth_date?.slice(0, 4)}
+                      {w.death_date ? `–${w.death_date.slice(0, 4)}` : ""}
+                      {divorced ? ` · ${t("divorced")}` : ""}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => pickMother(null)}>
+              {t("unknown_mother")}
+            </Button>
+            <Button variant="outline" onClick={() => setMotherPicker(null)}>
+              {t("cancel")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
