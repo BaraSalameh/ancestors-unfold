@@ -145,14 +145,15 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                         ? {
                             backgroundColor: "hsl(var(--muted))",
                             color: "hsl(var(--muted-foreground))",
-                            "--tw-ring-color": "hsl(var(--border))",
+                            ["--tw-ring-color" as never]: "hsl(var(--border))",
                           }
                         : {
                             backgroundColor: `${c.stroke}1a`,
                             color: c.stroke,
-                            "--tw-ring-color": `${c.stroke}55`,
+                            ["--tw-ring-color" as never]: `${c.stroke}55`,
                           }) as React.CSSProperties
                     }
+
 
                     title={`${ordinal(i + 1, lang)} — ${displayName(w, lang)}${years ? ` (${years})` : ""}${
                       divorced ? ` · ${t("divorced")}` : ""
