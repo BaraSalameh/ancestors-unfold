@@ -88,6 +88,23 @@ const dict: Dict = {
     ar: "لهذا الأب أكثر من زوجة. اختر أيّ زوجة هي أم الطفل.",
   },
   unknown_mother: { en: "Unknown / skip", ar: "غير معروفة / تخطٍ" },
+  spouses: { en: "Spouses", ar: "الزوجات" },
+  add_spouse_existing: { en: "Link an existing woman", ar: "ربط امرأة موجودة" },
+  add_spouse_unknown: { en: "Add unknown spouse", ar: "إضافة زوجة غير معروفة" },
+  search_spouse: { en: "Search by name…", ar: "ابحث بالاسم…" },
+  unknown_wife: { en: "Unknown", ar: "غير معروفة" },
+  already_wife: { en: "Already linked", ar: "مرتبطة مسبقًا" },
+  remove_wife: { en: "Remove", ar: "إزالة" },
+  external_children: { en: "Children from another family", ar: "أبناء من أسرة أخرى" },
+  external_children_desc: {
+    en: "Children this woman had with a previous husband outside this tree.",
+    ar: "أبناء أنجبتهم هذه المرأة من زوج سابق من خارج هذه الشجرة.",
+  },
+  child_name: { en: "Child name", ar: "اسم الابن/الابنة" },
+  other_parent: { en: "Other parent (outside)", ar: "الوالد الآخر (خارجي)" },
+  has_external_children: { en: "Has children from another family", ar: "لديها أبناء من أسرة أخرى" },
+  add_row: { en: "Add", ar: "إضافة" },
+  remove: { en: "Remove", ar: "إزالة" },
 };
 
 export function ordinal(n: number, lang: Lang): string {
