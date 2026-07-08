@@ -141,6 +141,84 @@ export const familyStore = {
     save();
     emit();
   },
+  addSpouse(maleId: string, femaleId: string): void {
+    const now = new Date().toISOString();
+    const male = state.find((m) => m.id === maleId);
+    const female = state.find((m) => m.id === femaleId);
+    if (!male || male.gender !== "male" || !female || female.gender !== "female") return;
+    state = state.map((m) => {
+      if (m.id === maleId) {
+        const set = new Set(m.spouse_ids ?? []);
+        set.add(femaleId);
+        return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? femaleId, updated_at: now };
+      }
+      if (m.id === femaleId) {
+        return { ...m, spouse_id: m.spouse_id ?? maleId, updated_at: now };
+      }
+      return m;
+    });
+    save();
+    emit();
+  },
+  removeSpouse(maleId: string, femaleId: string): void {
+    const now = new Date().toISOString();
+    const female = state.find((m) => m.id === femaleId);
+    const removeUnknown = !!female?.is_unknown;
+    state = state
+      .filter((m) => !(removeUnknown && m.id === femaleId))
+      .map((m) => {
+        if (m.id === maleId) {
+          return {
+            ...m,
+            spouse_ids: (m.spouse_ids ?? []).filter((x) => x !== femaleId),
+            spouse_id: m.spouse_id === femaleId ? undefined : m.spouse_id,
+            divorced_from: (m.divorced_from ?? []).filter((x) => x !== femaleId),
+            updated_at: now,
+          };
+        }
+        if (m.id === femaleId && !removeUnknown) {
+          return {
+            ...m,
+            spouse_id: m.spouse_id === maleId ? undefined : m.spouse_id,
+            divorced_from: (m.divorced_from ?? []).filter((x) => x !== maleId),
+            updated_at: now,
+          };
+        }
+        return m;
+      });
+    save();
+    emit();
+  },
+  addUnknownSpouse(maleId: string): FamilyMember | undefined {
+    const now = new Date().toISOString();
+    const male = state.find((m) => m.id === maleId);
+    if (!male || male.gender !== "male") return;
+    const existingUnknown = state.filter(
+      (m) => m.is_unknown && (male.spouse_ids ?? []).includes(m.id),
+    ).length;
+    const idx = existingUnknown + 1;
+    const wife: FamilyMember = {
+      id: crypto.randomUUID(),
+      name_en: `Unknown wife #${idx}`,
+      name_ar: `زوجة غير معروفة #${idx}`,
+      gender: "female",
+      is_unknown: true,
+      created_at: now,
+      updated_at: now,
+    };
+    state = [...state, wife];
+    state = state.map((m) => {
+      if (m.id === maleId) {
+        const set = new Set(m.spouse_ids ?? []);
+        set.add(wife.id);
+        return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? wife.id, updated_at: now };
+      }
+      return m;
+    });
+    save();
+    emit();
+    return wife;
+  },
   remove(id: string): void {
     state = state
       .filter((m) => m.id !== id)
@@ -149,6 +227,7 @@ export const familyStore = {
         father_id: m.father_id === id ? undefined : m.father_id,
         mother_id: m.mother_id === id ? undefined : m.mother_id,
         spouse_id: m.spouse_id === id ? undefined : m.spouse_id,
+        spouse_ids: m.spouse_ids?.filter((x) => x !== id),
         divorced_from: m.divorced_from?.filter((x) => x !== id),
       }));
     save();

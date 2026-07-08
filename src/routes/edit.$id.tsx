@@ -26,6 +26,7 @@ function EditPage() {
       <div className="rounded-xl border bg-card p-6 shadow-sm">
         <MemberForm
           initial={member}
+          memberId={id}
           members={members.filter((m) => m.id !== id)}
           submitLabel={t("save")}
           onCancel={() => navigate({ to: "/member/$id", params: { id } })}

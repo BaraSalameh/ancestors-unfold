@@ -52,11 +52,18 @@ function layout(
   const memberById = new Map(members.map((m) => [m.id, m]));
   const wivesByHusband = computeWivesByHusband(members);
 
-  // Any female who appears as a wife inside a husband card is hidden from
-  // the tree (her chip inside the husband card replaces the standalone card).
+  // A wife's standalone card is hidden ONLY when she is an outsider (no
+  // father resolvable in this tree) or a placeholder unknown wife. Cousin
+  // wives (father exists in the tree) keep their own card so the family
+  // link to their father remains visible.
   const asWife = new Set<string>();
-  for (const list of wivesByHusband.values()) {
-    for (const w of list) asWife.add(w.id);
+  const wifeHusbandOf = new Map<string, string>(); // wifeId -> husbandId
+  for (const [husbandId, list] of wivesByHusband.entries()) {
+    for (const w of list) {
+      wifeHusbandOf.set(w.id, husbandId);
+      const hasFamily = !!(w.father_id && memberById.has(w.father_id));
+      if (!hasFamily || w.is_unknown) asWife.add(w.id);
+    }
   }
 
   const childrenMap = new Map<string, string[]>();
@@ -151,8 +158,12 @@ function layout(
   const spouseSeen = new Set<string>();
   for (const m of members) {
     if (hidden.has(m.id) || !m.spouse_id) continue;
+    // Cousin wife: her marital link is already shown as a chip inside the
+    // husband's card; skip drawing the extra spouse edge.
+    if (wifeHusbandOf.has(m.id)) continue;
     const sp = memberById.get(m.spouse_id);
     if (!sp || hidden.has(sp.id)) continue;
+    if (wifeHusbandOf.has(sp.id)) continue;
     const key = [m.id, sp.id].sort().join("~");
     if (spouseSeen.has(key)) continue;
     spouseSeen.add(key);

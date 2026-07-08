@@ -1,5 +1,13 @@
 export type Gender = "male" | "female";
 
+export interface ExternalChild {
+  id: string;
+  name: string;
+  other_parent_name?: string;
+  birth_year?: string;
+  notes?: string;
+}
+
 export interface FamilyMember {
   id: string;
   name_en: string;
@@ -12,8 +20,16 @@ export interface FamilyMember {
   father_id?: string;
   mother_id?: string;
   spouse_id?: string;
+  /** All spouses for polygamous males. Additive to spouse_id. */
+  spouse_ids?: string[];
   /** IDs of previous partners the member has divorced. Symmetric with the other side. */
   divorced_from?: string[];
+  /** Placeholder wife with no known identity. Rendered only inside husband card, never as an own card. */
+  is_unknown?: boolean;
+  /**
+   * Children this woman had with another (out-of-tree) husband. Kept on the mother.
+   */
+  external_children?: ExternalChild[];
   pos_x?: number;
   pos_y?: number;
   created_at: string;

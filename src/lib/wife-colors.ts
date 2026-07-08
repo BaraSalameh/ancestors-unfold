@@ -41,8 +41,11 @@ export function computeWivesByHusband(
         if (prev === undefined || y < prev) wifeFirstYear.set(mother.id, y);
       }
     }
-    if (husband.spouse_id) {
-      const sp = byId.get(husband.spouse_id);
+    const directSpouses = new Set<string>();
+    if (husband.spouse_id) directSpouses.add(husband.spouse_id);
+    for (const sid of husband.spouse_ids ?? []) directSpouses.add(sid);
+    for (const sid of directSpouses) {
+      const sp = byId.get(sid);
       if (sp && sp.gender === "female") wifeIds.add(sp.id);
     }
 
