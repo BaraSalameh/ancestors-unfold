@@ -181,8 +181,22 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                     />
                     <span className="shrink-0 opacity-70">{ordinal(i + 1, lang)}</span>
                     <span className={`truncate ${divorced ? "line-through" : ""}`}>
-                      {displayName(w, lang)}
+                      {w.is_unknown ? (
+                        <span className="italic opacity-80">{t("unknown_wife")}</span>
+                      ) : (
+                        displayName(w, lang)
+                      )}
                     </span>
+                    {w.is_unknown && <HelpCircle className="h-2.5 w-2.5 shrink-0 opacity-60" />}
+                    {(w.external_children?.length ?? 0) > 0 && (
+                      <span
+                        className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-1 text-[9px] text-amber-700 dark:text-amber-300"
+                        title={t("has_external_children")}
+                      >
+                        <UserPlus className="h-2 w-2" />
+                        {w.external_children!.length}
+                      </span>
+                    )}
                     {years && (
                       <span className="shrink-0 opacity-70 tabular-nums">{years}</span>
                     )}
