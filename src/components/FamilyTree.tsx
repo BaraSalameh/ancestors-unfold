@@ -163,6 +163,7 @@ function layout(
     if (wifeHusbandOf.has(m.id)) continue;
     const sp = memberById.get(m.spouse_id);
     if (!sp || hidden.has(sp.id)) continue;
+    if (wifeHusbandOf.has(sp.id)) continue;
     const key = [m.id, sp.id].sort().join("~");
     if (spouseSeen.has(key)) continue;
     spouseSeen.add(key);
