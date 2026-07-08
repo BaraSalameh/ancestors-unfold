@@ -105,7 +105,7 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
             >
               {lang === "ar" ? member.name_en : member.name_ar}
             </div>
-            <div className="mt-1 flex items-center gap-1.5">
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${th.chip}`}
               >
@@ -119,9 +119,25 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                   {deathY ? `–${deathY}` : ""}
                 </span>
               )}
+              {member.gender === "female" && (member.external_children?.length ?? 0) > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:text-amber-300"
+                  title={
+                    t("has_external_children") +
+                    ": " +
+                    (member.external_children ?? [])
+                      .map((c) => c.name + (c.other_parent_name ? ` (${c.other_parent_name})` : ""))
+                      .join(", ")
+                  }
+                >
+                  <UserPlus className="h-2.5 w-2.5" />
+                  {member.external_children!.length}
+                </span>
+              )}
             </div>
           </div>
         </div>
+
 
         {wives && wives.length > 0 && (
           <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
