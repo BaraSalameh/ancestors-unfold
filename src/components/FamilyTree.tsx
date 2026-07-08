@@ -158,6 +158,9 @@ function layout(
   const spouseSeen = new Set<string>();
   for (const m of members) {
     if (hidden.has(m.id) || !m.spouse_id) continue;
+    // Cousin wife: her marital link is already shown as a chip inside the
+    // husband's card; skip drawing the extra spouse edge.
+    if (wifeHusbandOf.has(m.id)) continue;
     const sp = memberById.get(m.spouse_id);
     if (!sp || hidden.has(sp.id)) continue;
     const key = [m.id, sp.id].sort().join("~");
