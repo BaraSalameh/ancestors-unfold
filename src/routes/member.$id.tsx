@@ -122,13 +122,46 @@ function MemberPage() {
           </Section>
         )}
 
-        <Section title={t("basic_info") + " · " + t("father") + " / " + t("mother") + " / " + t("spouse")}>
-          <div className="grid gap-3 sm:grid-cols-3">
+        <Section title={t("father") + " / " + t("mother")}>
+          <div className="grid gap-3 sm:grid-cols-2">
             <RelCard label={t("father")} m={father} />
             <RelCard label={t("mother")} m={mother} />
-            <RelCard label={t("spouse")} m={spouse} />
           </div>
         </Section>
+
+        <Section title={t("spouses") ?? t("spouse")} action={
+          <Button asChild size="sm" variant="outline">
+            <Link to="/edit/$id" params={{ id: member.id }}><Plus className="h-4 w-4 ltr:mr-1 rtl:ml-1" />{t("add_spouse")}</Link>
+          </Button>
+        }>
+          {spouses.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("none")}</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {spouses.map((s) => {
+                const divorced = (member.divorced_from ?? []).includes(s.id);
+                return (
+                  <div key={s.id} className="relative">
+                    <RelCard label="" m={s} />
+                    <div className="mt-1 flex gap-1 text-[10px]">
+                      {s.is_unknown && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                          {t("unknown_wife") ?? "Unknown"}
+                        </span>
+                      )}
+                      {divorced && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                          {t("divorced") ?? "Divorced"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Section>
+
 
         <Section title={t("children")} action={
           <Button asChild size="sm" variant="outline">
