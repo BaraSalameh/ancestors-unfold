@@ -141,7 +141,7 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
 
         {member.gender === "male" && (
           <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
-            <div className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               <Heart className="h-2.5 w-2.5" />
               <span>{t("spouses")}</span>
               <span
@@ -157,18 +157,19 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                     navigate({ to: "/edit/$id", params: { id: member.id } });
                   }
                 }}
-                title={t("add_spouse")}
-                className="ms-auto inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary transition hover:bg-primary/20 hover:scale-110"
+                title={t("edit_spouses")}
+                className="ms-auto inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] normal-case tracking-normal text-primary transition hover:bg-primary/20"
               >
                 <Plus className="h-2.5 w-2.5" />
+                <span>{t("edit")}</span>
               </span>
             </div>
             {(!wives || wives.length === 0) ? (
-              <div className="text-[10px] italic text-muted-foreground">
-                {t("none")}
+              <div className="rounded-md border border-dashed border-border/80 bg-background/60 px-2 py-1.5 text-[10px] italic text-muted-foreground">
+                {t("no_spouses_recorded")}
               </div>
             ) : (
-            <div className="flex flex-col gap-1">
+            <div className="flex max-h-24 flex-col gap-1 overflow-y-auto pr-1">
               {wives.map((w, i) => {
 
                 const c = wifeColorFor(i);

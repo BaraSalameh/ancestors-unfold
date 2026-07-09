@@ -81,9 +81,24 @@ export const familyStore = {
     state = [...state, member];
     // mirror spouse link
     if (member.spouse_id) {
-      state = state.map((m) =>
-        m.id === member.spouse_id && !m.spouse_id ? { ...m, spouse_id: member.id, updated_at: now } : m,
-      );
+      const spouse = state.find((m) => m.id === member.spouse_id);
+      state = state.map((m) => {
+        if (!spouse) return m;
+        if (member.gender === "female" && spouse.gender === "male" && m.id === spouse.id) {
+          const set = new Set(m.spouse_ids ?? []);
+          set.add(member.id);
+          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? member.id, updated_at: now };
+        }
+        if (member.gender === "male" && spouse.gender === "female" && m.id === member.id) {
+          const set = new Set(m.spouse_ids ?? []);
+          set.add(spouse.id);
+          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? spouse.id, updated_at: now };
+        }
+        if (member.gender === "male" && spouse.gender === "female" && m.id === spouse.id) {
+          return { ...m, spouse_id: m.spouse_id ?? member.id, updated_at: now };
+        }
+        return m;
+      });
     }
     save();
     emit();
@@ -107,9 +122,25 @@ export const familyStore = {
     const now = new Date().toISOString();
     state = state.map((m) => (m.id === id ? { ...m, ...patch, updated_at: now } : m));
     if (patch.spouse_id) {
-      state = state.map((m) =>
-        m.id === patch.spouse_id ? { ...m, spouse_id: id, updated_at: now } : m,
-      );
+      const member = state.find((m) => m.id === id);
+      const spouse = state.find((m) => m.id === patch.spouse_id);
+      state = state.map((m) => {
+        if (!member || !spouse) return m;
+        if (member.gender === "female" && spouse.gender === "male" && m.id === spouse.id) {
+          const set = new Set(m.spouse_ids ?? []);
+          set.add(member.id);
+          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? member.id, updated_at: now };
+        }
+        if (member.gender === "male" && spouse.gender === "female" && m.id === member.id) {
+          const set = new Set(m.spouse_ids ?? []);
+          set.add(spouse.id);
+          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? spouse.id, updated_at: now };
+        }
+        if (member.gender === "male" && spouse.gender === "female" && m.id === spouse.id) {
+          return { ...m, spouse_id: m.spouse_id ?? member.id, updated_at: now };
+        }
+        return m;
+      });
     }
     save();
     emit();

@@ -92,7 +92,7 @@ function layout(
 
   const renderedIds = members.filter((m) => !hidden.has(m.id)).map((m) => m.id);
   for (const id of renderedIds) {
-    const h = wivesByHusband.has(id) ? NODE_H_HUSBAND : NODE_H;
+    const h = memberById.get(id)?.gender === "male" ? NODE_H_HUSBAND : NODE_H;
     g.setNode(id, { width: NODE_W, height: h });
   }
 

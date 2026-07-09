@@ -89,6 +89,8 @@ const dict: Dict = {
   },
   unknown_mother: { en: "Unknown / skip", ar: "غير معروفة / تخطٍ" },
   spouses: { en: "Spouses", ar: "الزوجات" },
+  edit_spouses: { en: "Edit spouses", ar: "تعديل الزوجات" },
+  no_spouses_recorded: { en: "No spouses recorded yet", ar: "لم يتم تسجيل زوجات بعد" },
   add_spouse_existing: { en: "Link an existing woman", ar: "ربط امرأة موجودة" },
   add_spouse_unknown: { en: "Add unknown spouse", ar: "إضافة زوجة غير معروفة" },
   search_spouse: { en: "Search by name…", ar: "ابحث بالاسم…" },
