@@ -83,7 +83,7 @@ export function MemberForm({
       setError(t("name_required"));
       return;
     }
-    onSubmit({
+    const payload: MemberInput = {
       name_en: name_en.trim(),
       name_ar: name_ar.trim(),
       gender,
@@ -93,9 +93,14 @@ export function MemberForm({
       notes: notes.trim() || undefined,
       father_id: father_id || undefined,
       mother_id: mother_id || undefined,
-      spouse_id: spouse_id || undefined,
       external_children: external_children.length ? external_children : undefined,
-    });
+    };
+
+    if (!showSpouseEditor) {
+      payload.spouse_id = spouse_id || undefined;
+    }
+
+    onSubmit(payload);
   };
 
   const showSpouseEditor = gender === "male" && !!memberId;

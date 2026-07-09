@@ -15,8 +15,9 @@ export type WifeColor = (typeof WIFE_COLORS)[number];
 
 /**
  * Ordered list of wives per husband (male). A "wife" is any female who either
- * co-parents a child with the husband, or is directly linked via spouse_id.
- * Order = earliest known child birth year first, then by name.
+ * co-parents a child with the husband, is listed on the husband's spouse_ids,
+ * or points back to him through spouse_id. This keeps older one-way records
+ * visible inside the husband's card.
  */
 export function computeWivesByHusband(
   members: FamilyMember[],
@@ -29,6 +30,21 @@ export function computeWivesByHusband(
 
     const wifeIds = new Set<string>();
     const wifeFirstYear = new Map<string, number>();
+    const explicitOrder = new Map<string, number>();
+
+    const addExplicit = (id: string | undefined) => {
+      if (!id || explicitOrder.has(id)) return;
+      explicitOrder.set(id, explicitOrder.size);
+    };
+
+    addExplicit(husband.spouse_id);
+    for (const sid of husband.spouse_ids ?? []) addExplicit(sid);
+
+    for (const spouse of members) {
+      if (spouse.gender === "female" && spouse.spouse_id === husband.id) {
+        addExplicit(spouse.id);
+      }
+    }
 
     for (const child of members) {
       if (child.father_id !== husband.id || !child.mother_id) continue;
@@ -41,10 +57,7 @@ export function computeWivesByHusband(
         if (prev === undefined || y < prev) wifeFirstYear.set(mother.id, y);
       }
     }
-    const directSpouses = new Set<string>();
-    if (husband.spouse_id) directSpouses.add(husband.spouse_id);
-    for (const sid of husband.spouse_ids ?? []) directSpouses.add(sid);
-    for (const sid of directSpouses) {
+    for (const sid of explicitOrder.keys()) {
       const sp = byId.get(sid);
       if (sp && sp.gender === "female") wifeIds.add(sp.id);
     }
@@ -52,6 +65,11 @@ export function computeWivesByHusband(
     const wives = [...wifeIds]
       .map((id) => byId.get(id)!)
       .sort((a, b) => {
+        const oa = explicitOrder.get(a.id);
+        const ob = explicitOrder.get(b.id);
+        if (oa !== undefined && ob !== undefined && oa !== ob) return oa - ob;
+        if (oa !== undefined && ob === undefined) return -1;
+        if (oa === undefined && ob !== undefined) return 1;
         const ya = wifeFirstYear.get(a.id) ?? Number.POSITIVE_INFINITY;
         const yb = wifeFirstYear.get(b.id) ?? Number.POSITIVE_INFINITY;
         if (ya !== yb) return ya - yb;
