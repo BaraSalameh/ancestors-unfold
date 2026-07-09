@@ -34,7 +34,13 @@ function MemberPage() {
 
   const father = member.father_id ? members.find((m) => m.id === member.father_id) : undefined;
   const mother = member.mother_id ? members.find((m) => m.id === member.mother_id) : undefined;
-  const spouse = member.spouse_id ? members.find((m) => m.id === member.spouse_id) : undefined;
+  const spouseIds = Array.from(
+    new Set([...(member.spouse_id ? [member.spouse_id] : []), ...(member.spouse_ids ?? [])])
+  );
+  const spouses = spouseIds
+    .map((sid) => members.find((m) => m.id === sid))
+    .filter((m): m is FamilyMember => !!m);
+  const spouse = spouses[0];
   const children = getChildren(members, member.id);
   const generation = getGeneration(members, member.id);
 
