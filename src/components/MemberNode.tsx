@@ -91,11 +91,6 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                 <User className="h-6 w-6" />
               </div>
             )}
-            {deceased && (
-              <span className="absolute -bottom-1 -right-1 rounded-full bg-slate-700 px-1 text-[8px] font-semibold uppercase tracking-wider text-white shadow">
-                ✝
-              </span>
-            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold text-card-foreground">
