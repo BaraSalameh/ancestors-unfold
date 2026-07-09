@@ -1,6 +1,9 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
-import { User, Cake, Sparkles, Heart, Unlink, Link2, UserPlus, HelpCircle } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { User, Cake, Sparkles, Heart, Unlink, Link2, UserPlus, HelpCircle, Plus } from "lucide-react";
+
+
 import { displayName, ordinal, useI18n } from "@/lib/i18n";
 import type { FamilyMember } from "@/lib/family-types";
 import { wifeColorFor } from "@/lib/wife-colors";
@@ -36,9 +39,11 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
   const { member, highlighted, onOpen, wives } = data;
   const th = genderTheme(member.gender);
   const { lang, t } = useI18n();
-  const deceased = !!member.death_date;
+  const navigate = useNavigate();
+
   const birthY = member.birth_date?.slice(0, 4);
   const deathY = member.death_date?.slice(0, 4);
+
 
   return (
     <div className="relative">
@@ -89,11 +94,6 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                 <User className="h-6 w-6" />
               </div>
             )}
-            {deceased && (
-              <span className="absolute -bottom-1 -right-1 rounded-full bg-slate-700 px-1 text-[8px] font-semibold uppercase tracking-wider text-white shadow">
-                ✝
-              </span>
-            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold text-card-foreground">
@@ -139,14 +139,38 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
         </div>
 
 
-        {wives && wives.length > 0 && (
+        {member.gender === "male" && (
           <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
             <div className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               <Heart className="h-2.5 w-2.5" />
-              {t("spouse")}
+              <span>{t("spouses")}</span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate({ to: "/edit/$id", params: { id: member.id } });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    navigate({ to: "/edit/$id", params: { id: member.id } });
+                  }
+                }}
+                title={t("add_spouse")}
+                className="ms-auto inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary transition hover:bg-primary/20 hover:scale-110"
+              >
+                <Plus className="h-2.5 w-2.5" />
+              </span>
             </div>
+            {(!wives || wives.length === 0) ? (
+              <div className="text-[10px] italic text-muted-foreground">
+                {t("none")}
+              </div>
+            ) : (
             <div className="flex flex-col gap-1">
               {wives.map((w, i) => {
+
                 const c = wifeColorFor(i);
                 const divorced = (member.divorced_from ?? []).includes(w.id);
                 const wBirth = w.birth_date?.slice(0, 4);
@@ -226,7 +250,9 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                 );
               })}
             </div>
+            )}
           </div>
+
         )}
       </button>
     </div>
