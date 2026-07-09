@@ -250,7 +250,9 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                 );
               })}
             </div>
+            )}
           </div>
+
         )}
       </button>
     </div>
