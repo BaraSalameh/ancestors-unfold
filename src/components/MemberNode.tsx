@@ -1,7 +1,8 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
-import { Link } from "@tanstack/react-router";
-import { User, Cake, Sparkles, Heart, Unlink, Link2, UserPlus, HelpCircle, Plus, Pencil } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { User, Cake, Sparkles, Heart, Unlink, Link2, UserPlus, HelpCircle, Plus } from "lucide-react";
+
 
 import { displayName, ordinal, useI18n } from "@/lib/i18n";
 import type { FamilyMember } from "@/lib/family-types";
