@@ -40,7 +40,6 @@ function MemberPage() {
   const spouses = spouseIds
     .map((sid) => members.find((m) => m.id === sid))
     .filter((m): m is FamilyMember => !!m);
-  const spouse = spouses[0];
   const children = getChildren(members, member.id);
   const generation = getGeneration(members, member.id);
 
