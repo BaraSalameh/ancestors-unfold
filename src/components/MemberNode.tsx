@@ -38,9 +38,9 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
   const { member, highlighted, onOpen, wives } = data;
   const th = genderTheme(member.gender);
   const { lang, t } = useI18n();
-  const deathY = member.death_date?.slice(0, 4);
   const birthY = member.birth_date?.slice(0, 4);
   const deathY = member.death_date?.slice(0, 4);
+
 
   return (
     <div className="relative">
