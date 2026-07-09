@@ -139,14 +139,38 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
         </div>
 
 
-        {wives && wives.length > 0 && (
+        {member.gender === "male" && (
           <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
             <div className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               <Heart className="h-2.5 w-2.5" />
-              {t("spouse")}
+              <span>{t("spouses")}</span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate({ to: "/edit/$id", params: { id: member.id } });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    navigate({ to: "/edit/$id", params: { id: member.id } });
+                  }
+                }}
+                title={t("add_spouse")}
+                className="ms-auto inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary transition hover:bg-primary/20 hover:scale-110"
+              >
+                <Plus className="h-2.5 w-2.5" />
+              </span>
             </div>
+            {(!wives || wives.length === 0) ? (
+              <div className="text-[10px] italic text-muted-foreground">
+                {t("none")}
+              </div>
+            ) : (
             <div className="flex flex-col gap-1">
               {wives.map((w, i) => {
+
                 const c = wifeColorFor(i);
                 const divorced = (member.divorced_from ?? []).includes(w.id);
                 const wBirth = w.birth_date?.slice(0, 4);
