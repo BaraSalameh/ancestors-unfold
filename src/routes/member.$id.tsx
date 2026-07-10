@@ -34,10 +34,27 @@ function MemberPage() {
 
   const father = member.father_id ? members.find((m) => m.id === member.father_id) : undefined;
   const mother = member.mother_id ? members.find((m) => m.id === member.mother_id) : undefined;
-  const spouseIds = Array.from(
-    new Set([...(member.spouse_id ? [member.spouse_id] : []), ...(member.spouse_ids ?? [])])
-  );
-  const spouses = spouseIds
+  
+  // Collect spouse IDs from explicit links and also from children (mothers/fathers of children)
+  const spouseIds = new Set<string>();
+  if (member.spouse_id) spouseIds.add(member.spouse_id);
+  if (member.spouse_ids) {
+    for (const id of member.spouse_ids) spouseIds.add(id);
+  }
+  // For males: also add mothers of their children
+  if (member.gender === "male") {
+    for (const m of members) {
+      if (m.father_id === member.id && m.mother_id) spouseIds.add(m.mother_id);
+    }
+  }
+  // For females: also add fathers of their children
+  if (member.gender === "female") {
+    for (const m of members) {
+      if (m.mother_id === member.id && m.father_id) spouseIds.add(m.father_id);
+    }
+  }
+  
+  const spouses = Array.from(spouseIds)
     .map((sid) => members.find((m) => m.id === sid))
     .filter((m): m is FamilyMember => !!m);
   const children = getChildren(members, member.id);
