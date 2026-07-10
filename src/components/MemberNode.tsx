@@ -122,6 +122,9 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                 <Sparkles className="h-2.5 w-2.5" />
                 {t(member.gender)}
               </span>
+              <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:text-emerald-300">
+                {member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}
+              </span>
               <Popover open={subfamilyOpen} onOpenChange={setSubfamilyOpen}>
                 <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                   <button className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium text-purple-600 hover:bg-purple-500/20 dark:text-purple-300">

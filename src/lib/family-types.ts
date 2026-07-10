@@ -1,4 +1,5 @@
 export type Gender = "male" | "female";
+export type CitizenStatus = "resident" | "non_resident";
 
 export interface ExternalChild {
   id: string;
@@ -15,6 +16,7 @@ export interface FamilyMember {
   gender: Gender;
   birth_date?: string;
   death_date?: string;
+  citizen_status?: CitizenStatus;
   image_url?: string;
   notes?: string;
   father_id?: string;

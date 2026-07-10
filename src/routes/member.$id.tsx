@@ -122,6 +122,7 @@ function MemberPage() {
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               <Badge>{t(member.gender)}</Badge>
               <Badge>{member.death_date ? t("deceased") : t("living")}</Badge>
+              <Badge>{member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}</Badge>
               <Badge>{t("generation")}: {generation}</Badge>
             </div>
           </div>
@@ -130,6 +131,7 @@ function MemberPage() {
         <Section title={t("basic_info")}>
           <Field label={t("birth_date")} value={member.birth_date ?? "—"} />
           <Field label={t("death_date")} value={member.death_date ?? "—"} />
+          <Field label={t("citizen_status")} value={member.citizen_status === "non_resident" ? t("non_resident") : t("resident")} />
         </Section>
 
         {member.notes && (

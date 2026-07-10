@@ -35,6 +35,7 @@ import {
 import { useI18n, displayName, ordinal, type Lang } from "@/lib/i18n";
 import { familyStore } from "@/lib/family-store";
 import type {
+  CitizenStatus,
   ExternalChild,
   FamilyMember,
   Gender,
@@ -62,6 +63,7 @@ export function MemberForm({
   const [name_en, setNameEn] = useState(initial?.name_en ?? "");
   const [name_ar, setNameAr] = useState(initial?.name_ar ?? "");
   const [gender, setGender] = useState<Gender>(initial?.gender ?? "male");
+  const [citizen_status, setCitizenStatus] = useState<CitizenStatus>(initial?.citizen_status ?? "resident");
   const [birth_date, setBirth] = useState(initial?.birth_date ?? "");
   const [death_date, setDeath] = useState(initial?.death_date ?? "");
   const [image_url, setImage] = useState(initial?.image_url ?? "");
@@ -87,6 +89,7 @@ export function MemberForm({
       name_en: name_en.trim(),
       name_ar: name_ar.trim(),
       gender,
+      citizen_status,
       birth_date: birth_date || undefined,
       death_date: death_date || undefined,
       image_url: image_url.trim() || undefined,
@@ -128,7 +131,7 @@ export function MemberForm({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <div className="space-y-2">
           <Label>{t("gender")}</Label>
           <Select value={gender} onValueChange={(v) => setGender(v as Gender)}>
@@ -138,6 +141,18 @@ export function MemberForm({
             <SelectContent>
               <SelectItem value="male">{t("male")}</SelectItem>
               <SelectItem value="female">{t("female")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>{t("citizen_status")}</Label>
+          <Select value={citizen_status} onValueChange={(v) => setCitizenStatus(v as CitizenStatus)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="resident">{t("resident")}</SelectItem>
+              <SelectItem value="non_resident">{t("non_resident")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
