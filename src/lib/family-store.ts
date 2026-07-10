@@ -37,6 +37,8 @@ const SAMPLE: FamilyMember[] = (() => {
 
 let state: FamilyMember[] = [];
 const listeners = new Set<() => void>();
+let past: FamilyMember[][] = [];
+let future: FamilyMember[][] = [];
 
 function load() {
   if (typeof window === "undefined") {
@@ -61,6 +63,34 @@ function emit() {
   for (const l of listeners) l();
 }
 
+function cloneMembers(members: FamilyMember[]): FamilyMember[] {
+  return members.map((m) => ({
+    ...m,
+    spouse_ids: m.spouse_ids ? [...m.spouse_ids] : undefined,
+    divorced_from: m.divorced_from ? [...m.divorced_from] : undefined,
+  }));
+}
+
+function snapshot(): FamilyMember[] {
+  return cloneMembers(state);
+}
+
+function commit(mutator: () => void) {
+  const before = snapshot();
+  mutator();
+  if (JSON.stringify(before) === JSON.stringify(state)) return;
+  past = [...past, before];
+  future = [];
+  save();
+  emit();
+}
+
+function applySnapshot(next: FamilyMember[]) {
+  state = cloneMembers(next);
+  save();
+  emit();
+}
+
 if (typeof window !== "undefined") load();
 
 export const familyStore = {
@@ -72,78 +102,79 @@ export const familyStore = {
   },
   add(input: MemberInput): FamilyMember {
     const now = new Date().toISOString();
-    const member: FamilyMember = {
-      ...input,
-      id: crypto.randomUUID(),
-      created_at: now,
-      updated_at: now,
-    };
-    state = [...state, member];
-    // mirror spouse link
-    if (member.spouse_id) {
-      const spouse = state.find((m) => m.id === member.spouse_id);
-      state = state.map((m) => {
-        if (!spouse) return m;
-        if (member.gender === "female" && spouse.gender === "male" && m.id === spouse.id) {
-          const set = new Set(m.spouse_ids ?? []);
-          set.add(member.id);
-          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? member.id, updated_at: now };
-        }
-        if (member.gender === "male" && spouse.gender === "female" && m.id === member.id) {
-          const set = new Set(m.spouse_ids ?? []);
-          set.add(spouse.id);
-          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? spouse.id, updated_at: now };
-        }
-        if (member.gender === "male" && spouse.gender === "female" && m.id === spouse.id) {
-          return { ...m, spouse_id: m.spouse_id ?? member.id, updated_at: now };
-        }
-        return m;
-      });
-    }
-    save();
-    emit();
-    return member;
+    let member: FamilyMember | undefined;
+    commit(() => {
+      member = {
+        ...input,
+        id: crypto.randomUUID(),
+        created_at: now,
+        updated_at: now,
+      };
+      state = [...state, member];
+      // mirror spouse link
+      if (member.spouse_id) {
+        const spouse = state.find((m) => m.id === member.spouse_id);
+        state = state.map((m) => {
+          if (!spouse) return m;
+          if (member.gender === "female" && spouse.gender === "male" && m.id === spouse.id) {
+            const set = new Set(m.spouse_ids ?? []);
+            set.add(member.id);
+            return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? member.id, updated_at: now };
+          }
+          if (member.gender === "male" && spouse.gender === "female" && m.id === member.id) {
+            const set = new Set(m.spouse_ids ?? []);
+            set.add(spouse.id);
+            return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? spouse.id, updated_at: now };
+          }
+          if (member.gender === "male" && spouse.gender === "female" && m.id === spouse.id) {
+            return { ...m, spouse_id: m.spouse_id ?? member.id, updated_at: now };
+          }
+          return m;
+        });
+      }
+    });
+    return member!;
   },
   setPosition(id: string, pos: { x: number; y: number } | null): void {
-    state = state.map((m) =>
-      m.id === id
-        ? { ...m, pos_x: pos?.x, pos_y: pos?.y }
-        : m,
-    );
-    save();
-    emit();
+    commit(() => {
+      state = state.map((m) =>
+        m.id === id
+          ? { ...m, pos_x: pos?.x, pos_y: pos?.y }
+          : m,
+      );
+    });
   },
   clearPositions(): void {
-    state = state.map((m) => ({ ...m, pos_x: undefined, pos_y: undefined }));
-    save();
-    emit();
+    commit(() => {
+      state = state.map((m) => ({ ...m, pos_x: undefined, pos_y: undefined }));
+    });
   },
   update(id: string, patch: Partial<MemberInput>): void {
     const now = new Date().toISOString();
-    state = state.map((m) => (m.id === id ? { ...m, ...patch, updated_at: now } : m));
-    if (patch.spouse_id) {
-      const member = state.find((m) => m.id === id);
-      const spouse = state.find((m) => m.id === patch.spouse_id);
-      state = state.map((m) => {
-        if (!member || !spouse) return m;
-        if (member.gender === "female" && spouse.gender === "male" && m.id === spouse.id) {
-          const set = new Set(m.spouse_ids ?? []);
-          set.add(member.id);
-          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? member.id, updated_at: now };
-        }
-        if (member.gender === "male" && spouse.gender === "female" && m.id === member.id) {
-          const set = new Set(m.spouse_ids ?? []);
-          set.add(spouse.id);
-          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? spouse.id, updated_at: now };
-        }
-        if (member.gender === "male" && spouse.gender === "female" && m.id === spouse.id) {
-          return { ...m, spouse_id: m.spouse_id ?? member.id, updated_at: now };
-        }
-        return m;
-      });
-    }
-    save();
-    emit();
+    commit(() => {
+      state = state.map((m) => (m.id === id ? { ...m, ...patch, updated_at: now } : m));
+      if (patch.spouse_id) {
+        const member = state.find((m) => m.id === id);
+        const spouse = state.find((m) => m.id === patch.spouse_id);
+        state = state.map((m) => {
+          if (!member || !spouse) return m;
+          if (member.gender === "female" && spouse.gender === "male" && m.id === spouse.id) {
+            const set = new Set(m.spouse_ids ?? []);
+            set.add(member.id);
+            return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? member.id, updated_at: now };
+          }
+          if (member.gender === "male" && spouse.gender === "female" && m.id === member.id) {
+            const set = new Set(m.spouse_ids ?? []);
+            set.add(spouse.id);
+            return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? spouse.id, updated_at: now };
+          }
+          if (member.gender === "male" && spouse.gender === "female" && m.id === spouse.id) {
+            return { ...m, spouse_id: m.spouse_id ?? member.id, updated_at: now };
+          }
+          return m;
+        });
+      }
+    });
   },
   toggleDivorce(aId: string, bId: string): void {
     const now = new Date().toISOString();
@@ -154,71 +185,71 @@ export const familyStore = {
     const a = state.find((m) => m.id === aId);
     if (!a) return;
     const currently = has(a, bId);
-    state = state.map((m) => {
-      if (m.id === aId)
-        return {
-          ...m,
-          divorced_from: currently ? remove(m.divorced_from, bId) : add(m.divorced_from, bId),
-          updated_at: now,
-        };
-      if (m.id === bId)
-        return {
-          ...m,
-          divorced_from: currently ? remove(m.divorced_from, aId) : add(m.divorced_from, aId),
-          updated_at: now,
-        };
-      return m;
+    commit(() => {
+      state = state.map((m) => {
+        if (m.id === aId)
+          return {
+            ...m,
+            divorced_from: currently ? remove(m.divorced_from, bId) : add(m.divorced_from, bId),
+            updated_at: now,
+          };
+        if (m.id === bId)
+          return {
+            ...m,
+            divorced_from: currently ? remove(m.divorced_from, aId) : add(m.divorced_from, aId),
+            updated_at: now,
+          };
+        return m;
+      });
     });
-    save();
-    emit();
   },
   addSpouse(maleId: string, femaleId: string): void {
     const now = new Date().toISOString();
     const male = state.find((m) => m.id === maleId);
     const female = state.find((m) => m.id === femaleId);
     if (!male || male.gender !== "male" || !female || female.gender !== "female") return;
-    state = state.map((m) => {
-      if (m.id === maleId) {
-        const set = new Set(m.spouse_ids ?? []);
-        set.add(femaleId);
-        return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? femaleId, updated_at: now };
-      }
-      if (m.id === femaleId) {
-        return { ...m, spouse_id: m.spouse_id ?? maleId, updated_at: now };
-      }
-      return m;
+    commit(() => {
+      state = state.map((m) => {
+        if (m.id === maleId) {
+          const set = new Set(m.spouse_ids ?? []);
+          set.add(femaleId);
+          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? femaleId, updated_at: now };
+        }
+        if (m.id === femaleId) {
+          return { ...m, spouse_id: m.spouse_id ?? maleId, updated_at: now };
+        }
+        return m;
+      });
     });
-    save();
-    emit();
   },
   removeSpouse(maleId: string, femaleId: string): void {
     const now = new Date().toISOString();
     const female = state.find((m) => m.id === femaleId);
     const removeUnknown = !!female?.is_unknown;
-    state = state
-      .filter((m) => !(removeUnknown && m.id === femaleId))
-      .map((m) => {
-        if (m.id === maleId) {
-          return {
-            ...m,
-            spouse_ids: (m.spouse_ids ?? []).filter((x) => x !== femaleId),
-            spouse_id: m.spouse_id === femaleId ? undefined : m.spouse_id,
-            divorced_from: (m.divorced_from ?? []).filter((x) => x !== femaleId),
-            updated_at: now,
-          };
-        }
-        if (m.id === femaleId && !removeUnknown) {
-          return {
-            ...m,
-            spouse_id: m.spouse_id === maleId ? undefined : m.spouse_id,
-            divorced_from: (m.divorced_from ?? []).filter((x) => x !== maleId),
-            updated_at: now,
-          };
-        }
-        return m;
-      });
-    save();
-    emit();
+    commit(() => {
+      state = state
+        .filter((m) => !(removeUnknown && m.id === femaleId))
+        .map((m) => {
+          if (m.id === maleId) {
+            return {
+              ...m,
+              spouse_ids: (m.spouse_ids ?? []).filter((x) => x !== femaleId),
+              spouse_id: m.spouse_id === femaleId ? undefined : m.spouse_id,
+              divorced_from: (m.divorced_from ?? []).filter((x) => x !== femaleId),
+              updated_at: now,
+            };
+          }
+          if (m.id === femaleId && !removeUnknown) {
+            return {
+              ...m,
+              spouse_id: m.spouse_id === maleId ? undefined : m.spouse_id,
+              divorced_from: (m.divorced_from ?? []).filter((x) => x !== maleId),
+              updated_at: now,
+            };
+          }
+          return m;
+        });
+    });
   },
   addUnknownSpouse(maleId: string): FamilyMember | undefined {
     const now = new Date().toISOString();
@@ -228,47 +259,69 @@ export const familyStore = {
       (m) => m.is_unknown && (male.spouse_ids ?? []).includes(m.id),
     ).length;
     const idx = existingUnknown + 1;
-    const wife: FamilyMember = {
-      id: crypto.randomUUID(),
-      name_en: `Unknown wife #${idx}`,
-      name_ar: `زوجة غير معروفة #${idx}`,
-      gender: "female",
-      is_unknown: true,
-      created_at: now,
-      updated_at: now,
-    };
-    state = [...state, wife];
-    state = state.map((m) => {
-      if (m.id === maleId) {
-        const set = new Set(m.spouse_ids ?? []);
-        set.add(wife.id);
-        return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? wife.id, updated_at: now };
-      }
-      return m;
+    let wife: FamilyMember | undefined;
+    commit(() => {
+      wife = {
+        id: crypto.randomUUID(),
+        name_en: `Unknown wife #${idx}`,
+        name_ar: `زوجة غير معروفة #${idx}`,
+        gender: "female",
+        is_unknown: true,
+        created_at: now,
+        updated_at: now,
+      };
+      state = [...state, wife];
+      state = state.map((m) => {
+        if (m.id === maleId) {
+          const set = new Set(m.spouse_ids ?? []);
+          set.add(wife.id);
+          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? wife.id, updated_at: now };
+        }
+        return m;
+      });
     });
-    save();
-    emit();
     return wife;
   },
   remove(id: string): void {
-    state = state
-      .filter((m) => m.id !== id)
-      .map((m) => ({
-        ...m,
-        father_id: m.father_id === id ? undefined : m.father_id,
-        mother_id: m.mother_id === id ? undefined : m.mother_id,
-        spouse_id: m.spouse_id === id ? undefined : m.spouse_id,
-        spouse_ids: m.spouse_ids?.filter((x) => x !== id),
-        divorced_from: m.divorced_from?.filter((x) => x !== id),
-      }));
-    save();
-    emit();
+    commit(() => {
+      state = state
+        .filter((m) => m.id !== id)
+        .map((m) => ({
+          ...m,
+          father_id: m.father_id === id ? undefined : m.father_id,
+          mother_id: m.mother_id === id ? undefined : m.mother_id,
+          spouse_id: m.spouse_id === id ? undefined : m.spouse_id,
+          spouse_ids: m.spouse_ids?.filter((x) => x !== id),
+          divorced_from: m.divorced_from?.filter((x) => x !== id),
+        }));
+    });
+  },
+
+  undo(): void {
+    if (!past.length) return;
+    const previous = past[past.length - 1];
+    future = [snapshot(), ...future];
+    past = past.slice(0, -1);
+    applySnapshot(previous);
+  },
+  redo(): void {
+    if (!future.length) return;
+    const next = future[0];
+    past = [...past, snapshot()];
+    future = future.slice(1);
+    applySnapshot(next);
+  },
+  canUndo(): boolean {
+    return past.length > 0;
+  },
+  canRedo(): boolean {
+    return future.length > 0;
   },
 
   reset() {
-    state = SAMPLE;
-    save();
-    emit();
+    commit(() => {
+      state = SAMPLE;
+    });
   },
   subscribe(l: () => void) {
     listeners.add(l);

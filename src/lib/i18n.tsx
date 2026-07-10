@@ -79,6 +79,8 @@ const dict: Dict = {
   connect_hint: { en: "Drag between dots to link. Drag cards to move. Click a connector to delete or drag its endpoint to reconnect.", ar: "اسحب بين النقاط للربط. اسحب البطاقات للتحريك. انقر على الرابط لحذفه أو اسحب طرفه لإعادة توصيله." },
   auto_layout: { en: "Auto layout", ar: "ترتيب تلقائي" },
   auto_layout_done: { en: "Layout rearranged", ar: "تمت إعادة الترتيب" },
+  undo: { en: "Undo", ar: "تراجع" },
+  redo: { en: "Redo", ar: "إعادة" },
   divorced: { en: "Divorced", ar: "مطلقة" },
   mark_divorced: { en: "Mark as divorced", ar: "وضع علامة مطلقة" },
   mark_married: { en: "Mark as married", ar: "وضع علامة متزوجة" },

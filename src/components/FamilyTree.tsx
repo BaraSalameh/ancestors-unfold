@@ -296,6 +296,33 @@ function Inner() {
     }
   }, [initialNodes, initialEdges, setNodes, setEdges, fitView]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) {
+        return;
+      }
+
+      const isMeta = event.ctrlKey || event.metaKey;
+      if (!isMeta) return;
+
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        familyStore.undo();
+      } else if (key === "y" || (key === "z" && event.shiftKey)) {
+        event.preventDefault();
+        familyStore.redo();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const onConnect = useCallback(
     (conn: Connection) => {
       if (!conn.source || !conn.target) return;
@@ -527,6 +554,12 @@ function Inner() {
             <Info className="h-3 w-3" />
             {t("connect_hint")}
           </div>
+          <Button size="sm" variant="outline" onClick={() => familyStore.undo()} disabled={!familyStore.canUndo()} className="shadow-sm">
+            {t("undo")}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => familyStore.redo()} disabled={!familyStore.canRedo()} className="shadow-sm">
+            {t("redo")}
+          </Button>
           <Button size="sm" variant="secondary" onClick={onAutoLayout} className="gap-1.5 shadow-sm">
             <LayoutGrid className="h-3.5 w-3.5" />
             {t("auto_layout")}
