@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react";
-import type { FamilyMember, MemberInput } from "./family-types";
+import type { FamilyMember, MemberInput, SubFamily } from "./family-types";
 
 const STORAGE_KEY = "family-tree-hub:v1";
+const SUBFAMILIES_KEY = "family-tree-hub:subfamilies:v1";
 
 const SAMPLE: FamilyMember[] = (() => {
   const now = new Date().toISOString();
@@ -36,6 +37,7 @@ const SAMPLE: FamilyMember[] = (() => {
 })();
 
 let state: FamilyMember[] = [];
+let subfamilies: SubFamily[] = [];
 const listeners = new Set<() => void>();
 let past: FamilyMember[][] = [];
 let future: FamilyMember[][] = [];
@@ -71,6 +73,24 @@ function cloneMembers(members: FamilyMember[]): FamilyMember[] {
   }));
 }
 
+function loadSubfamilies() {
+  if (typeof window === "undefined") {
+    subfamilies = [];
+    return;
+  }
+  try {
+    const raw = window.localStorage.getItem(SUBFAMILIES_KEY);
+    subfamilies = raw ? (JSON.parse(raw) as SubFamily[]) : [];
+  } catch {
+    subfamilies = [];
+  }
+}
+
+function saveSubfamilies() {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(SUBFAMILIES_KEY, JSON.stringify(subfamilies));
+}
+
 function snapshot(): FamilyMember[] {
   return cloneMembers(state);
 }
@@ -91,7 +111,10 @@ function applySnapshot(next: FamilyMember[]) {
   emit();
 }
 
-if (typeof window !== "undefined") load();
+if (typeof window !== "undefined") {
+  load();
+  loadSubfamilies();
+}
 
 export const familyStore = {
   getAll(): FamilyMember[] {
@@ -323,6 +346,85 @@ export const familyStore = {
       state = SAMPLE;
     });
   },
+
+  addSubfamily(name_en: string, name_ar: string, color?: string, linked_male_id?: string): SubFamily {
+    const now = new Date().toISOString();
+    const sf: SubFamily = {
+      id: crypto.randomUUID(),
+      name_en,
+      name_ar,
+      linked_male_id,
+      attachments: [],
+      color,
+      created_at: now,
+      updated_at: now,
+    };
+    subfamilies = [...subfamilies, sf];
+    saveSubfamilies();
+    emit();
+    return sf;
+  },
+
+  getSubfamilies(): SubFamily[] {
+    return subfamilies;
+  },
+
+  updateSubfamily(id: string, patch: Partial<Omit<SubFamily, "id" | "created_at" | "updated_at">>): void {
+    const now = new Date().toISOString();
+    subfamilies = subfamilies.map((sf) =>
+      sf.id === id ? { ...sf, ...patch, updated_at: now } : sf
+    );
+    saveSubfamilies();
+    emit();
+  },
+
+  deleteSubfamily(id: string): void {
+    subfamilies = subfamilies.filter((sf) => sf.id !== id);
+    state = state.map((m) =>
+      m.subfamily_id === id ? { ...m, subfamily_id: undefined } : m
+    );
+    save();
+    saveSubfamilies();
+    emit();
+  },
+
+  assignSubfamily(memberId: string, subfamilyId: string | undefined): void {
+    commit(() => {
+      state = state.map((m) =>
+        m.id === memberId ? { ...m, subfamily_id: subfamilyId } : m
+      );
+    });
+  },
+
+  getSubfamilyMembers(subfamilyId: string): FamilyMember[] {
+    const subfamily = subfamilies.find((sf) => sf.id === subfamilyId);
+    if (!subfamily?.linked_male_id) {
+      return state.filter((m) => m.subfamily_id === subfamilyId);
+    }
+
+    const linkedMale = state.find((m) => m.id === subfamily.linked_male_id);
+    if (!linkedMale) {
+      return state.filter((m) => m.subfamily_id === subfamilyId);
+    }
+
+    const branchIds = new Set<string>();
+    const queue = [linkedMale.id];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      if (branchIds.has(currentId)) continue;
+      branchIds.add(currentId);
+
+      state
+        .filter((m) => m.father_id === currentId || m.mother_id === currentId)
+        .forEach((child) => {
+          if (!branchIds.has(child.id)) queue.push(child.id);
+        });
+    }
+
+    return state.filter((m) => m.subfamily_id === subfamilyId || branchIds.has(m.id));
+  },
+
   subscribe(l: () => void) {
     listeners.add(l);
     return () => listeners.delete(l);

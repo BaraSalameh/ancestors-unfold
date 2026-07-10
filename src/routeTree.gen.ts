@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SubfamiliesRouteImport } from './routes/subfamilies'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MemberIdRouteImport } from './routes/member.$id'
 import { Route as EditIdRouteImport } from './routes/edit.$id'
 
+const SubfamiliesRoute = SubfamiliesRouteImport.update({
+  id: '/subfamilies',
+  path: '/subfamilies',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/settings': typeof SettingsRoute
+  '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
   '/member/$id': typeof MemberIdRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/settings': typeof SettingsRoute
+  '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
   '/member/$id': typeof MemberIdRoute
 }
@@ -60,27 +68,44 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/settings': typeof SettingsRoute
+  '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
   '/member/$id': typeof MemberIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/add' | '/settings' | '/edit/$id' | '/member/$id'
+  fullPaths:
+    '/' | '/add' | '/settings' | '/subfamilies' | '/edit/$id' | '/member/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/settings' | '/edit/$id' | '/member/$id'
-  id: '__root__' | '/' | '/add' | '/settings' | '/edit/$id' | '/member/$id'
+  to: '/' | '/add' | '/settings' | '/subfamilies' | '/edit/$id' | '/member/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/add'
+    | '/settings'
+    | '/subfamilies'
+    | '/edit/$id'
+    | '/member/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRoute
   SettingsRoute: typeof SettingsRoute
+  SubfamiliesRoute: typeof SubfamiliesRoute
   EditIdRoute: typeof EditIdRoute
   MemberIdRoute: typeof MemberIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/subfamilies': {
+      id: '/subfamilies'
+      path: '/subfamilies'
+      fullPath: '/subfamilies'
+      preLoaderRoute: typeof SubfamiliesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -123,6 +148,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRoute,
   SettingsRoute: SettingsRoute,
+  SubfamiliesRoute: SubfamiliesRoute,
   EditIdRoute: EditIdRoute,
   MemberIdRoute: MemberIdRoute,
 }

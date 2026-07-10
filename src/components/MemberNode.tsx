@@ -1,7 +1,12 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { useNavigate } from "@tanstack/react-router";
 import { User, Cake, Sparkles, Heart, Unlink, Link2, UserPlus, HelpCircle, Plus } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 
 import { displayName, ordinal, useI18n } from "@/lib/i18n";
@@ -40,6 +45,11 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
   const th = genderTheme(member.gender);
   const { lang, t } = useI18n();
   const navigate = useNavigate();
+  const [subfamilyOpen, setSubfamilyOpen] = useState(false);
+  const subfamilies = familyStore.getSubfamilies();
+  const currentSubfamily = member.subfamily_id
+    ? subfamilies.find((sf) => sf.id === member.subfamily_id)
+    : null;
 
   const birthY = member.birth_date?.slice(0, 4);
   const deathY = member.death_date?.slice(0, 4);
@@ -112,6 +122,38 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                 <Sparkles className="h-2.5 w-2.5" />
                 {t(member.gender)}
               </span>
+              <Popover open={subfamilyOpen} onOpenChange={setSubfamilyOpen}>
+                <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <button className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium text-purple-600 hover:bg-purple-500/20 dark:text-purple-300">
+                    {currentSubfamily ? displayName(currentSubfamily, lang) : t("subfamily")}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-40 p-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-1 text-[10px]">
+                    <button
+                      onClick={() => {
+                        familyStore.assignSubfamily(member.id, undefined);
+                        setSubfamilyOpen(false);
+                      }}
+                      className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
+                    >
+                      {!currentSubfamily ? "✓ " : "  "}{t("none")}
+                    </button>
+                    {subfamilies.map((sf) => (
+                      <button
+                        key={sf.id}
+                        onClick={() => {
+                          familyStore.assignSubfamily(member.id, sf.id);
+                          setSubfamilyOpen(false);
+                        }}
+                        className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
+                      >
+                        {currentSubfamily?.id === sf.id ? "✓ " : "  "}{displayName(sf, lang)}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
               {birthY && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
                   <Cake className="h-2.5 w-2.5" />

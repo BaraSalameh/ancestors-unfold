@@ -30,8 +30,30 @@ export interface FamilyMember {
    * Children this woman had with another (out-of-tree) husband. Kept on the mother.
    */
   external_children?: ExternalChild[];
+  /** ID of the sub-family this member belongs to */
+  subfamily_id?: string;
   pos_x?: number;
   pos_y?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubFamilyAttachment {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+  created_at: string;
+}
+
+export interface SubFamily {
+  id: string;
+  name_en: string;
+  name_ar: string;
+  linked_male_id?: string;
+  notes?: string;
+  attachments?: SubFamilyAttachment[];
+  color?: string;
   created_at: string;
   updated_at: string;
 }

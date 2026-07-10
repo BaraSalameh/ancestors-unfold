@@ -20,6 +20,9 @@ export function Header() {
           <Link to="/" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }} activeOptions={{ exact: true }}>
             {t("family_tree")}
           </Link>
+          <Link to="/subfamilies" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
+            {t("subfamilies_nav")}
+          </Link>
           <Link to="/settings" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
             {t("settings")}
           </Link>
