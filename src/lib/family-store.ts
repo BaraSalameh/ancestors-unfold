@@ -246,6 +246,36 @@ export const familyStore = {
       });
     });
   },
+  reorderSpouse(maleId: string, femaleId: string, direction: -1 | 1): void {
+    const now = new Date().toISOString();
+    const male = state.find((m) => m.id === maleId);
+    if (!male || male.gender !== "male") return;
+
+    // Include legacy and inferred links so the order shown on the card becomes
+    // the canonical persisted order after the first move.
+    const orderedIds: string[] = [];
+    const add = (id: string | undefined) => {
+      if (id && !orderedIds.includes(id)) orderedIds.push(id);
+    };
+    for (const id of male.spouse_ids ?? []) add(id);
+    add(male.spouse_id);
+    for (const member of state) {
+      if (member.gender === "female" && member.spouse_id === maleId) add(member.id);
+    }
+    for (const child of state) {
+      if (child.father_id === maleId) add(child.mother_id);
+    }
+
+    const from = orderedIds.indexOf(femaleId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= orderedIds.length) return;
+    [orderedIds[from], orderedIds[to]] = [orderedIds[to], orderedIds[from]];
+    commit(() => {
+      state = state.map((m) =>
+        m.id === maleId ? { ...m, spouse_ids: orderedIds, updated_at: now } : m,
+      );
+    });
+  },
   removeSpouse(maleId: string, femaleId: string): void {
     const now = new Date().toISOString();
     const female = state.find((m) => m.id === femaleId);

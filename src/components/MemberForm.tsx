@@ -31,6 +31,10 @@ import {
   UserPlus,
   Trash2,
   Heart,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import { useI18n, displayName, ordinal, type Lang } from "@/lib/i18n";
 import { familyStore } from "@/lib/family-store";
@@ -187,14 +191,14 @@ export function MemberForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <RelationSelect
+        <RelationSearch
           label={t("father")}
           value={father_id}
           onChange={setFather}
           options={males}
           lang={lang}
         />
-        <RelationSelect
+        <RelationSearch
           label={t("mother")}
           value={mother_id}
           onChange={setMother}
@@ -202,7 +206,7 @@ export function MemberForm({
           lang={lang}
         />
         {!showSpouseEditor && (
-          <RelationSelect
+          <RelationSearch
             label={t("spouse")}
             value={spouse_id}
             onChange={setSpouse}
@@ -245,7 +249,7 @@ export function MemberForm({
   );
 }
 
-function RelationSelect({
+function RelationSearch({
   label,
   value,
   onChange,
@@ -259,25 +263,81 @@ function RelationSelect({
   lang: Lang;
 }) {
   const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selected = options.find((m) => m.id === value);
+  const normalizedQuery = query.trim().toLowerCase();
+  const results = normalizedQuery
+    ? options.filter(
+        (m) =>
+          m.name_en.toLowerCase().includes(normalizedQuery) ||
+          m.name_ar.includes(query.trim()),
+      )
+    : options;
+
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <Select
-        value={value || "__none"}
-        onValueChange={(v) => onChange(v === "__none" ? "" : v)}
-      >
-        <SelectTrigger>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__none">{t("no_father")}</SelectItem>
-          {options.map((m) => (
-            <SelectItem key={m.id} value={m.id}>
-              {displayName(m, lang)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between font-normal"
+          >
+            <span className={selected ? "truncate" : "truncate text-muted-foreground"}>
+              {selected ? displayName(selected, lang) : t("search_placeholder")}
+            </span>
+            <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder={t("search_placeholder")}
+              value={query}
+              onValueChange={setQuery}
+            />
+            <CommandList>
+              <CommandGroup>
+                <CommandItem
+                  value="__none"
+                  onSelect={() => {
+                    onChange("");
+                    setQuery("");
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={`me-2 h-4 w-4 ${value ? "opacity-0" : "opacity-100"}`} />
+                  {t("no_father")}
+                </CommandItem>
+              </CommandGroup>
+              {results.length === 0 ? (
+                <CommandEmpty>{t("no_results")}</CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {results.map((m) => (
+                    <CommandItem
+                      key={m.id}
+                      value={m.id}
+                      onSelect={() => {
+                        onChange(m.id);
+                        setQuery("");
+                        setOpen(false);
+                      }}
+                    >
+                      <Check className={`me-2 h-4 w-4 ${value === m.id ? "opacity-100" : "opacity-0"}`} />
+                      <span className="truncate">{displayName(m, lang)}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -296,8 +356,8 @@ function SpousesEditor({
   const male = allMembers.find((m) => m.id === maleId) ?? familyStore.get(maleId);
   const linkedIds = useMemo(() => {
     const s = new Set<string>();
-    if (male?.spouse_id) s.add(male.spouse_id);
     for (const id of male?.spouse_ids ?? []) s.add(id);
+    if (male?.spouse_id) s.add(male.spouse_id);
     // Also anyone who is a mother of male's children.
     for (const m of allMembers) {
       if (m.father_id === maleId && m.mother_id) s.add(m.mother_id);
@@ -362,10 +422,30 @@ function SpousesEditor({
                     {w.death_date ? `–${w.death_date.slice(0, 4)}` : ""}
                   </span>
                 )}
+                <div className="ms-auto flex shrink-0 items-center gap-0.5">
+                  <button
+                    type="button"
+                    disabled={i === 0}
+                    onClick={() => familyStore.reorderSpouse(maleId, w.id, -1)}
+                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+                    title={t("move_spouse_up")}
+                  >
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={i === wives.length - 1}
+                    onClick={() => familyStore.reorderSpouse(maleId, w.id, 1)}
+                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+                    title={t("move_spouse_down")}
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => familyStore.removeSpouse(maleId, w.id)}
-                  className="ms-auto rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  className="rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   title={t("remove_wife")}
                 >
                   <X className="h-3.5 w-3.5" />

@@ -99,6 +99,8 @@ const dict: Dict = {
   add_spouse_existing: { en: "Link an existing woman", ar: "ربط امرأة موجودة" },
   add_spouse_unknown: { en: "Add unknown spouse", ar: "إضافة زوجة غير معروفة" },
   search_spouse: { en: "Search by name…", ar: "ابحث بالاسم…" },
+  move_spouse_up: { en: "Move spouse up", ar: "نقل الزوجة لأعلى" },
+  move_spouse_down: { en: "Move spouse down", ar: "نقل الزوجة لأسفل" },
   unknown_wife: { en: "Unknown", ar: "غير معروفة" },
   already_wife: { en: "Already linked", ar: "مرتبطة مسبقًا" },
   remove_wife: { en: "Remove", ar: "إزالة" },

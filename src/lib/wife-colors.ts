@@ -37,8 +37,8 @@ export function computeWivesByHusband(
       explicitOrder.set(id, explicitOrder.size);
     };
 
-    addExplicit(husband.spouse_id);
     for (const sid of husband.spouse_ids ?? []) addExplicit(sid);
+    addExplicit(husband.spouse_id);
 
     for (const spouse of members) {
       if (spouse.gender === "female" && spouse.spouse_id === husband.id) {
