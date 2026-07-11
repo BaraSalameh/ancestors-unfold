@@ -53,6 +53,8 @@ export interface SubFamily {
   name_en: string;
   name_ar: string;
   linked_male_id?: string;
+  /** Optional containing sub-family. Sub-families may be nested to any depth. */
+  parent_subfamily_id?: string;
   notes?: string;
   attachments?: SubFamilyAttachment[];
   color?: string;

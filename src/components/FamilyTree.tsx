@@ -15,7 +15,7 @@ import ReactFlow, {
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
-import { Search, X, Info, LayoutGrid, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
+import { Search, X, Info, LayoutGrid, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -214,18 +214,6 @@ export function SubfamilyPanel({
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded border bg-background/50 px-2 py-1 text-[10px]">
-          <span className="text-muted-foreground">{t("show_related_tree")}</span>
-          <button
-            type="button"
-            onClick={() => onToggleFilter(!filterEnabled)}
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-1 ${filterEnabled ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
-          >
-            {filterEnabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-            {filterEnabled ? t("show_related_tree") : t("show_related_tree")}
-          </button>
-        </div>
-
         {editingId === selected.id ? (
           <div className="space-y-2 rounded border bg-background/50 p-2">
             <input
@@ -287,31 +275,20 @@ export function SubfamilyPanel({
                 {t("linked_male")}: <span className="font-medium text-foreground">{displayName(linkedMale, lang)}</span>
               </div>
             ) : null}
-            <div className="space-y-1 text-[10px] text-muted-foreground">
-              <div className="flex justify-between">
-                <span>{t("subfamily_total")}:</span>
-                <span className="font-medium">{selectedMembers.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{t("subfamily_living")}:</span>
-                <span className="font-medium">{livingMembers.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{t("subfamily_living_males")}:</span>
-                <span className="font-medium">{livingMaleCount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{t("subfamily_living_females")}:</span>
-                <span className="font-medium">{livingFemaleCount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{t("subfamily_males")}:</span>
-                <span className="font-medium">{maleCount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{t("subfamily_females")}:</span>
-                <span className="font-medium">{femaleCount}</span>
-              </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ["subfamily_total", selectedMembers.length],
+                ["subfamily_living", livingMembers.length],
+                ["subfamily_living_males", livingMaleCount],
+                ["subfamily_living_females", livingFemaleCount],
+                ["subfamily_males", maleCount],
+                ["subfamily_females", femaleCount],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border bg-card p-2 shadow-sm">
+                  <div className="text-lg font-bold leading-none text-foreground">{value}</div>
+                  <div className="mt-1 text-[10px] text-muted-foreground">{t(label as Parameters<typeof t>[0])}</div>
+                </div>
+              ))}
             </div>
 
             <div className="space-y-2 rounded border bg-background/50 p-2">
@@ -604,19 +581,27 @@ function layout(
   });
 
   // Collision resolution — enforce min horizontal gap per generation row.
-  const rows = new Map<number, Node<MemberNodeData>[]>();
-  for (const n of nodes) {
-    const k = Math.round(n.position.y / 40) * 40;
-    if (!rows.has(k)) rows.set(k, []);
-    rows.get(k)!.push(n);
-  }
   const HGAP = 40;
-  for (const arr of rows.values()) {
-    arr.sort((a, b) => a.position.x - b.position.x);
-    for (let i = 1; i < arr.length; i++) {
-      const prev = arr[i - 1];
-      const minX = prev.position.x + NODE_W + HGAP;
-      if (arr[i].position.x < minX) arr[i].position.x = minX;
+  const VGAP = 40;
+  const ordered = [...nodes].sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+  for (let i = 0; i < ordered.length; i++) {
+    const current = ordered[i];
+    const currentHeight = current.data.member.gender === "male" ? NODE_H_HUSBAND : NODE_H;
+    let moved = true;
+    while (moved) {
+      moved = false;
+      for (let j = 0; j < i; j++) {
+        const other = ordered[j];
+        const otherHeight = other.data.member.gender === "male" ? NODE_H_HUSBAND : NODE_H;
+        const overlapsY = current.position.y < other.position.y + otherHeight + VGAP &&
+          current.position.y + currentHeight + VGAP > other.position.y;
+        const overlapsX = current.position.x < other.position.x + NODE_W + HGAP &&
+          current.position.x + NODE_W + HGAP > other.position.x;
+        if (overlapsX && overlapsY) {
+          current.position.x = other.position.x + NODE_W + HGAP;
+          moved = true;
+        }
+      }
     }
   }
 
@@ -977,14 +962,16 @@ function Inner() {
         <Controls className="!bg-card !border" />
       </ReactFlow>
 
-      <div className="absolute bottom-4 ltr:left-4 rtl:right-4 z-10 max-w-xs rounded-lg border bg-card p-3 text-xs shadow-sm">
-        <SubfamilyPanel
-          mode="home"
-          selectedSubfamilyId={selectedSubfamilyId}
-          onSelectSubfamily={setSelectedSubfamilyId}
-          filterEnabled={subfamilyFilterEnabled}
-          onToggleFilter={setSubfamilyFilterEnabled}
-        />
+      <div className="absolute bottom-[180px] right-4 z-10 w-72 max-w-[calc(100%-2rem)] rounded-lg border bg-card p-3 text-xs shadow-sm">
+        <div className="max-h-[calc(100vh-260px)] overflow-y-auto overscroll-contain pr-1">
+          <SubfamilyPanel
+            mode="home"
+            selectedSubfamilyId={selectedSubfamilyId}
+            onSelectSubfamily={setSelectedSubfamilyId}
+            filterEnabled={subfamilyFilterEnabled}
+            onToggleFilter={setSubfamilyFilterEnabled}
+          />
+        </div>
       </div>
 
       <Dialog open={!!motherPicker} onOpenChange={(o) => !o && setMotherPicker(null)}>

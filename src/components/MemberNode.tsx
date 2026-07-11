@@ -1,14 +1,8 @@
 import { memo, useState } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { useNavigate } from "@tanstack/react-router";
-import { User, Cake, Sparkles, Heart, Unlink, Link2, UserPlus, HelpCircle, Plus } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-
-
+import { User, Cake, Heart, Unlink, Link2, UserPlus, HelpCircle, Plus } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { displayName, ordinal, useI18n } from "@/lib/i18n";
 import type { FamilyMember } from "@/lib/family-types";
 import { wifeColorFor } from "@/lib/wife-colors";
@@ -47,9 +41,7 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
   const navigate = useNavigate();
   const [subfamilyOpen, setSubfamilyOpen] = useState(false);
   const subfamilies = familyStore.getSubfamilies();
-  const currentSubfamily = member.subfamily_id
-    ? subfamilies.find((sf) => sf.id === member.subfamily_id)
-    : null;
+  const currentSubfamily = familyStore.getClosestSubfamily(member.id) ?? null;
 
   const birthY = member.birth_date?.slice(0, 4);
   const deathY = member.death_date?.slice(0, 4);
@@ -116,19 +108,13 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
               {lang === "ar" ? member.name_en : member.name_ar}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${th.chip}`}
-              >
-                <Sparkles className="h-2.5 w-2.5" />
-                {t(member.gender)}
-              </span>
               <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:text-emerald-300">
                 {member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}
               </span>
-              <Popover open={subfamilyOpen} onOpenChange={setSubfamilyOpen}>
+              {currentSubfamily ? <Popover open={subfamilyOpen} onOpenChange={setSubfamilyOpen}>
                 <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                  <button className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium text-purple-600 hover:bg-purple-500/20 dark:text-purple-300">
-                    {currentSubfamily ? displayName(currentSubfamily, lang) : t("subfamily")}
+                  <button disabled className="pointer-events-none inline-flex cursor-default items-center gap-1 rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium text-purple-600 dark:text-purple-300">
+                    {displayName(currentSubfamily, lang)}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-40 p-2" onClick={(e) => e.stopPropagation()}>
@@ -156,7 +142,7 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                     ))}
                   </div>
                 </PopoverContent>
-              </Popover>
+              </Popover> : null}
               {birthY && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
                   <Cake className="h-2.5 w-2.5" />

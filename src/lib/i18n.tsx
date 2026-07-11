@@ -117,7 +117,7 @@ const dict: Dict = {
   subfamilies_nav: { en: "Sub-families", ar: "العائلات الجزئية" },
   add_subfamily: { en: "Add sub-family label", ar: "إضافة تسمية العائلة الجزئية" },
   subfamily_name: { en: "Sub-family name", ar: "اسم العائلة الجزئية" },
-  linked_male: { en: "Linked male", ar: "الرجل المرتبط" },
+  linked_male: { en: "Family root", ar: "جذر العائلة" },
   search_male: { en: "Search male by name", ar: "ابحث عن الرجل بالاسم" },
   select_linked_male: { en: "Select linked male later", ar: "اختر الرجل المرتبط لاحقًا" },
   subfamily_members: { en: "Members", ar: "الأعضاء" },
