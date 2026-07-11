@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Moon, Sun, Languages, TreePine, Settings as SettingsIcon, Plus, LayoutDashboard } from "lucide-react";
+import { Moon, Sun, Languages, TreePine, Plus, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
@@ -26,9 +26,6 @@ export function Header() {
           {!isDashboard && <Link to="/subfamilies" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
             {t("subfamilies_nav")}
           </Link>}
-          <Link to="/settings" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
-            {t("settings")}
-          </Link>
         </nav>}
 
         <div className="ms-auto flex items-center gap-1">
@@ -51,11 +48,6 @@ export function Header() {
           <Button size="icon" variant="ghost" onClick={toggle} title={t("theme")} aria-label={t("theme")}>
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
-          {!isTreePreview && <Button asChild size="icon" variant="ghost" className="md:hidden" aria-label={t("settings")}>
-            <Link to="/settings">
-              <SettingsIcon className="h-4 w-4" />
-            </Link>
-          </Button>}
         </div>
       </div>
     </header>
