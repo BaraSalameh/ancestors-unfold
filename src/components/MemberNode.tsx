@@ -1,7 +1,6 @@
 import { memo, useState } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
-import { useNavigate } from "@tanstack/react-router";
-import { User, Cake, Heart, Unlink, Link2, UserPlus, HelpCircle, Plus } from "lucide-react";
+import { User, Cake, Heart, Unlink, Link2, UserPlus, HelpCircle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { displayName, ordinal, useI18n } from "@/lib/i18n";
 import type { FamilyMember } from "@/lib/family-types";
@@ -38,7 +37,6 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
   const { member, highlighted, onOpen, wives } = data;
   const th = genderTheme(member.gender);
   const { lang, t } = useI18n();
-  const navigate = useNavigate();
   const [subfamilyOpen, setSubfamilyOpen] = useState(false);
   const subfamilies = familyStore.getSubfamilies();
   const currentSubfamily = familyStore.getClosestSubfamily(member.id) ?? null;
@@ -65,15 +63,16 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
         id="spouse-l"
         type="target"
         position={Position.Left}
-        className="!h-2.5 !w-2.5 !border-2 !border-background !bg-purple-500"
+        isConnectable={false}
+        className="!pointer-events-none !h-0 !w-0 !border-0 !opacity-0"
       />
       <Handle
         id="spouse-r"
         type="source"
         position={Position.Right}
-        className="!h-2.5 !w-2.5 !border-2 !border-background !bg-purple-500"
+        isConnectable={false}
+        className="!pointer-events-none !h-0 !w-0 !border-0 !opacity-0"
       />
-
       <button
         onClick={() => onOpen(member.id)}
         className={`group relative flex w-64 flex-col overflow-hidden rounded-2xl border ${th.border} bg-card text-start shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.15)] transition-all hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_36px_-14px_rgba(0,0,0,0.25)] ${
@@ -175,25 +174,6 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
             <div className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               <Heart className="h-2.5 w-2.5" />
               <span>{t("spouses")}</span>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate({ to: "/edit/$id", params: { id: member.id } });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.stopPropagation();
-                    navigate({ to: "/edit/$id", params: { id: member.id } });
-                  }
-                }}
-                title={t("edit_spouses")}
-                className="ms-auto inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] normal-case tracking-normal text-primary transition hover:bg-primary/20"
-              >
-                <Plus className="h-2.5 w-2.5" />
-                <span>{t("edit")}</span>
-              </span>
             </div>
             {(!wives || wives.length === 0) ? (
               <div className="rounded-md border border-dashed border-border/80 bg-background/60 px-2 py-1.5 text-[10px] italic text-muted-foreground">
