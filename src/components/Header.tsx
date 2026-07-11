@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
-import { Moon, Sun, Languages, TreePine, Settings as SettingsIcon, Plus } from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { Moon, Sun, Languages, TreePine, Settings as SettingsIcon, Plus, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
@@ -7,6 +7,9 @@ import { useTheme } from "@/lib/theme";
 export function Header() {
   const { t, lang, setLang } = useI18n();
   const { theme, toggle } = useTheme();
+  const location = useRouterState({ select: (state) => state.location });
+  const isDashboard = location.pathname === "/";
+  const isTreePreview = location.pathname.startsWith("/tree/") && location.search.mode === "preview";
 
   return (
     <header className="sticky top-0 z-30 border-b bg-card/80 backdrop-blur">
@@ -16,25 +19,25 @@ export function Header() {
           <span className="hidden sm:inline">{t("app_name")}</span>
         </Link>
 
-        <nav className="ms-2 hidden items-center gap-1 md:flex">
-          <Link to="/" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }} activeOptions={{ exact: true }}>
-            {t("family_tree")}
+        {!isTreePreview && <nav className="ms-2 hidden items-center gap-1 md:flex">
+          <Link to="/" className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }} activeOptions={{ exact: true }}>
+            <LayoutDashboard className="h-4 w-4" /> {t("dashboard")}
           </Link>
-          <Link to="/subfamilies" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
+          {!isDashboard && <Link to="/subfamilies" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
             {t("subfamilies_nav")}
-          </Link>
+          </Link>}
           <Link to="/settings" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
             {t("settings")}
           </Link>
-        </nav>
+        </nav>}
 
         <div className="ms-auto flex items-center gap-1">
-          <Button asChild size="sm" variant="default" className="gap-1">
+          {!isDashboard && !isTreePreview && <Button asChild size="sm" variant="default" className="hidden gap-1 sm:flex">
             <Link to="/add">
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">{t("add_member")}</span>
             </Link>
-          </Button>
+          </Button>}
           <Button
             size="icon"
             variant="ghost"
@@ -48,11 +51,11 @@ export function Header() {
           <Button size="icon" variant="ghost" onClick={toggle} title={t("theme")} aria-label={t("theme")}>
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
-          <Button asChild size="icon" variant="ghost" className="md:hidden" aria-label={t("settings")}>
+          {!isTreePreview && <Button asChild size="icon" variant="ghost" className="md:hidden" aria-label={t("settings")}>
             <Link to="/settings">
               <SettingsIcon className="h-4 w-4" />
             </Link>
-          </Button>
+          </Button>}
         </div>
       </div>
     </header>

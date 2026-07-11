@@ -625,7 +625,7 @@ function isDescendant(members: FamilyMember[], ancestorId: string, targetId: str
   return false;
 }
 
-function Inner() {
+function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const members = useFamily();
   const { t, lang } = useI18n();
   const navigate = useNavigate();
@@ -646,9 +646,10 @@ function Inner() {
 
   const onOpen = useCallback(
     (id: string) => {
+      if (readOnly) return;
       navigate({ to: "/member/$id", params: { id } });
     },
-    [navigate],
+    [navigate, readOnly],
   );
 
   const visibleMembers = useMemo(() => {
@@ -684,7 +685,7 @@ function Inner() {
       }
 
       const isMeta = event.ctrlKey || event.metaKey;
-      if (!isMeta) return;
+      if (!isMeta || readOnly) return;
 
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
@@ -698,7 +699,7 @@ function Inner() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [readOnly]);
 
   const onConnect = useCallback(
     (conn: Connection) => {
@@ -916,7 +917,7 @@ function Inner() {
             </div>
           )}
         </div>
-        <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2">
+        {!readOnly && <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2">
           <div className="inline-flex items-center gap-2 rounded-full border bg-card/90 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
             <Info className="h-3 w-3" />
             {t("connect_hint")}
@@ -931,7 +932,7 @@ function Inner() {
             <LayoutGrid className="h-3.5 w-3.5" />
             {t("auto_layout")}
           </Button>
-        </div>
+        </div>}
       </div>
 
       <ReactFlow
@@ -939,22 +940,25 @@ function Inner() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onEdgesDelete={onEdgesDelete}
-        onEdgeUpdate={onEdgeUpdate}
-        onEdgeUpdateStart={onEdgeUpdateStart}
-        onEdgeUpdateEnd={onEdgeUpdateEnd}
-        onNodeDragStop={onNodeDragStop}
+        onConnect={readOnly ? undefined : onConnect}
+        onEdgesDelete={readOnly ? undefined : onEdgesDelete}
+        onEdgeUpdate={readOnly ? undefined : onEdgeUpdate}
+        onEdgeUpdateStart={readOnly ? undefined : onEdgeUpdateStart}
+        onEdgeUpdateEnd={readOnly ? undefined : onEdgeUpdateEnd}
+        onNodeDragStop={readOnly ? undefined : onNodeDragStop}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        edgesUpdatable
-        edgesFocusable
+        nodesDraggable={!readOnly}
+        nodesConnectable={!readOnly}
+        elementsSelectable={!readOnly}
+        edgesUpdatable={!readOnly}
+        edgesFocusable={!readOnly}
         minZoom={0.1}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
         connectionLineStyle={{ stroke: "#0ea5e9", strokeWidth: 2, strokeDasharray: "6 4" }}
-        defaultEdgeOptions={{ type: "relationship", focusable: true, deletable: true, updatable: true }}
-        deleteKeyCode={["Backspace", "Delete"]}
+        defaultEdgeOptions={{ type: "relationship", focusable: !readOnly, deletable: !readOnly, updatable: !readOnly }}
+        deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
         fitView
       >
         <Background gap={24} className="!bg-background" />
@@ -974,7 +978,7 @@ function Inner() {
         </div>
       </div>
 
-      <Dialog open={!!motherPicker} onOpenChange={(o) => !o && setMotherPicker(null)}>
+      {!readOnly && <Dialog open={!!motherPicker} onOpenChange={(o) => !o && setMotherPicker(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("select_mother")}</DialogTitle>
@@ -1019,15 +1023,15 @@ function Inner() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 }
 
-export function FamilyTree() {
+export function FamilyTree({ readOnly = false }: { readOnly?: boolean }) {
   return (
     <ReactFlowProvider>
-      <Inner />
+      <Inner readOnly={readOnly} />
     </ReactFlowProvider>
   );
 }

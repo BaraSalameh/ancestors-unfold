@@ -13,6 +13,7 @@ import { Route as SubfamiliesRouteImport } from './routes/subfamilies'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TreeIdRouteImport } from './routes/tree.$id'
 import { Route as MemberIdRouteImport } from './routes/member.$id'
 import { Route as EditIdRouteImport } from './routes/edit.$id'
 
@@ -36,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TreeIdRoute = TreeIdRouteImport.update({
+  id: '/tree/$id',
+  path: '/tree/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MemberIdRoute = MemberIdRouteImport.update({
   id: '/member/$id',
   path: '/member/$id',
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
   '/member/$id': typeof MemberIdRoute
+  '/tree/$id': typeof TreeIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
   '/member/$id': typeof MemberIdRoute
+  '/tree/$id': typeof TreeIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,13 +79,27 @@ export interface FileRoutesById {
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
   '/member/$id': typeof MemberIdRoute
+  '/tree/$id': typeof TreeIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/add' | '/settings' | '/subfamilies' | '/edit/$id' | '/member/$id'
+    | '/'
+    | '/add'
+    | '/settings'
+    | '/subfamilies'
+    | '/edit/$id'
+    | '/member/$id'
+    | '/tree/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/settings' | '/subfamilies' | '/edit/$id' | '/member/$id'
+  to:
+    | '/'
+    | '/add'
+    | '/settings'
+    | '/subfamilies'
+    | '/edit/$id'
+    | '/member/$id'
+    | '/tree/$id'
   id:
     | '__root__'
     | '/'
@@ -86,6 +108,7 @@ export interface FileRouteTypes {
     | '/subfamilies'
     | '/edit/$id'
     | '/member/$id'
+    | '/tree/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -95,6 +118,7 @@ export interface RootRouteChildren {
   SubfamiliesRoute: typeof SubfamiliesRoute
   EditIdRoute: typeof EditIdRoute
   MemberIdRoute: typeof MemberIdRoute
+  TreeIdRoute: typeof TreeIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -127,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tree/$id': {
+      id: '/tree/$id'
+      path: '/tree/$id'
+      fullPath: '/tree/$id'
+      preLoaderRoute: typeof TreeIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/member/$id': {
       id: '/member/$id'
       path: '/member/$id'
@@ -151,6 +182,7 @@ const rootRouteChildren: RootRouteChildren = {
   SubfamiliesRoute: SubfamiliesRoute,
   EditIdRoute: EditIdRoute,
   MemberIdRoute: MemberIdRoute,
+  TreeIdRoute: TreeIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
