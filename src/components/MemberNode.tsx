@@ -1,6 +1,6 @@
 import { memo, useState } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
-import { User, Cake, Heart, Unlink, Link2, UserPlus, HelpCircle } from "lucide-react";
+import { User, Cake, Heart, Unlink, Link2, UserPlus, HelpCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { displayName, ordinal, useI18n } from "@/lib/i18n";
 import type { FamilyMember } from "@/lib/family-types";
@@ -12,6 +12,9 @@ export interface MemberNodeData {
   highlighted?: boolean;
   onOpen: (id: string) => void;
   wives?: FamilyMember[]; // ordered wives, only present for husbands
+  hasDescendants?: boolean;
+  collapsed?: boolean;
+  onToggleCollapsed?: (id: string) => void;
 }
 
 const genderTheme = (g: "male" | "female") =>
@@ -34,7 +37,7 @@ const genderTheme = (g: "male" | "female") =>
       };
 
 function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
-  const { member, highlighted, onOpen, wives } = data;
+  const { member, highlighted, onOpen, wives, hasDescendants, collapsed, onToggleCollapsed } = data;
   const th = genderTheme(member.gender);
   const { lang, t } = useI18n();
   const [subfamilyOpen, setSubfamilyOpen] = useState(false);
@@ -47,6 +50,14 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
 
   return (
     <div className="relative">
+      {hasDescendants && <button
+        type="button"
+        onClick={(event) => { event.stopPropagation(); onToggleCollapsed?.(member.id); }}
+        className="nodrag absolute -end-2 -top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground"
+        title={collapsed ? t("expand_descendants") : t("collapse_descendants")}
+      >
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </button>}
       <Handle
         id="parent-in"
         type="target"

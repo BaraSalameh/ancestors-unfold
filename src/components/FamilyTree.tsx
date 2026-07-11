@@ -15,7 +15,7 @@ import ReactFlow, {
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
-import { Search, X, Info, LayoutGrid, Pencil, Trash2 } from "lucide-react";
+import { Search, X, Info, LayoutGrid, Pencil, Trash2, CalendarRange, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,22 @@ const NODE_H_HUSBAND = 220;
 const nodeTypes = { member: MemberNode };
 const edgeTypes = { relationship: RelationshipEdge };
 
+type GenerationBand = { start: number; end: number };
+
+const birthYear = (member: FamilyMember) => {
+  const year = Number.parseInt(member.birth_date?.slice(0, 4) ?? "", 10);
+  return Number.isFinite(year) ? year : null;
+};
+
+const generationBandFor = (member: FamilyMember): GenerationBand | null => {
+  const year = birthYear(member);
+  if (year === null) return null;
+  const start = Math.floor(year / 10) * 10;
+  return { start, end: start + 9 };
+};
+
+const generationKey = (band: GenerationBand) => `${band.start}-${band.end}`;
+
 const DIVORCED_COLOR = "#94a3b8";
 
 export function SubfamilyPanel({
@@ -49,12 +65,14 @@ export function SubfamilyPanel({
   filterEnabled,
   onToggleFilter,
   mode = "manage",
+  hideHeading = false,
 }: {
   selectedSubfamilyId: string | null;
   onSelectSubfamily: (id: string | null) => void;
   filterEnabled: boolean;
   onToggleFilter: (enabled: boolean) => void;
   mode?: "home" | "manage";
+  hideHeading?: boolean;
 }) {
   const { t, lang } = useI18n();
   const members = useFamily();
@@ -359,7 +377,7 @@ export function SubfamilyPanel({
 
   return (
     <div className="space-y-2">
-      <div className="font-semibold text-card-foreground">{t("subfamilies")}</div>
+      {!hideHeading && <div className="font-semibold text-card-foreground">{t("subfamilies")}</div>}
       {subfamilies.length === 0 ? (
         <p className="text-[10px] text-muted-foreground">{t("none")}</p>
       ) : (
@@ -410,6 +428,8 @@ function layout(
   collapsed: Set<string>,
   onOpen: (id: string) => void,
   highlightId: string | null,
+  chronological = false,
+  onToggleCollapsed?: (id: string) => void,
 ) {
   const memberById = new Map(members.map((m) => [m.id, m]));
   const wivesByHusband = computeWivesByHusband(members);
@@ -498,7 +518,7 @@ function layout(
         type: "relationship",
         style: mkStyle(color),
         markerEnd: mkArrow(color),
-        data: { parentId: fId, childId: m.id, kind: "parent" },
+        data: { parentId: fId, childId: m.id, motherId: mId, familyKey: `${fId}:${mId ?? "unknown"}`, kind: "parent" },
       });
     } else if (mId && renderedIds.includes(mId)) {
       g.setEdge(mId, m.id);
@@ -511,7 +531,7 @@ function layout(
         type: "relationship",
         style: mkStyle(DEFAULT_EDGE_COLOR),
         markerEnd: mkArrow(DEFAULT_EDGE_COLOR),
-        data: { parentId: mId, childId: m.id, kind: "parent" },
+        data: { parentId: mId, childId: m.id, familyKey: `${mId}:mother-only`, kind: "parent" },
       });
     }
   }
@@ -563,18 +583,25 @@ function layout(
   const nodes: Node<MemberNodeData>[] = renderedIds.map((id) => {
     const m = memberById.get(id)!;
     const pos = g.node(id);
-    const autoY = genOf(id) * ROW_H;
+    const band = generationBandFor(m);
+    const earliestBand = Math.min(...members.map(generationBandFor).filter((value): value is GenerationBand => value !== null).map((value) => value.start));
+    const autoY = chronological && band && Number.isFinite(earliestBand)
+      ? ((band.start - earliestBand) / 10) * ROW_H
+      : genOf(id) * ROW_H;
     const autoX = pos.x - pos.width / 2;
     const hasCustom = typeof m.pos_x === "number" && typeof m.pos_y === "number";
     return {
       id,
       type: "member",
-      position: hasCustom ? { x: m.pos_x!, y: m.pos_y! } : { x: autoX, y: autoY },
+      position: hasCustom && !chronological ? { x: m.pos_x!, y: m.pos_y! } : { x: autoX, y: autoY },
       data: {
         member: m,
         highlighted: highlightId === id,
         onOpen,
         wives: wivesByHusband.get(id),
+        hasDescendants: (childrenMap.get(id)?.length ?? 0) > 0,
+        collapsed: collapsed.has(id),
+        onToggleCollapsed,
       },
       draggable: true,
     };
@@ -584,6 +611,54 @@ function layout(
   const HGAP = 40;
   const VGAP = 40;
   const ordered = [...nodes].sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+  const byRow = new Map<number, Node<MemberNodeData>[]>();
+  for (const node of ordered) byRow.set(node.position.y, [...(byRow.get(node.position.y) ?? []), node]);
+  for (const row of byRow.values()) {
+    const byAge = (a: Node<MemberNodeData>, b: Node<MemberNodeData>) =>
+      (birthYear(b.data.member) ?? Number.MIN_SAFE_INTEGER) - (birthYear(a.data.member) ?? Number.MIN_SAFE_INTEGER);
+    if (chronological) {
+      row.sort(byAge);
+      const totalWidth = row.length * NODE_W + Math.max(0, row.length - 1) * HGAP;
+      row.forEach((node, index) => { node.position.x = index * (NODE_W + HGAP) - totalWidth / 2; });
+      continue;
+    }
+
+    // Family Levels: keep siblings as a cluster beneath their parent instead
+    // of flattening cousins into one row. Wider inter-family gaps make branch
+    // ownership immediately visible and leave clean connector corridors.
+    const nodeByMemberId = new Map(nodes.map((node) => [node.id, node]));
+    const groups = new Map<string, Node<MemberNodeData>[]>();
+    for (const node of row) {
+      const member = node.data.member;
+      const parentId = member.father_id && nodeByMemberId.has(member.father_id)
+        ? member.father_id
+        : member.mother_id && nodeByMemberId.has(member.mother_id)
+          ? member.mother_id
+          : `root:${member.id}`;
+      groups.set(parentId, [...(groups.get(parentId) ?? []), node]);
+    }
+    const FAMILY_GAP = 170;
+    const arranged = [...groups.entries()].map(([parentId, children]) => {
+      children.sort(byAge); // newest left, oldest right
+      const width = children.length * NODE_W + Math.max(0, children.length - 1) * HGAP;
+      const parent = nodeByMemberId.get(parentId);
+      const anchor = parent ? parent.position.x + NODE_W / 2 : children[0].position.x + NODE_W / 2;
+      return { children, width, anchor, start: anchor - width / 2 };
+    }).sort((a, b) => a.anchor - b.anchor);
+    let cursor = Number.NEGATIVE_INFINITY;
+    for (const group of arranged) {
+      group.start = Math.max(group.start, cursor);
+      cursor = group.start + group.width + FAMILY_GAP;
+    }
+    const balancingShift = arranged.length
+      ? arranged.reduce((sum, group) => sum + group.anchor - (group.start + group.width / 2), 0) / arranged.length
+      : 0;
+    for (const group of arranged) {
+      group.children.forEach((node, index) => {
+        node.position.x = group.start + balancingShift + index * (NODE_W + HGAP);
+      });
+    }
+  }
   for (let i = 0; i < ordered.length; i++) {
     const current = ordered[i];
     const currentHeight = current.data.member.gender === "male" ? NODE_H_HUSBAND : NODE_H;
@@ -605,7 +680,97 @@ function layout(
     }
   }
 
-  return { nodes, edges };
+  // Route each parent connector through a distinct gutter. Vertical segments
+  // are rejected when they would pass through any card, while the staggered
+  // entry/exit corridors prevent siblings from sharing the same visible line.
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const usedLanes: Array<{ x: number; top: number; bottom: number }> = [];
+  const parentGroups = new Map<string, Edge[]>();
+  for (const edge of edges) {
+    const data = edge.data as { kind?: string; familyKey?: string } | undefined;
+    if (data?.kind !== "parent") continue;
+    const key = data.familyKey ?? edge.source;
+    parentGroups.set(key, [...(parentGroups.get(key) ?? []), edge]);
+  }
+  const routeByEdge = new Map<string, Record<string, unknown>>();
+  const sourceFamilyCounts = new Map<string, number>();
+  for (const familyEdges of parentGroups.values()) {
+    const source = nodeById.get(familyEdges[0].source);
+    const targets = familyEdges.map((edge) => nodeById.get(edge.target)).filter((node): node is Node<MemberNodeData> => !!node);
+    if (!source || !targets.length) continue;
+    const sourceFamilyIndex = sourceFamilyCounts.get(source.id) ?? 0;
+    sourceFamilyCounts.set(source.id, sourceFamilyIndex + 1);
+    const sourceHeight = source.data.member.gender === "male" ? NODE_H_HUSBAND : NODE_H;
+    const verticalTop = source.position.y + sourceHeight + 24;
+    const verticalBottom = Math.max(...targets.map((target) => target.position.y - 24));
+    const sourceCenter = source.position.x + NODE_W / 2;
+    const targetCenter = targets.reduce((sum, target) => sum + target.position.x + NODE_W / 2, 0) / targets.length;
+    const clearance = 28;
+    const candidates = [
+      sourceCenter,
+      source.position.x - clearance, source.position.x + NODE_W + clearance,
+      ...targets.flatMap((target) => [target.position.x - clearance, target.position.x + NODE_W + clearance]),
+      ...nodes.flatMap((node) => [node.position.x - clearance, node.position.x + NODE_W + clearance]),
+    ];
+    const isClear = (x: number) => nodes.every((node) => {
+      if (node.id === source.id) return true;
+      const height = node.data.member.gender === "male" ? NODE_H_HUSBAND : NODE_H;
+      const overlapsY = node.position.y - 14 < verticalBottom && node.position.y + height + 14 > verticalTop;
+      return !(overlapsY && x > node.position.x - 14 && x < node.position.x + NODE_W + 14);
+    });
+    const clear = [...new Set(candidates)].filter(isClear);
+    const conflictsWithLane = (x: number) => usedLanes.some((lane) =>
+      Math.abs(lane.x - x) < 24 && lane.top < verticalBottom && lane.bottom > verticalTop
+    );
+    let routeX = (clear.length ? clear : candidates).sort((a, b) => {
+      const score = (x: number) => Math.abs(x - sourceCenter) + Math.abs(x - targetCenter) +
+        (x === sourceCenter ? -500 : 0) +
+        (conflictsWithLane(x) ? 10000 : 0);
+      return score(a) - score(b);
+    })[0];
+    // A single child needs no shared family gutter: move toward that child
+    // once, then descend directly into the card.
+    if (familyEdges.length === 1) {
+      const directX = targets[0].position.x + NODE_W / 2;
+      if (isClear(directX) && !conflictsWithLane(directX)) routeX = directX;
+    } else {
+      // Snap once for the whole sibling group, never independently per edge.
+      // This keeps one canonical family trunk when a child is already close
+      // to the selected lane and avoids a visually parallel short drop.
+      const nearbyTargetX = targets
+        .map((target) => target.position.x + NODE_W / 2)
+        .sort((a, b) => Math.abs(a - routeX) - Math.abs(b - routeX))[0];
+      if (Math.abs(nearbyTargetX - routeX) < 72 && isClear(nearbyTargetX) && !conflictsWithLane(nearbyTargetX)) {
+        routeX = nearbyTargetX;
+      }
+    }
+    usedLanes.push({ x: routeX, top: verticalTop, bottom: verticalBottom });
+    const generationYs = [...new Set(targets.map((target) => target.position.y - 24))].sort((a, b) => a - b);
+    const sharedFamilyJunctionY = generationYs[0];
+    const trunkEndY = generationYs[generationYs.length - 1];
+    const trunkOwnerId = familyEdges[0].id;
+    familyEdges.sort((a, b) => (nodeById.get(a.target)?.position.x ?? 0) - (nodeById.get(b.target)?.position.x ?? 0));
+    familyEdges.forEach((edge, index) => {
+      const target = nodeById.get(edge.target);
+      const decadeJunctionY = target ? target.position.y - 24 : sharedFamilyJunctionY;
+      routeByEdge.set(edge.id, {
+        routeX,
+        // Separate each spouse/family group immediately below the parent card.
+        // Children in the same group still share this exact source segment.
+        sourceLane: 24 + sourceFamilyIndex * 14,
+        targetLane: 24,
+        // Family Levels has one family bus. By Decade has one bus per decade;
+        // siblings on the same decade row therefore share the exact junction.
+        branchY: chronological ? decadeJunctionY : sharedFamilyJunctionY,
+        drawTrunk: edge.id === trunkOwnerId,
+        trunkEndY,
+        generationBreakpoints: index === 0 ? (chronological ? generationYs : [sharedFamilyJunctionY]) : undefined,
+      });
+    });
+  }
+  const routedEdges = edges.map((edge) => ({ ...edge, data: { ...edge.data, ...(routeByEdge.get(edge.id) ?? {}) } }));
+
+  return { nodes, edges: routedEdges };
 }
 
 function isDescendant(members: FamilyMember[], ancestorId: string, targetId: string): boolean {
@@ -634,6 +799,12 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [selectedSubfamilyId, setSelectedSubfamilyId] = useState<string | null>(null);
   const [subfamilyFilterEnabled, setSubfamilyFilterEnabled] = useState(false);
+  const [generationYear, setGenerationYear] = useState("");
+  const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
+  const [previewType, setPreviewType] = useState<"lineage" | "chronological">("lineage");
+  const [collapsedWidgets, setCollapsedWidgets] = useState({ preview: false, generation: false, subfamilies: false });
+  const toggleWidget = (widget: keyof typeof collapsedWidgets) =>
+    setCollapsedWidgets((current) => ({ ...current, [widget]: !current[widget] }));
   const { setCenter, fitView } = useReactFlow();
   const didFit = useRef(false);
   const edgeUpdateSuccessful = useRef(true);
@@ -652,15 +823,53 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
     [navigate, readOnly],
   );
 
+  const onToggleCollapsed = useCallback((id: string) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const generations = useMemo(() => {
+    const unique = new Map<string, GenerationBand>();
+    for (const member of members) {
+      const band = generationBandFor(member);
+      if (band) unique.set(generationKey(band), band);
+    }
+    return [...unique.values()].sort((a, b) => a.start - b.start);
+  }, [members]);
+
   const visibleMembers = useMemo(() => {
-    if (!subfamilyFilterEnabled || !selectedSubfamilyId) return members;
-    return familyStore.getSubfamilyMembers(selectedSubfamilyId);
+    let result = !subfamilyFilterEnabled || !selectedSubfamilyId ? members : familyStore.getSubfamilyMembers(selectedSubfamilyId);
+    return result;
   }, [members, selectedSubfamilyId, subfamilyFilterEnabled]);
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => layout(visibleMembers, collapsed, onOpen, highlightId),
-    [visibleMembers, collapsed, onOpen, highlightId],
+    () => layout(visibleMembers, collapsed, onOpen, highlightId, previewType === "chronological", onToggleCollapsed),
+    [visibleMembers, collapsed, onOpen, highlightId, previewType, onToggleCollapsed],
   );
+
+  const earliestGeneration = generations[0]?.start ?? 0;
+  const activeGeneration = useMemo(() => {
+    if (!generations.length) return null;
+    const graphCenterY = (((typeof window === "undefined" ? 800 : window.innerHeight) / 2) - viewport.y) / viewport.zoom;
+    return generations.reduce((closest, band) => {
+      const bandY = ((band.start - earliestGeneration) / 10) * 340;
+      const closestY = ((closest.start - earliestGeneration) / 10) * 340;
+      return Math.abs(bandY - graphCenterY) < Math.abs(closestY - graphCenterY) ? band : closest;
+    });
+  }, [generations, earliestGeneration, viewport]);
+
+  const scrollToGeneration = () => {
+    const year = Number.parseInt(generationYear, 10);
+    if (!Number.isFinite(year) || !generations.length) return;
+    const requestedStart = Math.floor(year / 10) * 10;
+    const closest = generations.reduce((best, band) => Math.abs(band.start - requestedStart) < Math.abs(best.start - requestedStart) ? band : best);
+    const y = ((closest.start - earliestGeneration) / 10) * 340 + NODE_H / 2;
+    setCenter(0, y, { zoom: Math.max(viewport.zoom, 0.65), duration: 600 });
+    setGenerationYear(String(year));
+  };
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -960,21 +1169,57 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         defaultEdgeOptions={{ type: "relationship", focusable: !readOnly, deletable: !readOnly, updatable: !readOnly }}
         deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
         fitView
+        onMove={(_event, nextViewport) => setViewport(nextViewport)}
       >
         <Background gap={24} className="!bg-background" />
+        {previewType === "chronological" && activeGeneration && (
+          <div
+            className="pointer-events-none absolute inset-x-0 z-0 border-t-2 border-dashed border-primary/25"
+            style={{ top: `${((activeGeneration.start - earliestGeneration) / 10) * 340 * viewport.zoom + viewport.y}px` }}
+          >
+            <span className="ms-3 rounded-b bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground">
+              {activeGeneration.start}–{activeGeneration.end}
+            </span>
+          </div>
+        )}
         <MiniMap pannable zoomable className="!bg-card !border" />
-        <Controls className="!bg-card !border" />
+        <Controls showInteractive={false} className="!bg-card !border" />
       </ReactFlow>
 
-      <div className="absolute bottom-[180px] right-4 z-10 w-72 max-w-[calc(100%-2rem)] rounded-lg border bg-card p-3 text-xs shadow-sm">
-        <div className="max-h-[calc(100vh-260px)] overflow-y-auto overscroll-contain pr-1">
+      <div className="absolute bottom-[180px] right-4 z-10 flex w-72 max-w-[calc(100%-2rem)] flex-col gap-2">
+        <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
+          <button type="button" onClick={() => toggleWidget("preview")} className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.preview ? "" : "mb-2"}`}>
+            {t("preview_type")}<ChevronDown className={`h-4 w-4 transition-transform ${collapsedWidgets.preview ? "-rotate-90" : ""}`} />
+          </button>
+          {!collapsedWidgets.preview && <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+            <button onClick={() => setPreviewType("lineage")} className={`rounded px-2 py-1.5 ${previewType === "lineage" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{t("lineage_view")}</button>
+            <button onClick={() => setPreviewType("chronological")} className={`rounded px-2 py-1.5 ${previewType === "chronological" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{t("generation_view")}</button>
+          </div>}
+        </div>
+        {previewType === "chronological" && generations.length > 0 && <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
+          <button type="button" onClick={() => toggleWidget("generation")} className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.generation ? "" : "mb-2"}`}>
+            <span className="flex items-center gap-2"><CalendarRange className="h-4 w-4 text-primary" />{t("generation")}</span><ChevronDown className={`h-4 w-4 transition-transform ${collapsedWidgets.generation ? "-rotate-90" : ""}`} />
+          </button>
+          {!collapsedWidgets.generation && <><div className="flex gap-1">
+            <Input value={generationYear} onChange={(event) => setGenerationYear(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))} onKeyDown={(event) => event.key === "Enter" && scrollToGeneration()} inputMode="numeric" placeholder="1975" className="h-8 text-xs" />
+            <Button size="sm" onClick={scrollToGeneration} disabled={generationYear.length !== 4}>{t("go")}</Button>
+          </div>
+          {activeGeneration && <div className="mt-2 text-[10px] text-muted-foreground">{activeGeneration.start}–{activeGeneration.end}</div>}</>}
+        </div>}
+        <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
+        <button type="button" onClick={() => toggleWidget("subfamilies")} className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.subfamilies ? "" : "mb-2"}`}>
+          {t("subfamilies")}<ChevronDown className={`h-4 w-4 transition-transform ${collapsedWidgets.subfamilies ? "-rotate-90" : ""}`} />
+        </button>
+        {!collapsedWidgets.subfamilies && <div className="max-h-[calc(100vh-260px)] overflow-y-auto overscroll-contain pr-1">
           <SubfamilyPanel
             mode="home"
             selectedSubfamilyId={selectedSubfamilyId}
             onSelectSubfamily={setSelectedSubfamilyId}
             filterEnabled={subfamilyFilterEnabled}
             onToggleFilter={setSubfamilyFilterEnabled}
+            hideHeading
           />
+        </div>}
         </div>
       </div>
 

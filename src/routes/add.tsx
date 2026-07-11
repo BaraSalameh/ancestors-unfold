@@ -22,6 +22,7 @@ function AddPage() {
   const members = useFamily();
   const { t } = useI18n();
   const { parentId, childId, spouseId } = useSearch({ from: "/add" });
+  const treeId = familyStore.getActiveTreeId();
 
   // Pre-fill based on context
   const child = childId ? members.find((m) => m.id === childId) : undefined;
@@ -42,7 +43,9 @@ function AddPage() {
           initial={initial}
           members={members}
           submitLabel={t("save")}
-          onCancel={() => navigate({ to: "/" })}
+          onCancel={() =>
+            navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } })
+          }
           onSubmit={(data) => {
             const m = familyStore.add(data);
             // If creating a parent for an existing child, attach the child
