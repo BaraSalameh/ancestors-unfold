@@ -15,6 +15,7 @@ function EditPage() {
   const members = useFamily();
   const { t } = useI18n();
   const member = members.find((m) => m.id === id);
+  const treeId = familyStore.getActiveTreeId();
 
   if (!member) {
     return <div className="p-8 text-center text-muted-foreground">{t("not_found")}</div>;
@@ -29,7 +30,9 @@ function EditPage() {
           memberId={id}
           members={members.filter((m) => m.id !== id)}
           submitLabel={t("save")}
-          onCancel={() => navigate({ to: "/member/$id", params: { id } })}
+          onCancel={() =>
+            navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } })
+          }
           onSubmit={(data) => {
             familyStore.update(id, data);
             toast.success(t("updated"));

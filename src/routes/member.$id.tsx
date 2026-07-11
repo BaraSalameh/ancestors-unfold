@@ -30,6 +30,7 @@ function MemberPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const member = members.find((m) => m.id === id);
+  const treeId = familyStore.getActiveTreeId();
   if (!member) return <div className="p-8 text-center text-muted-foreground">{t("not_found")}</div>;
 
   const father = member.father_id ? members.find((m) => m.id === member.father_id) : undefined;
@@ -91,7 +92,7 @@ function MemberPage() {
     <div className="mx-auto max-w-4xl px-4 py-6">
       <div className="mb-4 flex items-center justify-between">
         <Button asChild variant="ghost" size="sm">
-          <Link to="/"><ArrowLeft className="ltr:mr-2 rtl:ml-2 h-4 w-4" />{t("back")}</Link>
+          <Link to="/tree/$id" params={{ id: treeId }} search={{ mode: "edit" }}><ArrowLeft className="ltr:mr-2 rtl:ml-2 h-4 w-4" />{t("back")}</Link>
         </Button>
         <div className="flex gap-2">
           <Button asChild size="sm" variant="outline">

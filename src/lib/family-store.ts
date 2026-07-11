@@ -127,6 +127,9 @@ if (typeof window !== "undefined") {
 }
 
 export const familyStore = {
+  getActiveTreeId(): string {
+    return activeTreeId;
+  },
   activateTree(treeId: string): void {
     if (!treeId || activeTreeId === treeId) return;
     activeTreeId = treeId;
