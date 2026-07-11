@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useI18n } from "@/lib/i18n";
+import { familyStore } from "@/lib/family-store";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard | Ancestors Unfold" }, { name: "description", content: "Manage and explore your family trees." }] }),
@@ -41,7 +42,11 @@ function Dashboard() {
   const submit = () => {
     if (!name.trim()) return;
     if (editing) saveTrees(trees.map((tree) => tree.id === editing.id ? { ...tree, name: name.trim(), description: description.trim(), updatedAt: t("just_now") } : tree));
-    else saveTrees([{ id: crypto.randomUUID(), name: name.trim(), description: description.trim() || t("new_family_story"), members: 0, generations: 0, updatedAt: t("just_now"), color: "from-violet-500 to-fuchsia-700" }, ...trees]);
+    else {
+      const id = crypto.randomUUID();
+      familyStore.initializeTree(id);
+      saveTrees([{ id, name: name.trim(), description: description.trim() || t("new_family_story"), members: 0, generations: 0, updatedAt: t("just_now"), color: "from-violet-500 to-fuchsia-700" }, ...trees]);
+    }
     setEditing(null); setCreateOpen(false);
   };
 
@@ -67,7 +72,7 @@ function Dashboard() {
       </article>)}</div> : <div className="rounded-xl border border-dashed bg-card py-16 text-center"><Search className="mx-auto h-8 w-8 text-muted-foreground" /><h3 className="mt-3 font-medium">{t("no_trees_found")}</h3><p className="mt-1 text-sm text-muted-foreground">{t("no_trees_hint")}</p></div>}
     </section>
     <Dialog open={createOpen || !!editing} onOpenChange={(open) => { if (!open) { setCreateOpen(false); setEditing(null); } }}><DialogContent><DialogHeader><DialogTitle>{editing ? t("update_family_tree") : t("create_tree_title")}</DialogTitle><DialogDescription>{editing ? t("update_tree_desc") : t("create_tree_desc")}</DialogDescription></DialogHeader><div className="space-y-4"><div><label className="mb-1.5 block text-sm font-medium">{t("family_name")}</label><Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("family_name_example")} /></div><div><label className="mb-1.5 block text-sm font-medium">{t("description")} <span className="font-normal text-muted-foreground">{t("optional")}</span></label><Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("tree_note_placeholder")} /></div></div><DialogFooter><Button variant="outline" onClick={() => { setCreateOpen(false); setEditing(null); }}>{t("cancel")}</Button><Button onClick={submit} disabled={!name.trim()}>{editing ? t("save_changes") : t("create_tree")}</Button></DialogFooter></DialogContent></Dialog>
-    <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("delete_tree_title")} {deleting?.name}</AlertDialogTitle><AlertDialogDescription>{t("delete_tree_desc")}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t("cancel")}</AlertDialogCancel><AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => { if (deleting) saveTrees(trees.filter((tree) => tree.id !== deleting.id)); setDeleting(null); }}>{t("delete_family_tree")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("delete_tree_title")} {deleting?.name}</AlertDialogTitle><AlertDialogDescription>{t("delete_tree_desc")}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t("cancel")}</AlertDialogCancel><AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => { if (deleting) { familyStore.deleteTreeData(deleting.id); saveTrees(trees.filter((tree) => tree.id !== deleting.id)); } setDeleting(null); }}>{t("delete_family_tree")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </main>;
 }
 

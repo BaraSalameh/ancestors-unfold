@@ -1,8 +1,11 @@
 import { useSyncExternalStore } from "react";
 import type { FamilyMember, MemberInput, SubFamily } from "./family-types";
 
-const STORAGE_KEY = "family-tree-hub:v1";
-const SUBFAMILIES_KEY = "family-tree-hub:subfamilies:v1";
+const LEGACY_STORAGE_KEY = "family-tree-hub:v1";
+const LEGACY_SUBFAMILIES_KEY = "family-tree-hub:subfamilies:v1";
+const treeStorageKey = (treeId: string) => `family-tree-hub:tree:${treeId}:members:v1`;
+const subfamiliesStorageKey = (treeId: string) => `family-tree-hub:tree:${treeId}:subfamilies:v1`;
+let activeTreeId = "al-rashid";
 
 const SAMPLE: FamilyMember[] = (() => {
   const now = new Date().toISOString();
@@ -45,21 +48,24 @@ let future: FamilyMember[][] = [];
 
 function load() {
   if (typeof window === "undefined") {
-    state = SAMPLE;
+    state = activeTreeId === "al-rashid" ? SAMPLE : [];
     return;
   }
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    state = raw ? (JSON.parse(raw) as FamilyMember[]) : SAMPLE;
-    if (!raw) save();
+    const key = treeStorageKey(activeTreeId);
+    const scoped = window.localStorage.getItem(key);
+    const legacy = activeTreeId === "al-rashid" ? window.localStorage.getItem(LEGACY_STORAGE_KEY) : null;
+    const raw = scoped ?? legacy;
+    state = raw ? (JSON.parse(raw) as FamilyMember[]) : activeTreeId === "al-rashid" ? SAMPLE : [];
+    if (!scoped) save();
   } catch {
-    state = SAMPLE;
+    state = activeTreeId === "al-rashid" ? SAMPLE : [];
   }
 }
 
 function save() {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  window.localStorage.setItem(treeStorageKey(activeTreeId), JSON.stringify(state));
 }
 
 function emit() {
@@ -80,8 +86,11 @@ function loadSubfamilies() {
     return;
   }
   try {
-    const raw = window.localStorage.getItem(SUBFAMILIES_KEY);
+    const scoped = window.localStorage.getItem(subfamiliesStorageKey(activeTreeId));
+    const legacy = activeTreeId === "al-rashid" ? window.localStorage.getItem(LEGACY_SUBFAMILIES_KEY) : null;
+    const raw = scoped ?? legacy;
     subfamilies = raw ? (JSON.parse(raw) as SubFamily[]) : [];
+    if (!scoped) saveSubfamilies();
   } catch {
     subfamilies = [];
   }
@@ -89,7 +98,7 @@ function loadSubfamilies() {
 
 function saveSubfamilies() {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(SUBFAMILIES_KEY, JSON.stringify(subfamilies));
+  window.localStorage.setItem(subfamiliesStorageKey(activeTreeId), JSON.stringify(subfamilies));
 }
 
 function snapshot(): FamilyMember[] {
@@ -118,6 +127,25 @@ if (typeof window !== "undefined") {
 }
 
 export const familyStore = {
+  activateTree(treeId: string): void {
+    if (!treeId || activeTreeId === treeId) return;
+    activeTreeId = treeId;
+    past = [];
+    future = [];
+    load();
+    loadSubfamilies();
+    emit();
+  },
+  initializeTree(treeId: string): void {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(treeStorageKey(treeId), "[]");
+    window.localStorage.setItem(subfamiliesStorageKey(treeId), "[]");
+  },
+  deleteTreeData(treeId: string): void {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(treeStorageKey(treeId));
+    window.localStorage.removeItem(subfamiliesStorageKey(treeId));
+  },
   getAll(): FamilyMember[] {
     return state;
   },
@@ -492,7 +520,7 @@ export function useFamily(): FamilyMember[] {
   return useSyncExternalStore(
     familyStore.subscribe,
     () => familyStore.getAll(),
-    () => SAMPLE,
+    () => state,
   );
 }
 
