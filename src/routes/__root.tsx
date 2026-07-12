@@ -14,6 +14,8 @@ import { I18nProvider } from "@/lib/i18n";
 import { ThemeProvider } from "@/lib/theme";
 import { Header } from "@/components/Header";
 import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "@/lib/auth";
+import { AuthGuard } from "@/components/AuthGuard";
 
 function NotFoundComponent() {
   return (
@@ -120,10 +122,12 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <I18nProvider>
-          <div className="min-h-screen bg-background text-foreground">
-            <Header />
-            <Outlet />
-          </div>
+          <AuthProvider>
+            <div className="min-h-screen bg-background text-foreground">
+              <Header />
+              <AuthGuard><Outlet /></AuthGuard>
+            </div>
+          </AuthProvider>
           <Toaster richColors position="top-center" />
         </I18nProvider>
       </ThemeProvider>
