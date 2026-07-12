@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Moon, Sun, Languages, TreePine, Plus, LayoutDashboard } from "lucide-react";
+import { Moon, Sun, Languages, TreePine, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
@@ -20,9 +20,6 @@ export function Header() {
         </Link>
 
         {!isTreePreview && <nav className="ms-2 hidden items-center gap-1 md:flex">
-          <Link to="/" className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }} activeOptions={{ exact: true }}>
-            <LayoutDashboard className="h-4 w-4" /> {t("dashboard")}
-          </Link>
           {!isDashboard && <Link to="/subfamilies" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
             {t("subfamilies_nav")}
           </Link>}
