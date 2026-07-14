@@ -45,27 +45,47 @@ let subfamilies: SubFamily[] = [];
 const listeners = new Set<() => void>();
 let past: FamilyMember[][] = [];
 let future: FamilyMember[][] = [];
+let remoteSaveTimer: ReturnType<typeof setTimeout> | undefined;
+let remoteVersion = 1;
+let persistenceError: string | null = null;
+
+async function hydrateFromServer(treeId: string) {
+  try {
+    const response = await fetch(`/api/trees/${treeId}/snapshot`, { credentials: "include" });
+    if (!response.ok || activeTreeId !== treeId) return;
+    const snapshot = await response.json() as { version: number; members: FamilyMember[]; subfamilies: SubFamily[] };
+    remoteVersion = snapshot.version;
+    state = snapshot.members;
+    subfamilies = snapshot.subfamilies;
+    past = []; future = []; emit();
+  } catch { /* readiness and auth surfaces report connection failures */ }
+}
+
+function scheduleRemoteSave() {
+  if (typeof window === "undefined") return;
+  clearTimeout(remoteSaveTimer);
+  remoteSaveTimer = setTimeout(() => {
+    void fetch(`/api/trees/${activeTreeId}/snapshot`, {
+      method: "PUT", credentials: "include", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ batchId: crypto.randomUUID(), expectedVersion: remoteVersion, members: state, subfamilies }),
+    }).then(async (response) => {
+      if (!response.ok) { persistenceError = (await response.json().catch(()=>({code:"SAVE_FAILED"}))).code; emit(); return; }
+      const result = await response.json() as { version: number }; remoteVersion = result.version; persistenceError = null;
+    }).catch(() => { persistenceError = "NETWORK_ERROR"; emit(); });
+  }, 250);
+}
 
 function load() {
   if (typeof window === "undefined") {
-    state = activeTreeId === "al-rashid" ? SAMPLE : [];
+    state = [];
     return;
   }
-  try {
-    const key = treeStorageKey(activeTreeId);
-    const scoped = window.localStorage.getItem(key);
-    const legacy = activeTreeId === "al-rashid" ? window.localStorage.getItem(LEGACY_STORAGE_KEY) : null;
-    const raw = scoped ?? legacy;
-    state = raw ? (JSON.parse(raw) as FamilyMember[]) : activeTreeId === "al-rashid" ? SAMPLE : [];
-    if (!scoped) save();
-  } catch {
-    state = activeTreeId === "al-rashid" ? SAMPLE : [];
-  }
+  state = [];
+  void hydrateFromServer(activeTreeId);
 }
 
 function save() {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(treeStorageKey(activeTreeId), JSON.stringify(state));
+  scheduleRemoteSave();
 }
 
 function emit() {
@@ -85,20 +105,11 @@ function loadSubfamilies() {
     subfamilies = [];
     return;
   }
-  try {
-    const scoped = window.localStorage.getItem(subfamiliesStorageKey(activeTreeId));
-    const legacy = activeTreeId === "al-rashid" ? window.localStorage.getItem(LEGACY_SUBFAMILIES_KEY) : null;
-    const raw = scoped ?? legacy;
-    subfamilies = raw ? (JSON.parse(raw) as SubFamily[]) : [];
-    if (!scoped) saveSubfamilies();
-  } catch {
-    subfamilies = [];
-  }
+  subfamilies = [];
 }
 
 function saveSubfamilies() {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(subfamiliesStorageKey(activeTreeId), JSON.stringify(subfamilies));
+  scheduleRemoteSave();
 }
 
 function snapshot(): FamilyMember[] {
@@ -130,6 +141,7 @@ export const familyStore = {
   getActiveTreeId(): string {
     return activeTreeId;
   },
+  getPersistenceError(): string | null { return persistenceError; },
   activateTree(treeId: string): void {
     if (!treeId || activeTreeId === treeId) return;
     activeTreeId = treeId;
@@ -140,14 +152,10 @@ export const familyStore = {
     emit();
   },
   initializeTree(treeId: string): void {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(treeStorageKey(treeId), "[]");
-    window.localStorage.setItem(subfamiliesStorageKey(treeId), "[]");
+    void hydrateFromServer(treeId);
   },
   deleteTreeData(treeId: string): void {
-    if (typeof window === "undefined") return;
-    window.localStorage.removeItem(treeStorageKey(treeId));
-    window.localStorage.removeItem(subfamiliesStorageKey(treeId));
+    void fetch(`/api/trees/${treeId}`, { method: "DELETE", credentials: "include" });
   },
   getAll(): FamilyMember[] {
     return state;
@@ -159,30 +167,31 @@ export const familyStore = {
     const now = new Date().toISOString();
     let member: FamilyMember | undefined;
     commit(() => {
-      member = {
+      const created: FamilyMember = {
         ...input,
         id: crypto.randomUUID(),
         created_at: now,
         updated_at: now,
       };
-      state = [...state, member];
+      member = created;
+      state = [...state, created];
       // mirror spouse link
-      if (member.spouse_id) {
-        const spouse = state.find((m) => m.id === member.spouse_id);
+      if (created.spouse_id) {
+        const spouse = state.find((m) => m.id === created.spouse_id);
         state = state.map((m) => {
           if (!spouse) return m;
-          if (member.gender === "female" && spouse.gender === "male" && m.id === spouse.id) {
+          if (created.gender === "female" && spouse.gender === "male" && m.id === spouse.id) {
             const set = new Set(m.spouse_ids ?? []);
-            set.add(member.id);
-            return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? member.id, updated_at: now };
+            set.add(created.id);
+            return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? created.id, updated_at: now };
           }
-          if (member.gender === "male" && spouse.gender === "female" && m.id === member.id) {
+          if (created.gender === "male" && spouse.gender === "female" && m.id === created.id) {
             const set = new Set(m.spouse_ids ?? []);
             set.add(spouse.id);
             return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? spouse.id, updated_at: now };
           }
-          if (member.gender === "male" && spouse.gender === "female" && m.id === spouse.id) {
-            return { ...m, spouse_id: m.spouse_id ?? member.id, updated_at: now };
+          if (created.gender === "male" && spouse.gender === "female" && m.id === spouse.id) {
+            return { ...m, spouse_id: m.spouse_id ?? created.id, updated_at: now };
           }
           return m;
         });
@@ -346,7 +355,7 @@ export const familyStore = {
     const idx = existingUnknown + 1;
     let wife: FamilyMember | undefined;
     commit(() => {
-      wife = {
+      const createdWife: FamilyMember = {
         id: crypto.randomUUID(),
         name_en: `Unknown wife #${idx}`,
         name_ar: `زوجة غير معروفة #${idx}`,
@@ -355,12 +364,13 @@ export const familyStore = {
         created_at: now,
         updated_at: now,
       };
-      state = [...state, wife];
+      wife = createdWife;
+      state = [...state, createdWife];
       state = state.map((m) => {
         if (m.id === maleId) {
           const set = new Set(m.spouse_ids ?? []);
-          set.add(wife.id);
-          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? wife.id, updated_at: now };
+          set.add(createdWife.id);
+          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? createdWife.id, updated_at: now };
         }
         return m;
       });

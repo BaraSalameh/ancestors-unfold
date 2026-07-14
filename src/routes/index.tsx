@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Activity, ArrowUpRight, CalendarDays, Eye, GitBranch, MoreHorizontal, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,14 +24,10 @@ const KEY = "ancestors-unfold:trees:v1";
 
 function Dashboard() {
   const { t, dir, lang } = useI18n();
-  const [trees, setTrees] = useState<TreeRecord[]>(() => {
-    if (typeof window === "undefined") return initialTrees;
-    try {
-      const stored = JSON.parse(localStorage.getItem(KEY) || "null");
-      if (!stored) return initialTrees;
-      return stored.map((tree: TreeRecord & { name?: string; description?: string }) => ({ ...tree, name_en: tree.name_en || tree.name || "", name_ar: tree.name_ar || "", description_en: tree.description_en || tree.description || "", description_ar: tree.description_ar || "" }));
-    } catch { return initialTrees; }
-  });
+  const [trees, setTrees] = useState<TreeRecord[]>([]);
+  useEffect(() => {
+    void fetch("/api/trees", { credentials: "include" }).then((r) => r.ok ? r.json() : []).then((rows: any[]) => setTrees(rows.map((tree) => ({ ...tree, members: 0, generations: 0, updatedAt: new Date(tree.updated_at).toLocaleDateString(), color: tree.color || "from-violet-500 to-fuchsia-700" }))));
+  }, []);
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<TreeRecord | null>(null);
@@ -40,18 +36,25 @@ function Dashboard() {
   const [nameAr, setNameAr] = useState("");
   const [descriptionEn, setDescriptionEn] = useState("");
   const [descriptionAr, setDescriptionAr] = useState("");
-  const saveTrees = (next: TreeRecord[]) => { setTrees(next); localStorage.setItem(KEY, JSON.stringify(next)); };
+  const saveTrees = (next: TreeRecord[]) => { setTrees(next); };
   const filtered = useMemo(() => trees.filter((tree) => `${tree.name_en} ${tree.name_ar} ${tree.description_en} ${tree.description_ar}`.toLowerCase().includes(query.toLowerCase())), [trees, query]);
   const members = trees.reduce((sum, t) => sum + t.members, 0);
   const openCreate = () => { setNameEn(""); setNameAr(""); setDescriptionEn(""); setDescriptionAr(""); setCreateOpen(true); };
   const openEdit = (tree: TreeRecord) => { setNameEn(tree.name_en); setNameAr(tree.name_ar); setDescriptionEn(tree.description_en); setDescriptionAr(tree.description_ar); setEditing(tree); };
-  const submit = () => {
+  const submit = async () => {
     if (!nameEn.trim()) return;
-    if (editing) saveTrees(trees.map((tree) => tree.id === editing.id ? { ...tree, name_en: nameEn.trim(), name_ar: nameAr.trim(), description_en: descriptionEn.trim(), description_ar: descriptionAr.trim(), updatedAt: t("just_now") } : tree));
+    if (editing) {
+      const response = await fetch(`/api/trees/${editing.id}`, { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ name_en: nameEn.trim(), name_ar: nameAr.trim(), description_en: descriptionEn.trim(), description_ar: descriptionAr.trim() }) });
+      if (!response.ok) return;
+      saveTrees(trees.map((tree) => tree.id === editing.id ? { ...tree, name_en: nameEn.trim(), name_ar: nameAr.trim(), description_en: descriptionEn.trim(), description_ar: descriptionAr.trim(), updatedAt: t("just_now") } : tree));
+    }
     else {
-      const id = crypto.randomUUID();
+      const response = await fetch("/api/trees", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ name_en: nameEn.trim(), name_ar: nameAr.trim(), description_en: descriptionEn.trim() || t("new_family_story"), description_ar: descriptionAr.trim(), color: "from-violet-500 to-fuchsia-700" }) });
+      if (!response.ok) return;
+      const created = await response.json();
+      const id = created.id;
       familyStore.initializeTree(id);
-      saveTrees([{ id, name_en: nameEn.trim(), name_ar: nameAr.trim(), description_en: descriptionEn.trim() || t("new_family_story"), description_ar: descriptionAr.trim(), members: 0, generations: 0, updatedAt: t("just_now"), color: "from-violet-500 to-fuchsia-700" }, ...trees]);
+      saveTrees([{ id, name_en: created.name_en, name_ar: created.name_ar || "", description_en: created.description_en || "", description_ar: created.description_ar || "", members: 0, generations: 0, updatedAt: t("just_now"), color: created.color }, ...trees]);
     }
     setEditing(null); setCreateOpen(false);
   };

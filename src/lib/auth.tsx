@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { browserAuthService } from "./browser-auth-service";
+import { apiAuthService } from "./api-auth-service";
 import type { AuthSession, RegistrationInput } from "./auth-service";
+import { importLegacyLocalStorage } from "./legacy-import";
 
 type AuthContextValue = {
   session: AuthSession | null;
@@ -19,7 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    browserAuthService.getSession().then(setSession).finally(() => setIsLoading(false));
+    apiAuthService.getSession().then(async (value) => { setSession(value); if (value) await importLegacyLocalStorage(); }).catch(() => setSession(null)).finally(() => setIsLoading(false));
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
@@ -27,9 +28,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     isLoading,
     isAuthenticated: !!session,
-    login: async (email, password) => setSession(await browserAuthService.login(email, password)),
-    register: async (input) => setSession(await browserAuthService.register(input)),
-    logout: async () => { await browserAuthService.logout(); setSession(null); },
+    login: async (email, password) => { const next=await apiAuthService.login(email,password); setSession(next); await importLegacyLocalStorage(); },
+    register: async (input) => { const next=await apiAuthService.register(input); setSession(next); await importLegacyLocalStorage(); },
+    logout: async () => { await apiAuthService.logout(); setSession(null); },
   }), [session, isLoading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
