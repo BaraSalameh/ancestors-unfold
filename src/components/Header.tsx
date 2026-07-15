@@ -11,7 +11,7 @@ export function Header() {
   const { theme, toggle } = useTheme();
   const { user, isLoading, logout } = useAuth();
   const location = useRouterState({ select: (state) => state.location });
-  const isDashboard = location.pathname === "/";
+  const isTreeEdit = location.pathname.startsWith("/tree/") && location.search.mode === "edit";
   const isTreePreview = location.pathname.startsWith("/tree/") && location.search.mode === "preview";
   const isAuthPage = location.pathname === "/auth";
 
@@ -24,13 +24,13 @@ export function Header() {
         </Link>
 
         {!isTreePreview && !isAuthPage && <nav className="ms-2 hidden items-center gap-1 md:flex">
-          {!isDashboard && <Link to="/subfamilies" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
+          {isTreeEdit && <Link to="/subfamilies" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
             {t("subfamilies_nav")}
           </Link>}
         </nav>}
 
         <div className="ms-auto flex items-center gap-1">
-          {!isDashboard && !isTreePreview && !isAuthPage && <Button asChild size="sm" variant="default" className="hidden gap-1 sm:flex">
+          {isTreeEdit && <Button asChild size="sm" variant="default" className="hidden gap-1 sm:flex">
             <Link to="/add">
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">{t("add_member")}</span>
