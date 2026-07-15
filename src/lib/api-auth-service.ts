@@ -6,6 +6,9 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const value = await response.json().catch(() => ({})) as { code?: string };
   if (value.code === "EMAIL_EXISTS") throw new AuthError("EMAIL_EXISTS");
   if (value.code === "INVALID_CREDENTIALS") throw new AuthError("INVALID_CREDENTIALS");
+  if (value.code === "INVALID_INPUT") throw new AuthError("INVALID_INPUT");
+  if (value.code === "RATE_LIMITED") throw new AuthError("RATE_LIMITED");
+  if (value.code === "DATABASE_NOT_CONFIGURED" || response.status === 503) throw new AuthError("SERVICE_UNAVAILABLE");
   throw new AuthError("STORAGE_ERROR");
 }
 

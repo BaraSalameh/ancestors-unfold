@@ -15,12 +15,6 @@ export const Route = createFileRoute("/")({
 });
 
 type TreeRecord = { id: string; name_en: string; name_ar: string; description_en: string; description_ar: string; members: number; generations: number; updatedAt: string; color: string };
-const initialTrees: TreeRecord[] = [
-  { id: "al-rashid", name_en: "Al-Rashid Family", name_ar: "عائلة الراشد", description_en: "Our main family lineage, beginning in 1920.", description_ar: "سلالة عائلتنا الرئيسية، ابتداءً من عام 1920.", members: 11, generations: 4, updatedAt: "Today", color: "from-emerald-500 to-teal-700" },
-  { id: "al-mansour", name_en: "Al-Mansour Family", name_ar: "عائلة المنصور", description_en: "Maternal ancestry and connected relatives.", description_ar: "نسب الأم والأقارب المرتبطون به.", members: 27, generations: 5, updatedAt: "2 days ago", color: "from-amber-400 to-orange-600" },
-  { id: "hassan", name_en: "Hassan Family", name_ar: "عائلة حسن", description_en: "The Hassan branch and its descendants.", description_ar: "فرع عائلة حسن وذريته.", members: 18, generations: 3, updatedAt: "May 24, 2026", color: "from-sky-500 to-indigo-700" },
-];
-const KEY = "ancestors-unfold:trees:v1";
 
 function Dashboard() {
   const { t, dir, lang } = useI18n();

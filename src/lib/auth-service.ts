@@ -12,7 +12,13 @@ export type AuthSession = {
   createdAt: string;
 };
 
-export type AuthErrorCode = "EMAIL_EXISTS" | "INVALID_CREDENTIALS" | "STORAGE_ERROR";
+export type AuthErrorCode =
+  | "EMAIL_EXISTS"
+  | "INVALID_CREDENTIALS"
+  | "INVALID_INPUT"
+  | "RATE_LIMITED"
+  | "SERVICE_UNAVAILABLE"
+  | "STORAGE_ERROR";
 
 export class AuthError extends Error {
   constructor(public readonly code: AuthErrorCode) {

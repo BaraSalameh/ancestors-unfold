@@ -23,7 +23,7 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-const schema = z.object({ email: z.string().trim().min(1, "email_required").email("email_invalid"), password: z.string().min(1, "password_required").min(8, "password_too_short"), confirmPassword: z.string().optional(), fullNameEn: z.string().optional(), fullNameAr: z.string().optional() });
+const schema = z.object({ email: z.string().trim().min(1, "email_required").email("email_invalid"), password: z.string().min(1, "password_required"), confirmPassword: z.string().optional(), fullNameEn: z.string().optional(), fullNameAr: z.string().optional() });
 type FormValues = z.infer<typeof schema>;
 
 function AuthPage() {
@@ -49,6 +49,10 @@ function AuthPage() {
       form.setError("fullNameAr", { message: "full_name_ar_required" });
       return;
     }
+    if (mode === "register" && values.password.length < 12) {
+      form.setError("password", { message: "registration_password_too_short" });
+      return;
+    }
     if (mode === "register" && !values.confirmPassword) {
       form.setError("confirmPassword", { message: "confirm_password_required" });
       return;
@@ -64,6 +68,9 @@ function AuthPage() {
     } catch (error) {
       if (error instanceof AuthError && error.code === "EMAIL_EXISTS") setSubmitError(t("email_exists"));
       else if (error instanceof AuthError && error.code === "INVALID_CREDENTIALS") setSubmitError(t("invalid_credentials"));
+      else if (error instanceof AuthError && error.code === "INVALID_INPUT") setSubmitError(t("invalid_auth_input"));
+      else if (error instanceof AuthError && error.code === "RATE_LIMITED") setSubmitError(t("auth_rate_limited"));
+      else if (error instanceof AuthError && error.code === "SERVICE_UNAVAILABLE") setSubmitError(t("auth_service_unavailable"));
       else setSubmitError(t("auth_error"));
     }
   });

@@ -173,7 +173,8 @@ export async function handleApi(request: Request): Promise<Response | null> {
   } catch(error) {
     console.error(error); const message=error instanceof Error?error.message:"INTERNAL_ERROR";
     if(error instanceof ApiError) return json({code:error.code,requestId},error.status);
-    if(message==="EMAIL_EXISTS") return json({code:message},409);
+    const databaseError = typeof error === "object" && error !== null ? error as { code?: string; constraint?: string } : null;
+    if(message==="EMAIL_EXISTS" || (databaseError?.code === "23505" && databaseError.constraint === "users_email_uq")) return json({code:"EMAIL_EXISTS"},409);
     if(message==="DATABASE_NOT_CONFIGURED") return json({code:message},503);
     if(message==="FORBIDDEN") return json({code:message},403);
     return json({code:"INTERNAL_ERROR",requestId},500);

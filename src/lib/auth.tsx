@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { apiAuthService } from "./api-auth-service";
 import type { AuthSession, RegistrationInput } from "./auth-service";
-import { importLegacyLocalStorage } from "./legacy-import";
 
 type AuthContextValue = {
   session: AuthSession | null;
@@ -20,7 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    apiAuthService.getSession().then(async (value) => { setSession(value); if (value) await importLegacyLocalStorage(); }).catch(() => setSession(null)).finally(() => setIsLoading(false));
+    apiAuthService.getSession().then(setSession).catch(() => setSession(null)).finally(() => setIsLoading(false));
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
@@ -28,8 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     isLoading,
     isAuthenticated: !!session,
-    login: async (email, password) => { const next=await apiAuthService.login(email,password); setSession(next); await importLegacyLocalStorage(); },
-    register: async (input) => { const next=await apiAuthService.register(input); setSession(next); await importLegacyLocalStorage(); },
+    login: async (email, password) => { const next=await apiAuthService.login(email,password); setSession(next); },
+    register: async (input) => { const next=await apiAuthService.register(input); setSession(next); },
     logout: async () => { await apiAuthService.logout(); setSession(null); },
   }), [session, isLoading]);
 

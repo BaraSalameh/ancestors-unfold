@@ -1,10 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { FamilyMember, MemberInput, SubFamily } from "./family-types";
 
-const LEGACY_STORAGE_KEY = "family-tree-hub:v1";
-const LEGACY_SUBFAMILIES_KEY = "family-tree-hub:subfamilies:v1";
-const treeStorageKey = (treeId: string) => `family-tree-hub:tree:${treeId}:members:v1`;
-const subfamiliesStorageKey = (treeId: string) => `family-tree-hub:tree:${treeId}:subfamilies:v1`;
 let activeTreeId = "al-rashid";
 
 const SAMPLE: FamilyMember[] = (() => {

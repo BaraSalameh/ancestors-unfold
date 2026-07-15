@@ -5,6 +5,10 @@ export type Lang = "en" | "ar";
 type Dict = Record<string, { en: string; ar: string }>;
 
 const dict: Dict = {
+  registration_password_too_short: { en: "Password must be at least 12 characters.", ar: "يجب أن تتكون كلمة المرور من 12 حرفًا على الأقل." },
+  invalid_auth_input: { en: "Some account details are invalid. Check the form and try again.", ar: "بعض بيانات الحساب غير صالحة. تحقق من النموذج وحاول مرة أخرى." },
+  auth_rate_limited: { en: "Too many attempts. Please wait a while before trying again.", ar: "محاولات كثيرة جدًا. يرجى الانتظار قليلًا قبل المحاولة مرة أخرى." },
+  auth_service_unavailable: { en: "Account services are temporarily unavailable. Please try again later.", ar: "خدمات الحسابات غير متاحة مؤقتًا. حاول مرة أخرى لاحقًا." },
   auth_title: { en: "Welcome to Ancestors Unfold", ar: "مرحبًا بك في أنسابنا" },
   auth_description: { en: "Sign in or create an account to manage your family history.", ar: "سجّل الدخول أو أنشئ حسابًا لإدارة تاريخ عائلتك." },
   login: { en: "Log in", ar: "تسجيل الدخول" },
