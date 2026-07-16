@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID } from "node:crypto";
 import argon2 from "argon2";
+import { OAuth2Client } from "google-auth-library";
 import type { PoolClient } from "pg";
 import { databaseConfigured, query, transaction } from "./db";
 import {
@@ -14,6 +15,7 @@ import {
 import { passwordResetMail, sendMail, verificationMail } from "./email";
 
 const COOKIE = "ancestors_session";
+const OAUTH_COOKIE = "ancestors_google_oauth";
 const json = (value: unknown, status = 200, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(value), {
     status,
@@ -31,15 +33,27 @@ const codeHash = (code: string) => {
   return createHmac("sha256", secret).update(code).digest();
 };
 const newCode = () => randomInt(0, 1_000_000).toString().padStart(6, "0");
-const cookieValue = (request: Request) =>
+const cookieNamed = (request: Request, name: string) =>
   request.headers
     .get("cookie")
     ?.split(";")
     .map((x) => x.trim())
-    .find((x) => x.startsWith(`${COOKIE}=`))
-    ?.slice(COOKIE.length + 1);
+    .find((x) => x.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+const cookieValue = (request: Request) => cookieNamed(request, COOKIE);
 const sessionCookie = (token: string, maxAge: number) =>
   `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${process.env.SESSION_COOKIE_SECURE === "true" ? "; Secure" : ""}`;
+const oauthCookie = (value: string, maxAge: number) =>
+  `${OAUTH_COOKIE}=${value}; Path=/api/auth/google/callback; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${process.env.SESSION_COOKIE_SECURE === "true" ? "; Secure" : ""}`;
+function googleConfig(request: Request) {
+  const clientId = process.env.GOOGLE_CLIENT_ID,
+    clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new ApiError("GOOGLE_OAUTH_NOT_CONFIGURED", 503);
+  const callback = `${process.env.PUBLIC_ORIGIN ?? new URL(request.url).origin}/api/auth/google/callback`;
+  return { clientId, client: new OAuth2Client(clientId, clientSecret, callback) };
+}
+const safeRedirect = (value: string | null) =>
+  value?.startsWith("/") && !value.startsWith("//") ? value : "/";
 
 type Session = {
   id: string;
@@ -152,6 +166,124 @@ export async function handleApi(request: Request): Promise<Response | null> {
             },
             503,
           );
+    }
+    if (url.pathname === "/api/auth/google" && request.method === "GET") {
+      const { client } = googleConfig(request);
+      const state = randomBytes(32).toString("base64url"),
+        nonce = randomBytes(32).toString("base64url"),
+        verifier = randomBytes(48).toString("base64url");
+      const stored = Buffer.from(
+        JSON.stringify({
+          state,
+          nonce,
+          verifier,
+          redirect: safeRedirect(url.searchParams.get("redirect")),
+        }),
+      ).toString("base64url");
+      const location = client.generateAuthUrl({
+        access_type: "online",
+        scope: ["openid", "email", "profile"],
+        state,
+        nonce,
+        code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+        code_challenge_method: "S256",
+        prompt: "select_account",
+      });
+      return new Response(null, {
+        status: 302,
+        headers: { location, "set-cookie": oauthCookie(stored, 600), "cache-control": "no-store" },
+      });
+    }
+    if (url.pathname === "/api/auth/google/callback" && request.method === "GET") {
+      const clearOauth = oauthCookie("", 0),
+        raw = cookieNamed(request, OAUTH_COOKIE);
+      let saved: { state: string; nonce: string; verifier: string; redirect: string };
+      try {
+        saved = JSON.parse(Buffer.from(raw ?? "", "base64url").toString("utf8"));
+      } catch {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "/auth?oauth_error=invalid_state", "set-cookie": clearOauth },
+        });
+      }
+      const code = url.searchParams.get("code");
+      if (!code || url.searchParams.get("state") !== saved.state)
+        return new Response(null, {
+          status: 302,
+          headers: { location: "/auth?oauth_error=cancelled", "set-cookie": clearOauth },
+        });
+      const { clientId, client } = googleConfig(request);
+      const { tokens } = await client.getToken({ code, codeVerifier: saved.verifier });
+      if (!tokens.id_token) throw new ApiError("GOOGLE_ID_TOKEN_MISSING", 401);
+      const profile = (
+        await client.verifyIdToken({ idToken: tokens.id_token, audience: clientId })
+      ).getPayload();
+      if (
+        !profile?.sub ||
+        !profile.email ||
+        !profile.email_verified ||
+        profile.nonce !== saved.nonce
+      )
+        throw new ApiError("GOOGLE_IDENTITY_INVALID", 401);
+      const email = normalizeEmail(profile.email);
+      const login = await transaction(null, null, requestId, async (c) => {
+        const identity = await c.query<{ user_id: string; status: string }>(
+          `SELECT o.user_id,u.status FROM app.oauth_accounts o JOIN app.users u ON u.id=o.user_id WHERE o.provider='google' AND o.provider_account_id=$1 FOR UPDATE OF o,u`,
+          [profile.sub],
+        );
+        let userId = identity.rows[0]?.user_id;
+        if (identity.rows[0] && ["suspended", "deleted"].includes(identity.rows[0].status))
+          throw new ApiError("ACCOUNT_UNAVAILABLE", 403);
+        if (!userId) {
+          const existing = await c.query<{ id: string; status: string }>(
+            "SELECT id,status FROM app.users WHERE email=$1 FOR UPDATE",
+            [email],
+          );
+          if (existing.rows[0] && ["suspended", "deleted"].includes(existing.rows[0].status))
+            throw new ApiError("ACCOUNT_UNAVAILABLE", 403);
+          userId = existing.rows[0]?.id;
+          if (!userId) {
+            const name = profile.name?.trim() || email.split("@")[0];
+            userId = (
+              await c.query<{ id: string }>(
+                `INSERT INTO app.users(email,email_verified_at,full_name_en,full_name_ar,status) VALUES($1,now(),$2,$2,'active') RETURNING id`,
+                [email, name],
+              )
+            ).rows[0].id;
+          } else {
+            await c.query(
+              "UPDATE app.users SET email_verified_at=COALESCE(email_verified_at,now()),status='active',updated_at=now() WHERE id=$1",
+              [userId],
+            );
+            await c.query(
+              "UPDATE app.email_verification_tokens SET invalidated_at=now() WHERE user_id=$1 AND consumed_at IS NULL AND invalidated_at IS NULL",
+              [userId],
+            );
+          }
+          await c.query(
+            `INSERT INTO app.oauth_accounts(user_id,provider,provider_account_id,provider_email,provider_email_verified,profile) VALUES($1,'google',$2,$3,true,$4::jsonb)`,
+            [userId, profile.sub, email, JSON.stringify(profile)],
+          );
+        } else {
+          await c.query(
+            "UPDATE app.oauth_accounts SET provider_email=$2,provider_email_verified=true,profile=$3::jsonb,updated_at=now() WHERE provider='google' AND provider_account_id=$1",
+            [profile.sub, email, JSON.stringify(profile)],
+          );
+        }
+        await c.query("UPDATE app.users SET last_login_at=now() WHERE id=$1", [userId]);
+        const credential = await c.query<{ credential_version: number }>(
+          "SELECT credential_version FROM app.password_credentials WHERE user_id=$1",
+          [userId],
+        );
+        return createSession(c, userId, credential.rows[0]?.credential_version ?? 1, request);
+      });
+      const headers = new Headers({
+        location: safeRedirect(saved.redirect),
+        "cache-control": "no-store",
+      });
+      headers.append("set-cookie", clearOauth);
+      headers.append("set-cookie", sessionCookie(login.token, login.maxAge));
+      return new Response(null, { status: 302, headers });
     }
     const publicPreview = url.pathname.match(/^\/api\/previews\/([A-Za-z0-9_-]{40,100})$/);
     if (publicPreview && request.method === "GET") {
@@ -618,6 +750,15 @@ export async function handleApi(request: Request): Promise<Response | null> {
     return json({ code: "NOT_FOUND" }, 404);
   } catch (error) {
     console.error(error);
+    if (url.pathname === "/api/auth/google/callback")
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: "/auth?oauth_error=failed",
+          "set-cookie": oauthCookie("", 0),
+          "cache-control": "no-store",
+        },
+      });
     const message = error instanceof Error ? error.message : "INTERNAL_ERROR";
     if (error instanceof ApiError) return json({ code: error.code, requestId }, error.status);
     const databaseError =

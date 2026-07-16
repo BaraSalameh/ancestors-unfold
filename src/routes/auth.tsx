@@ -21,6 +21,7 @@ export const Route = createFileRoute("/auth")({
       typeof s.redirect === "string" && s.redirect.startsWith("/") && !s.redirect.startsWith("//")
         ? s.redirect
         : "/",
+    oauthError: typeof s.oauth_error === "string" ? s.oauth_error : undefined,
   }),
   head: () => ({ meta: [{ title: "Sign in | Ancestors Unfold" }] }),
   component: AuthPage,
@@ -56,7 +57,7 @@ function AuthPage() {
   const { t } = useI18n(),
     auth = useAuth(),
     navigate = useNavigate(),
-    { redirect } = Route.useSearch();
+    { redirect, oauthError } = Route.useSearch();
   const [mode, setMode] = useState<"login" | "register">("login"),
     [view, setView] = useState<View>("auth"),
     [pendingEmail, setPendingEmail] = useState(""),
@@ -70,6 +71,9 @@ function AuthPage() {
   useEffect(() => {
     if (auth.isAuthenticated) window.location.assign(redirect);
   }, [auth.isAuthenticated, redirect]);
+  useEffect(() => {
+    if (oauthError) setError(t("auth_error"));
+  }, [oauthError, t]);
   const submit = form.handleSubmit(async (v) => {
     setError(null);
     if (!v.password) {
@@ -268,6 +272,24 @@ function AuthPage() {
                 <TabsTrigger value="register">{t("register")}</TabsTrigger>
               </TabsList>
               <TabsContent value={mode} className="mt-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mb-4 w-full"
+                  onClick={() =>
+                    window.location.assign(
+                      `/api/auth/google?redirect=${encodeURIComponent(redirect)}`,
+                    )
+                  }
+                >
+                  <GoogleMark />
+                  {t("continue_with_google")}
+                </Button>
+                <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  {t("or_continue_with")}
+                  <span className="h-px flex-1 bg-border" />
+                </div>
                 <form onSubmit={submit} className="space-y-4" noValidate>
                   {mode === "register" && (
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -346,6 +368,25 @@ function AuthPage() {
         </CardContent>
       </Card>
     </main>
+  );
+}
+function GoogleMark() {
+  return (
+    <svg className="me-2 h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M21.6 12.2c0-.7-.1-1.5-.2-2.2H12v4.2h5.4a4.6 4.6 0 0 1-2 3v2.7h3.5c2-1.9 3.2-4.6 3.2-7.7Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 22c2.9 0 5.3-1 7-2.6l-3.5-2.7c-1 .7-2.2 1-3.5 1a6.2 6.2 0 0 1-5.8-4.3H2.6v2.8A10 10 0 0 0 12 22Z"
+      />
+      <path fill="#FBBC05" d="M6.2 13.4a6 6 0 0 1 0-3.8V6.8H2.6a10 10 0 0 0 0 9.4l3.6-2.8Z" />
+      <path
+        fill="#EA4335"
+        d="M12 6.2c1.6 0 3 .5 4.1 1.6l3.1-3A10 10 0 0 0 2.6 6.7l3.6 2.8A6.2 6.2 0 0 1 12 6.2Z"
+      />
+    </svg>
   );
 }
 function Field({
