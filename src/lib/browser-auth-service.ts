@@ -1,8 +1,15 @@
-import { AuthError, type AuthService, type AuthSession } from "./auth-service";
+import { AuthError, type AuthSession } from "./auth-service";
 
 // Development-only persistence. This adapter is intentionally replaceable and is
 // not a substitute for server-side authentication and a database in production.
-type StoredAccount = { id: string; email: string; passwordHash: string; salt: string; fullNameEn?: string; fullNameAr?: string };
+type StoredAccount = {
+  id: string;
+  email: string;
+  passwordHash: string;
+  salt: string;
+  fullNameEn?: string;
+  fullNameAr?: string;
+};
 
 const ACCOUNTS_KEY = "ancestors-unfold:auth:accounts:v1";
 const SESSION_KEY = "ancestors-unfold:auth:session:v1";
@@ -23,7 +30,7 @@ function readAccounts(): StoredAccount[] {
   }
 }
 
-export const browserAuthService: AuthService = {
+export const browserAuthService = {
   async register(input) {
     const email = normalizeEmail(input.email);
     const accounts = readAccounts();
@@ -39,7 +46,12 @@ export const browserAuthService: AuthService = {
       passwordHash: await hashPassword(input.password, salt),
     };
     const session: AuthSession = {
-      user: { id: account.id, email: account.email, fullNameEn: account.fullNameEn ?? "", fullNameAr: account.fullNameAr ?? "" },
+      user: {
+        id: account.id,
+        email: account.email,
+        fullNameEn: account.fullNameEn ?? "",
+        fullNameAr: account.fullNameAr ?? "",
+      },
       createdAt: new Date().toISOString(),
     };
     localStorage.setItem(ACCOUNTS_KEY, JSON.stringify([...accounts, account]));
@@ -54,7 +66,12 @@ export const browserAuthService: AuthService = {
       throw new AuthError("INVALID_CREDENTIALS");
     }
     const session: AuthSession = {
-      user: { id: account.id, email: account.email, fullNameEn: account.fullNameEn ?? "", fullNameAr: account.fullNameAr ?? "" },
+      user: {
+        id: account.id,
+        email: account.email,
+        fullNameEn: account.fullNameEn ?? "",
+        fullNameAr: account.fullNameAr ?? "",
+      },
       createdAt: new Date().toISOString(),
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -75,7 +92,15 @@ export const browserAuthService: AuthService = {
       );
       if (!account) localStorage.removeItem(SESSION_KEY);
       if (!account) return null;
-      const restored: AuthSession = { ...session, user: { id: account.id, email: account.email, fullNameEn: account.fullNameEn ?? "", fullNameAr: account.fullNameAr ?? "" } };
+      const restored: AuthSession = {
+        ...session,
+        user: {
+          id: account.id,
+          email: account.email,
+          fullNameEn: account.fullNameEn ?? "",
+          fullNameAr: account.fullNameAr ?? "",
+        },
+      };
       localStorage.setItem(SESSION_KEY, JSON.stringify(restored));
       return restored;
     } catch {

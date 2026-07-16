@@ -8,8 +8,10 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   const location = useRouterState({ select: (state) => state.location });
   const navigate = useNavigate();
   const isAuthPage = location.pathname === "/auth";
-  const isPublicPreview = location.pathname.startsWith("/tree/") && location.search.mode === "preview";
-  const mayView = isAuthPage || isPublicPreview || isAuthenticated;
+  const isPasswordReset = location.pathname === "/reset-password";
+  const isPublicPreview =
+    location.pathname.startsWith("/tree/") && location.search.mode === "preview";
+  const mayView = isAuthPage || isPasswordReset || isPublicPreview || isAuthenticated;
 
   useEffect(() => {
     if (isLoading || mayView) return;
@@ -18,8 +20,11 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }, [isLoading, mayView, location.pathname, location.href, navigate]);
 
   if (isLoading || !mayView) {
-    return <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center"><LoaderCircle className="h-7 w-7 animate-spin text-primary" aria-label="Loading session" /></div>;
+    return (
+      <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
+        <LoaderCircle className="h-7 w-7 animate-spin text-primary" aria-label="Loading session" />
+      </div>
+    );
   }
   return children;
 }
-

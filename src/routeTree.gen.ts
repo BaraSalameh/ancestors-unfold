@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SubfamiliesRouteImport } from './routes/subfamilies'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AddRouteImport } from './routes/add'
@@ -27,6 +28,11 @@ const SubfamiliesRoute = SubfamiliesRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProfileRoute = ProfileRouteImport.update({
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/add': typeof AddRoute
   '/auth': typeof AuthRoute
   '/profile': typeof ProfileRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/add': typeof AddRoute
   '/auth': typeof AuthRoute
   '/profile': typeof ProfileRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/add': typeof AddRoute
   '/auth': typeof AuthRoute
   '/profile': typeof ProfileRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/auth'
     | '/profile'
+    | '/reset-password'
     | '/settings'
     | '/subfamilies'
     | '/edit/$id'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/auth'
     | '/profile'
+    | '/reset-password'
     | '/settings'
     | '/subfamilies'
     | '/edit/$id'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/auth'
     | '/profile'
+    | '/reset-password'
     | '/settings'
     | '/subfamilies'
     | '/edit/$id'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   AddRoute: typeof AddRoute
   AuthRoute: typeof AuthRoute
   ProfileRoute: typeof ProfileRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   SubfamiliesRoute: typeof SubfamiliesRoute
   EditIdRoute: typeof EditIdRoute
@@ -161,6 +174,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profile': {
@@ -220,6 +240,7 @@ const rootRouteChildren: RootRouteChildren = {
   AddRoute: AddRoute,
   AuthRoute: AuthRoute,
   ProfileRoute: ProfileRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   SubfamiliesRoute: SubfamiliesRoute,
   EditIdRoute: EditIdRoute,

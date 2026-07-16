@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { LoaderCircle, LockKeyhole, Mail, TreePine, UserRound } from "lucide-react";
 import { z } from "zod";
-import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { AuthError } from "@/lib/auth-service";
 import { useI18n } from "@/lib/i18n";
@@ -12,98 +11,363 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    redirect: typeof search.redirect === "string" && search.redirect.startsWith("/") && !search.redirect.startsWith("//") ? search.redirect : "/",
+  validateSearch: (s: Record<string, unknown>) => ({
+    redirect:
+      typeof s.redirect === "string" && s.redirect.startsWith("/") && !s.redirect.startsWith("//")
+        ? s.redirect
+        : "/",
   }),
   head: () => ({ meta: [{ title: "Sign in | Ancestors Unfold" }] }),
   component: AuthPage,
 });
+const schema = z.object({
+  email: z.string().trim().min(1, "email_required").email("email_invalid"),
+  password: z.string(),
+  confirmPassword: z.string().optional(),
+  fullNameEn: z.string().optional(),
+  fullNameAr: z.string().optional(),
+});
+type Values = z.infer<typeof schema>;
+type View = "auth" | "verify" | "forgot" | "forgot-sent";
+type TranslationKey = Parameters<ReturnType<typeof useI18n>["t"]>[0];
 
-const schema = z.object({ email: z.string().trim().min(1, "email_required").email("email_invalid"), password: z.string().min(1, "password_required"), confirmPassword: z.string().optional(), fullNameEn: z.string().optional(), fullNameAr: z.string().optional() });
-type FormValues = z.infer<typeof schema>;
-
-function AuthPage() {
-  const { t } = useI18n();
-  const { login, register, isAuthenticated } = useAuth();
-  const { redirect } = Route.useSearch();
-  const navigate = useNavigate();
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: "", password: "", confirmPassword: "", fullNameEn: "", fullNameAr: "" } });
-
-  useEffect(() => {
-    if (isAuthenticated) void navigate({ to: "/", replace: true });
-  }, [isAuthenticated, navigate]);
-
-  const submit = form.handleSubmit(async (values) => {
-    setSubmitError(null);
-    if (mode === "register" && !values.fullNameEn?.trim()) {
-      form.setError("fullNameEn", { message: "full_name_en_required" });
-      return;
-    }
-    if (mode === "register" && !values.fullNameAr?.trim()) {
-      form.setError("fullNameAr", { message: "full_name_ar_required" });
-      return;
-    }
-    if (mode === "register" && values.password.length < 12) {
-      form.setError("password", { message: "registration_password_too_short" });
-      return;
-    }
-    if (mode === "register" && !values.confirmPassword) {
-      form.setError("confirmPassword", { message: "confirm_password_required" });
-      return;
-    }
-    if (mode === "register" && values.password !== values.confirmPassword) {
-      form.setError("confirmPassword", { message: "passwords_do_not_match" });
-      return;
-    }
-    try {
-      if (mode === "register") await register({ email: values.email, password: values.password, fullNameEn: values.fullNameEn!, fullNameAr: values.fullNameAr! });
-      else await login(values.email, values.password);
-      window.location.assign(redirect);
-    } catch (error) {
-      if (error instanceof AuthError && error.code === "EMAIL_EXISTS") setSubmitError(t("email_exists"));
-      else if (error instanceof AuthError && error.code === "INVALID_CREDENTIALS") setSubmitError(t("invalid_credentials"));
-      else if (error instanceof AuthError && error.code === "INVALID_INPUT") setSubmitError(t("invalid_auth_input"));
-      else if (error instanceof AuthError && error.code === "RATE_LIMITED") setSubmitError(t("auth_rate_limited"));
-      else if (error instanceof AuthError && error.code === "SERVICE_UNAVAILABLE") setSubmitError(t("auth_service_unavailable"));
-      else setSubmitError(t("auth_error"));
-    }
-  });
-
-  const message = (key?: string) => key ? t(key as Parameters<typeof t>[0]) : undefined;
-  return <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-muted/25 px-4 py-10">
-    <Card className="w-full max-w-md shadow-lg">
-      <CardHeader className="text-center">
-        <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary"><TreePine className="h-6 w-6" /></div>
-        <CardTitle className="text-2xl">{t("auth_title")}</CardTitle>
-        <CardDescription>{t("auth_description")}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs value={mode} onValueChange={(value) => { setMode(value as typeof mode); setSubmitError(null); form.clearErrors(); }}>
-          <TabsList className="grid w-full grid-cols-2"><TabsTrigger value="login">{t("login")}</TabsTrigger><TabsTrigger value="register">{t("register")}</TabsTrigger></TabsList>
-          <TabsContent value={mode} className="mt-6">
-            <form onSubmit={submit} className="space-y-4" noValidate>
-              {mode === "register" && <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="full-name-en">{t("full_name_en")}</Label><div className="relative"><UserRound className="absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="full-name-en" dir="ltr" placeholder={t("full_name_en_placeholder")} autoComplete="name" className="ps-9" aria-invalid={!!form.formState.errors.fullNameEn} aria-describedby={form.formState.errors.fullNameEn ? "full-name-en-error" : undefined} {...form.register("fullNameEn")} /></div>{form.formState.errors.fullNameEn && <p id="full-name-en-error" role="alert" className="text-sm text-destructive">{message(form.formState.errors.fullNameEn.message)}</p>}</div><div className="space-y-2"><Label htmlFor="full-name-ar">{t("full_name_ar")}</Label><div className="relative"><UserRound className="absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="full-name-ar" dir="rtl" placeholder={t("full_name_ar_placeholder")} autoComplete="off" className="ps-9" aria-invalid={!!form.formState.errors.fullNameAr} aria-describedby={form.formState.errors.fullNameAr ? "full-name-ar-error" : undefined} {...form.register("fullNameAr")} /></div>{form.formState.errors.fullNameAr && <p id="full-name-ar-error" role="alert" className="text-sm text-destructive">{message(form.formState.errors.fullNameAr.message)}</p>}</div></div>}
-              <div className="space-y-2"><Label htmlFor="email">{t("email")}</Label><div className="relative"><Mail className="absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="email" type="email" placeholder={t("email_placeholder")} autoComplete="email" className="ps-9" aria-invalid={!!form.formState.errors.email} aria-describedby={form.formState.errors.email ? "email-error" : undefined} {...form.register("email")} /></div>{form.formState.errors.email && <p id="email-error" role="alert" className="text-sm text-destructive">{message(form.formState.errors.email.message)}</p>}</div>
-              <div className="space-y-2"><div className="flex items-center justify-between"><Label htmlFor="password">{t("password")}</Label>{mode === "login" && <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={() => toast.info(t("feature_requires_backend"))}>{t("forgot_password")}</button>}</div><div className="relative"><LockKeyhole className="absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="password" type="password" placeholder={t("password_placeholder")} autoComplete={mode === "login" ? "current-password" : "new-password"} className="ps-9" aria-invalid={!!form.formState.errors.password} aria-describedby={form.formState.errors.password ? "password-error" : undefined} {...form.register("password")} /></div>{form.formState.errors.password && <p id="password-error" role="alert" className="text-sm text-destructive">{message(form.formState.errors.password.message)}</p>}</div>
-              {mode === "register" && <div className="space-y-2"><Label htmlFor="confirm-password">{t("confirm_password")}</Label><div className="relative"><LockKeyhole className="absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="confirm-password" type="password" placeholder={t("confirm_password_placeholder")} autoComplete="new-password" className="ps-9" aria-invalid={!!form.formState.errors.confirmPassword} aria-describedby={form.formState.errors.confirmPassword ? "confirm-password-error" : undefined} {...form.register("confirmPassword")} /></div>{form.formState.errors.confirmPassword && <p id="confirm-password-error" role="alert" className="text-sm text-destructive">{message(form.formState.errors.confirmPassword.message)}</p>}</div>}
-              {submitError && <Alert variant="destructive"><AlertDescription role="alert">{submitError}</AlertDescription></Alert>}
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}{mode === "login" ? t("login") : t("create_account")}</Button>
-              <div className="relative py-1"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">{t("or_continue_with")}</span></div></div>
-              <Button type="button" variant="outline" className="w-full" onClick={() => toast.info(t("feature_requires_backend"))}><GoogleIcon />{t("continue_with_google")}</Button>
-            </form>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
-  </main>;
+function errorText(error: unknown, t: (key: TranslationKey) => string) {
+  if (!(error instanceof AuthError)) return t("auth_error");
+  const map: Record<string, string> = {
+    EMAIL_EXISTS: "email_exists",
+    INVALID_CREDENTIALS: "invalid_credentials",
+    INVALID_INPUT: "invalid_auth_input",
+    RATE_LIMITED: "auth_rate_limited",
+    EMAIL_NOT_VERIFIED: "email_not_verified",
+    INVALID_OR_EXPIRED_CODE: "invalid_or_expired_code",
+    RESEND_TOO_SOON: "resend_too_soon",
+    DELIVERY_FAILED: "delivery_failed",
+    SERVICE_UNAVAILABLE: "auth_service_unavailable",
+  };
+  return t((map[error.code] ?? "auth_error") as TranslationKey);
 }
 
-function GoogleIcon() {
-  return <svg viewBox="0 0 24 24" className="me-2 h-4 w-4" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.3c1.9-1.8 2.9-4.4 2.9-7.4Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.7-2.4l-3.3-2.5c-.9.6-2.1 1-3.4 1a5.9 5.9 0 0 1-5.5-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.5 14a6 6 0 0 1 0-3.9V7.5H3.1a10 10 0 0 0 0 9.1L6.5 14Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.9 1.5l2.9-2.8A9.7 9.7 0 0 0 3.1 7.5l3.4 2.6A5.9 5.9 0 0 1 12 6Z"/></svg>;
+function AuthPage() {
+  const { t } = useI18n(),
+    auth = useAuth(),
+    navigate = useNavigate(),
+    { redirect } = Route.useSearch();
+  const [mode, setMode] = useState<"login" | "register">("login"),
+    [view, setView] = useState<View>("auth"),
+    [pendingEmail, setPendingEmail] = useState(""),
+    [code, setCode] = useState(""),
+    [error, setError] = useState<string | null>(null),
+    [busy, setBusy] = useState(false);
+  const form = useForm<Values>({
+    resolver: zodResolver(schema),
+    defaultValues: { email: "", password: "", confirmPassword: "", fullNameEn: "", fullNameAr: "" },
+  });
+  useEffect(() => {
+    if (auth.isAuthenticated) window.location.assign(redirect);
+  }, [auth.isAuthenticated, redirect]);
+  const submit = form.handleSubmit(async (v) => {
+    setError(null);
+    if (!v.password) {
+      form.setError("password", { message: "password_required" });
+      return;
+    }
+    if (mode === "register") {
+      if (!v.fullNameEn?.trim()) {
+        form.setError("fullNameEn", { message: "full_name_en_required" });
+        return;
+      }
+      if (!v.fullNameAr?.trim()) {
+        form.setError("fullNameAr", { message: "full_name_ar_required" });
+        return;
+      }
+      if (v.password.length < 12) {
+        form.setError("password", { message: "registration_password_too_short" });
+        return;
+      }
+      if (v.password !== v.confirmPassword) {
+        form.setError("confirmPassword", { message: "passwords_do_not_match" });
+        return;
+      }
+    }
+    try {
+      if (mode === "register") {
+        const result = await auth.register({
+          email: v.email,
+          password: v.password,
+          fullNameEn: v.fullNameEn!,
+          fullNameAr: v.fullNameAr!,
+        });
+        setPendingEmail(result.email);
+        setView("verify");
+      } else await auth.login(v.email, v.password);
+    } catch (e) {
+      if (e instanceof AuthError && e.code === "EMAIL_NOT_VERIFIED") {
+        setPendingEmail(v.email.trim().toLowerCase());
+        setView("verify");
+      }
+      setError(errorText(e, t));
+    }
+  });
+  const verify = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await auth.confirmEmail(pendingEmail, code);
+    } catch (e) {
+      setError(errorText(e, t));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const resend = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await auth.resendEmailCode(pendingEmail);
+    } catch (e) {
+      setError(errorText(e, t));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const forgot = form.handleSubmit(async (v) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await auth.requestPasswordReset(v.email);
+      setView("forgot-sent");
+    } catch (e) {
+      setError(errorText(e, t));
+    } finally {
+      setBusy(false);
+    }
+  });
+  const msg = (k?: string) => (k ? t(k as TranslationKey) : undefined);
+  return (
+    <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-muted/25 px-4 py-10">
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <TreePine className="h-6 w-6" />
+          </div>
+          <CardTitle>
+            {view === "verify"
+              ? t("verify_email")
+              : view.startsWith("forgot")
+                ? t("reset_password")
+                : t("auth_title")}
+          </CardTitle>
+          <CardDescription>
+            {view === "verify"
+              ? t("verification_sent")
+              : view === "forgot-sent"
+                ? t("reset_email_sent")
+                : view === "forgot"
+                  ? t("forgot_password_description")
+                  : t("auth_description")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {view === "verify" && (
+            <div className="space-y-5">
+              <p className="text-center text-sm font-medium" dir="ltr">
+                {pendingEmail}
+              </p>
+              <div className="flex justify-center" dir="ltr">
+                <InputOTP
+                  maxLength={6}
+                  value={code}
+                  onChange={setCode}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                >
+                  <InputOTPGroup>
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <InputOTPSlot key={i} index={i} />
+                    ))}
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <Button className="w-full" disabled={busy || code.length !== 6} onClick={verify}>
+                {busy && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}
+                {t("confirm_code")}
+              </Button>
+              <Button variant="ghost" className="w-full" disabled={busy} onClick={resend}>
+                {t("resend_code")}
+              </Button>
+              <Button
+                variant="link"
+                className="w-full"
+                onClick={() => {
+                  setView("auth");
+                  setMode("login");
+                  setError(null);
+                }}
+              >
+                {t("back_to_login")}
+              </Button>
+            </div>
+          )}
+          {(view === "forgot" || view === "forgot-sent") && (
+            <form className="space-y-4" onSubmit={forgot}>
+              {view === "forgot" && (
+                <>
+                  <Label htmlFor="forgot-email">{t("email")}</Label>
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    autoComplete="email"
+                    {...form.register("email")}
+                  />
+                  {form.formState.errors.email && (
+                    <p className="text-sm text-destructive">
+                      {msg(form.formState.errors.email.message)}
+                    </p>
+                  )}
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+                  <Button className="w-full" disabled={busy}>
+                    {t("send_reset_link")}
+                  </Button>
+                </>
+              )}
+              <Button
+                type="button"
+                variant="link"
+                className="w-full"
+                onClick={() => setView("auth")}
+              >
+                {t("back_to_login")}
+              </Button>
+            </form>
+          )}
+          {view === "auth" && (
+            <Tabs
+              value={mode}
+              onValueChange={(v) => {
+                if (v === "login" || v === "register") setMode(v);
+                setError(null);
+                form.clearErrors();
+              }}
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">{t("login")}</TabsTrigger>
+                <TabsTrigger value="register">{t("register")}</TabsTrigger>
+              </TabsList>
+              <TabsContent value={mode} className="mt-6">
+                <form onSubmit={submit} className="space-y-4" noValidate>
+                  {mode === "register" && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label={t("full_name_en")} icon={<UserRound />}>
+                        <Input dir="ltr" {...form.register("fullNameEn")} />
+                      </Field>
+                      <Field label={t("full_name_ar")} icon={<UserRound />}>
+                        <Input dir="rtl" {...form.register("fullNameAr")} />
+                      </Field>
+                    </div>
+                  )}
+                  <Field label={t("email")} icon={<Mail />}>
+                    <Input type="email" autoComplete="email" {...form.register("email")} />
+                  </Field>
+                  {form.formState.errors.email && (
+                    <p className="text-sm text-destructive">
+                      {msg(form.formState.errors.email.message)}
+                    </p>
+                  )}
+                  <div>
+                    <div className="mb-2 flex justify-between">
+                      <Label>{t("password")}</Label>
+                      {mode === "login" && (
+                        <button
+                          type="button"
+                          className="text-sm text-primary hover:underline"
+                          onClick={() => setView("forgot")}
+                        >
+                          {t("forgot_password")}
+                        </button>
+                      )}
+                    </div>
+                    <Field icon={<LockKeyhole />}>
+                      <Input
+                        type="password"
+                        autoComplete={mode === "login" ? "current-password" : "new-password"}
+                        {...form.register("password")}
+                      />
+                    </Field>
+                    {form.formState.errors.password && (
+                      <p className="mt-2 text-sm text-destructive">
+                        {msg(form.formState.errors.password.message)}
+                      </p>
+                    )}
+                  </div>
+                  {mode === "register" && (
+                    <>
+                      <Label>{t("confirm_password")}</Label>
+                      <Input
+                        type="password"
+                        autoComplete="new-password"
+                        {...form.register("confirmPassword")}
+                      />
+                      {form.formState.errors.confirmPassword && (
+                        <p className="text-sm text-destructive">
+                          {msg(form.formState.errors.confirmPassword.message)}
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+                  <Button className="w-full" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting && (
+                      <LoaderCircle className="me-2 h-4 w-4 animate-spin" />
+                    )}
+                    {mode === "login" ? t("login") : t("create_account")}
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
+          )}
+        </CardContent>
+      </Card>
+    </main>
+  );
+}
+function Field({
+  label,
+  icon,
+  children,
+}: {
+  label?: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      {label && <Label>{label}</Label>}
+      <div className="relative">
+        {icon && (
+          <span className="absolute start-3 top-2.5 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:text-muted-foreground">
+            {icon}
+          </span>
+        )}
+        <div className={icon ? "[&>input]:ps-9" : ""}>{children}</div>
+      </div>
+    </div>
+  );
 }
