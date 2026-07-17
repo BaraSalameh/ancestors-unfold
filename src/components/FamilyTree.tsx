@@ -15,7 +15,16 @@ import ReactFlow, {
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
-import { Search, X, Info, LayoutGrid, Pencil, Trash2, CalendarRange, ChevronDown } from "lucide-react";
+import {
+  Search,
+  X,
+  Info,
+  LayoutGrid,
+  Pencil,
+  Trash2,
+  CalendarRange,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,7 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { MemberNode, type MemberNodeData } from "./MemberNode";
 import { RelationshipEdge } from "./RelationshipEdge";
-import { familyStore, useFamily } from "@/lib/family-store";
+import { familyStore, useFamily, useFamilyPersistence } from "@/lib/family-store";
 import { displayName, ordinal, useI18n } from "@/lib/i18n";
 import { useNavigate } from "@tanstack/react-router";
 import type { FamilyMember, SubFamily } from "@/lib/family-types";
@@ -88,15 +97,19 @@ export function SubfamilyPanel({
   const subfamilies = familyStore.getSubfamilies();
   const maleMembers = members.filter((member) => member.gender === "male");
 
-  const selected = selectedSubfamilyId ? subfamilies.find((sf) => sf.id === selectedSubfamilyId) : null;
-  const selectedMembers = selectedSubfamilyId ? familyStore.getSubfamilyMembers(selectedSubfamilyId) : [];
+  const selected = selectedSubfamilyId
+    ? subfamilies.find((sf) => sf.id === selectedSubfamilyId)
+    : null;
+  const selectedMembers = selectedSubfamilyId
+    ? familyStore.getSubfamilyMembers(selectedSubfamilyId)
+    : [];
   const livingMembers = selectedMembers.filter((member) => !member.death_date);
   const maleCount = selectedMembers.filter((member) => member.gender === "male").length;
   const femaleCount = selectedMembers.filter((member) => member.gender === "female").length;
   const livingMaleCount = livingMembers.filter((member) => member.gender === "male").length;
   const livingFemaleCount = livingMembers.filter((member) => member.gender === "female").length;
   const linkedMale = selected?.linked_male_id
-    ? maleMembers.find((member) => member.id === selected.linked_male_id) ?? null
+    ? (maleMembers.find((member) => member.id === selected.linked_male_id) ?? null)
     : null;
   const isHomeMode = mode === "home";
 
@@ -129,7 +142,11 @@ export function SubfamilyPanel({
 
     const matchedMale = maleMembers.find((member) => {
       const candidate = displayName(member, lang).toLowerCase();
-      return candidate === maleSearch.trim().toLowerCase() || member.name_en.toLowerCase() === maleSearch.trim().toLowerCase() || member.name_ar === maleSearch.trim();
+      return (
+        candidate === maleSearch.trim().toLowerCase() ||
+        member.name_en.toLowerCase() === maleSearch.trim().toLowerCase() ||
+        member.name_ar === maleSearch.trim()
+      );
     });
 
     familyStore.updateSubfamily(selected.id, {
@@ -167,7 +184,9 @@ export function SubfamilyPanel({
 
   const handleRemoveAttachment = (attachmentId: string) => {
     if (!selected) return;
-    const nextAttachments = (selected.attachments ?? []).filter((attachment) => attachment.id !== attachmentId);
+    const nextAttachments = (selected.attachments ?? []).filter(
+      (attachment) => attachment.id !== attachmentId,
+    );
     familyStore.updateSubfamily(selected.id, { attachments: nextAttachments });
   };
 
@@ -184,10 +203,13 @@ export function SubfamilyPanel({
   if (selectedSubfamilyId && selected && isHomeMode) {
     return (
       <div className="space-y-2">
-        <button onClick={() => {
-          onSelectSubfamily(null);
-          onToggleFilter(false);
-        }} className="text-xs hover:underline">
+        <button
+          onClick={() => {
+            onSelectSubfamily(null);
+            onToggleFilter(false);
+          }}
+          className="text-xs hover:underline"
+        >
           ← {t("back")}
         </button>
         <h3 className="font-semibold text-card-foreground">{displayName(selected, lang)}</h3>
@@ -255,7 +277,11 @@ export function SubfamilyPanel({
                 setMaleSearch(event.target.value);
                 const matched = maleMembers.find((member) => {
                   const candidate = displayName(member, lang).toLowerCase();
-                  return candidate === event.target.value.trim().toLowerCase() || member.name_en.toLowerCase() === event.target.value.trim().toLowerCase() || member.name_ar === event.target.value.trim();
+                  return (
+                    candidate === event.target.value.trim().toLowerCase() ||
+                    member.name_en.toLowerCase() === event.target.value.trim().toLowerCase() ||
+                    member.name_ar === event.target.value.trim()
+                  );
                 });
                 setDraftMaleId(matched?.id ?? "");
               }}
@@ -290,7 +316,8 @@ export function SubfamilyPanel({
             <h3 className="font-semibold text-card-foreground">{displayName(selected, lang)}</h3>
             {linkedMale ? (
               <div className="text-[10px] text-muted-foreground">
-                {t("linked_male")}: <span className="font-medium text-foreground">{displayName(linkedMale, lang)}</span>
+                {t("linked_male")}:{" "}
+                <span className="font-medium text-foreground">{displayName(linkedMale, lang)}</span>
               </div>
             ) : null}
             <div className="grid grid-cols-2 gap-2">
@@ -304,13 +331,17 @@ export function SubfamilyPanel({
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border bg-card p-2 shadow-sm">
                   <div className="text-lg font-bold leading-none text-foreground">{value}</div>
-                  <div className="mt-1 text-[10px] text-muted-foreground">{t(label as Parameters<typeof t>[0])}</div>
+                  <div className="mt-1 text-[10px] text-muted-foreground">
+                    {t(label as Parameters<typeof t>[0])}
+                  </div>
                 </div>
               ))}
             </div>
 
             <div className="space-y-2 rounded border bg-background/50 p-2">
-              <div className="text-[10px] font-semibold text-card-foreground">{t("add_attachment")}</div>
+              <div className="text-[10px] font-semibold text-card-foreground">
+                {t("add_attachment")}
+              </div>
               <div className="flex flex-col gap-1">
                 <input
                   type="text"
@@ -347,7 +378,10 @@ export function SubfamilyPanel({
               ) : (
                 <div className="flex flex-col gap-1">
                   {(selected.attachments ?? []).map((attachment) => (
-                    <div key={attachment.id} className="flex items-center justify-between gap-2 rounded border bg-background px-2 py-1">
+                    <div
+                      key={attachment.id}
+                      className="flex items-center justify-between gap-2 rounded border bg-background px-2 py-1"
+                    >
                       <a
                         href={attachment.url}
                         target="_blank"
@@ -518,7 +552,13 @@ function layout(
         type: "relationship",
         style: mkStyle(color),
         markerEnd: mkArrow(color),
-        data: { parentId: fId, childId: m.id, motherId: mId, familyKey: `${fId}:${mId ?? "unknown"}`, kind: "parent" },
+        data: {
+          parentId: fId,
+          childId: m.id,
+          motherId: mId,
+          familyKey: `${fId}:${mId ?? "unknown"}`,
+          kind: "parent",
+        },
       });
     } else if (mId && renderedIds.includes(mId)) {
       g.setEdge(mId, m.id);
@@ -584,10 +624,16 @@ function layout(
     const m = memberById.get(id)!;
     const pos = g.node(id);
     const band = generationBandFor(m);
-    const earliestBand = Math.min(...members.map(generationBandFor).filter((value): value is GenerationBand => value !== null).map((value) => value.start));
-    const autoY = chronological && band && Number.isFinite(earliestBand)
-      ? ((band.start - earliestBand) / 10) * ROW_H
-      : genOf(id) * ROW_H;
+    const earliestBand = Math.min(
+      ...members
+        .map(generationBandFor)
+        .filter((value): value is GenerationBand => value !== null)
+        .map((value) => value.start),
+    );
+    const autoY =
+      chronological && band && Number.isFinite(earliestBand)
+        ? ((band.start - earliestBand) / 10) * ROW_H
+        : genOf(id) * ROW_H;
     const autoX = pos.x - pos.width / 2;
     const hasCustom = typeof m.pos_x === "number" && typeof m.pos_y === "number";
     return {
@@ -610,16 +656,22 @@ function layout(
   // Collision resolution — enforce min horizontal gap per generation row.
   const HGAP = 40;
   const VGAP = 40;
-  const ordered = [...nodes].sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+  const ordered = [...nodes].sort(
+    (a, b) => a.position.y - b.position.y || a.position.x - b.position.x,
+  );
   const byRow = new Map<number, Node<MemberNodeData>[]>();
-  for (const node of ordered) byRow.set(node.position.y, [...(byRow.get(node.position.y) ?? []), node]);
+  for (const node of ordered)
+    byRow.set(node.position.y, [...(byRow.get(node.position.y) ?? []), node]);
   for (const row of byRow.values()) {
     const byAge = (a: Node<MemberNodeData>, b: Node<MemberNodeData>) =>
-      (birthYear(b.data.member) ?? Number.MIN_SAFE_INTEGER) - (birthYear(a.data.member) ?? Number.MIN_SAFE_INTEGER);
+      (birthYear(b.data.member) ?? Number.MIN_SAFE_INTEGER) -
+      (birthYear(a.data.member) ?? Number.MIN_SAFE_INTEGER);
     if (chronological) {
       row.sort(byAge);
       const totalWidth = row.length * NODE_W + Math.max(0, row.length - 1) * HGAP;
-      row.forEach((node, index) => { node.position.x = index * (NODE_W + HGAP) - totalWidth / 2; });
+      row.forEach((node, index) => {
+        node.position.x = index * (NODE_W + HGAP) - totalWidth / 2;
+      });
       continue;
     }
 
@@ -630,28 +682,34 @@ function layout(
     const groups = new Map<string, Node<MemberNodeData>[]>();
     for (const node of row) {
       const member = node.data.member;
-      const parentId = member.father_id && nodeByMemberId.has(member.father_id)
-        ? member.father_id
-        : member.mother_id && nodeByMemberId.has(member.mother_id)
-          ? member.mother_id
-          : `root:${member.id}`;
+      const parentId =
+        member.father_id && nodeByMemberId.has(member.father_id)
+          ? member.father_id
+          : member.mother_id && nodeByMemberId.has(member.mother_id)
+            ? member.mother_id
+            : `root:${member.id}`;
       groups.set(parentId, [...(groups.get(parentId) ?? []), node]);
     }
     const FAMILY_GAP = 170;
-    const arranged = [...groups.entries()].map(([parentId, children]) => {
-      children.sort(byAge); // newest left, oldest right
-      const width = children.length * NODE_W + Math.max(0, children.length - 1) * HGAP;
-      const parent = nodeByMemberId.get(parentId);
-      const anchor = parent ? parent.position.x + NODE_W / 2 : children[0].position.x + NODE_W / 2;
-      return { children, width, anchor, start: anchor - width / 2 };
-    }).sort((a, b) => a.anchor - b.anchor);
+    const arranged = [...groups.entries()]
+      .map(([parentId, children]) => {
+        children.sort(byAge); // newest left, oldest right
+        const width = children.length * NODE_W + Math.max(0, children.length - 1) * HGAP;
+        const parent = nodeByMemberId.get(parentId);
+        const anchor = parent
+          ? parent.position.x + NODE_W / 2
+          : children[0].position.x + NODE_W / 2;
+        return { children, width, anchor, start: anchor - width / 2 };
+      })
+      .sort((a, b) => a.anchor - b.anchor);
     let cursor = Number.NEGATIVE_INFINITY;
     for (const group of arranged) {
       group.start = Math.max(group.start, cursor);
       cursor = group.start + group.width + FAMILY_GAP;
     }
     const balancingShift = arranged.length
-      ? arranged.reduce((sum, group) => sum + group.anchor - (group.start + group.width / 2), 0) / arranged.length
+      ? arranged.reduce((sum, group) => sum + group.anchor - (group.start + group.width / 2), 0) /
+        arranged.length
       : 0;
     for (const group of arranged) {
       group.children.forEach((node, index) => {
@@ -668,9 +726,11 @@ function layout(
       for (let j = 0; j < i; j++) {
         const other = ordered[j];
         const otherHeight = other.data.member.gender === "male" ? NODE_H_HUSBAND : NODE_H;
-        const overlapsY = current.position.y < other.position.y + otherHeight + VGAP &&
+        const overlapsY =
+          current.position.y < other.position.y + otherHeight + VGAP &&
           current.position.y + currentHeight + VGAP > other.position.y;
-        const overlapsX = current.position.x < other.position.x + NODE_W + HGAP &&
+        const overlapsX =
+          current.position.x < other.position.x + NODE_W + HGAP &&
           current.position.x + NODE_W + HGAP > other.position.x;
         if (overlapsX && overlapsY) {
           current.position.x = other.position.x + NODE_W + HGAP;
@@ -696,7 +756,9 @@ function layout(
   const sourceFamilyCounts = new Map<string, number>();
   for (const familyEdges of parentGroups.values()) {
     const source = nodeById.get(familyEdges[0].source);
-    const targets = familyEdges.map((edge) => nodeById.get(edge.target)).filter((node): node is Node<MemberNodeData> => !!node);
+    const targets = familyEdges
+      .map((edge) => nodeById.get(edge.target))
+      .filter((node): node is Node<MemberNodeData> => !!node);
     if (!source || !targets.length) continue;
     const sourceFamilyIndex = sourceFamilyCounts.get(source.id) ?? 0;
     sourceFamilyCounts.set(source.id, sourceFamilyIndex + 1);
@@ -704,26 +766,40 @@ function layout(
     const verticalTop = source.position.y + sourceHeight + 24;
     const verticalBottom = Math.max(...targets.map((target) => target.position.y - 24));
     const sourceCenter = source.position.x + NODE_W / 2;
-    const targetCenter = targets.reduce((sum, target) => sum + target.position.x + NODE_W / 2, 0) / targets.length;
+    const targetCenter =
+      targets.reduce((sum, target) => sum + target.position.x + NODE_W / 2, 0) / targets.length;
     const clearance = 28;
     const candidates = [
       sourceCenter,
-      source.position.x - clearance, source.position.x + NODE_W + clearance,
-      ...targets.flatMap((target) => [target.position.x - clearance, target.position.x + NODE_W + clearance]),
-      ...nodes.flatMap((node) => [node.position.x - clearance, node.position.x + NODE_W + clearance]),
+      source.position.x - clearance,
+      source.position.x + NODE_W + clearance,
+      ...targets.flatMap((target) => [
+        target.position.x - clearance,
+        target.position.x + NODE_W + clearance,
+      ]),
+      ...nodes.flatMap((node) => [
+        node.position.x - clearance,
+        node.position.x + NODE_W + clearance,
+      ]),
     ];
-    const isClear = (x: number) => nodes.every((node) => {
-      if (node.id === source.id) return true;
-      const height = node.data.member.gender === "male" ? NODE_H_HUSBAND : NODE_H;
-      const overlapsY = node.position.y - 14 < verticalBottom && node.position.y + height + 14 > verticalTop;
-      return !(overlapsY && x > node.position.x - 14 && x < node.position.x + NODE_W + 14);
-    });
+    const isClear = (x: number) =>
+      nodes.every((node) => {
+        if (node.id === source.id) return true;
+        const height = node.data.member.gender === "male" ? NODE_H_HUSBAND : NODE_H;
+        const overlapsY =
+          node.position.y - 14 < verticalBottom && node.position.y + height + 14 > verticalTop;
+        return !(overlapsY && x > node.position.x - 14 && x < node.position.x + NODE_W + 14);
+      });
     const clear = [...new Set(candidates)].filter(isClear);
-    const conflictsWithLane = (x: number) => usedLanes.some((lane) =>
-      Math.abs(lane.x - x) < 24 && lane.top < verticalBottom && lane.bottom > verticalTop
-    );
+    const conflictsWithLane = (x: number) =>
+      usedLanes.some(
+        (lane) =>
+          Math.abs(lane.x - x) < 24 && lane.top < verticalBottom && lane.bottom > verticalTop,
+      );
     let routeX = (clear.length ? clear : candidates).sort((a, b) => {
-      const score = (x: number) => Math.abs(x - sourceCenter) + Math.abs(x - targetCenter) +
+      const score = (x: number) =>
+        Math.abs(x - sourceCenter) +
+        Math.abs(x - targetCenter) +
         (x === sourceCenter ? -500 : 0) +
         (conflictsWithLane(x) ? 10000 : 0);
       return score(a) - score(b);
@@ -740,16 +816,25 @@ function layout(
       const nearbyTargetX = targets
         .map((target) => target.position.x + NODE_W / 2)
         .sort((a, b) => Math.abs(a - routeX) - Math.abs(b - routeX))[0];
-      if (Math.abs(nearbyTargetX - routeX) < 72 && isClear(nearbyTargetX) && !conflictsWithLane(nearbyTargetX)) {
+      if (
+        Math.abs(nearbyTargetX - routeX) < 72 &&
+        isClear(nearbyTargetX) &&
+        !conflictsWithLane(nearbyTargetX)
+      ) {
         routeX = nearbyTargetX;
       }
     }
     usedLanes.push({ x: routeX, top: verticalTop, bottom: verticalBottom });
-    const generationYs = [...new Set(targets.map((target) => target.position.y - 24))].sort((a, b) => a - b);
+    const generationYs = [...new Set(targets.map((target) => target.position.y - 24))].sort(
+      (a, b) => a - b,
+    );
     const sharedFamilyJunctionY = generationYs[0];
     const trunkEndY = generationYs[generationYs.length - 1];
     const trunkOwnerId = familyEdges[0].id;
-    familyEdges.sort((a, b) => (nodeById.get(a.target)?.position.x ?? 0) - (nodeById.get(b.target)?.position.x ?? 0));
+    familyEdges.sort(
+      (a, b) =>
+        (nodeById.get(a.target)?.position.x ?? 0) - (nodeById.get(b.target)?.position.x ?? 0),
+    );
     familyEdges.forEach((edge, index) => {
       const target = nodeById.get(edge.target);
       const decadeJunctionY = target ? target.position.y - 24 : sharedFamilyJunctionY;
@@ -764,11 +849,15 @@ function layout(
         branchY: chronological ? decadeJunctionY : sharedFamilyJunctionY,
         drawTrunk: edge.id === trunkOwnerId,
         trunkEndY,
-        generationBreakpoints: index === 0 ? (chronological ? generationYs : [sharedFamilyJunctionY]) : undefined,
+        generationBreakpoints:
+          index === 0 ? (chronological ? generationYs : [sharedFamilyJunctionY]) : undefined,
       });
     });
   }
-  const routedEdges = edges.map((edge) => ({ ...edge, data: { ...edge.data, ...(routeByEdge.get(edge.id) ?? {}) } }));
+  const routedEdges = edges.map((edge) => ({
+    ...edge,
+    data: { ...edge.data, ...(routeByEdge.get(edge.id) ?? {}) },
+  }));
 
   return { nodes, edges: routedEdges };
 }
@@ -792,6 +881,7 @@ function isDescendant(members: FamilyMember[], ancestorId: string, targetId: str
 
 function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const members = useFamily();
+  const persistence = useFamilyPersistence();
   const { t, lang } = useI18n();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -802,12 +892,31 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const [generationYear, setGenerationYear] = useState("");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [previewType, setPreviewType] = useState<"lineage" | "chronological">("lineage");
-  const [collapsedWidgets, setCollapsedWidgets] = useState({ preview: false, generation: false, subfamilies: false });
+  const [collapsedWidgets, setCollapsedWidgets] = useState({
+    preview: false,
+    generation: false,
+    subfamilies: false,
+  });
   const toggleWidget = (widget: keyof typeof collapsedWidgets) =>
     setCollapsedWidgets((current) => ({ ...current, [widget]: !current[widget] }));
   const { setCenter, fitView } = useReactFlow();
   const didFit = useRef(false);
   const edgeUpdateSuccessful = useRef(true);
+
+  useEffect(() => {
+    if (readOnly || !persistence.error) return;
+    const conflict = persistence.error === "VERSION_CONFLICT";
+    toast.error(
+      conflict ? "This tree changed in another session." : "Unable to save tree changes.",
+      {
+        id: "tree-persistence-error",
+        duration: Infinity,
+        action: conflict
+          ? { label: "Reload latest", onClick: () => familyStore.reloadAfterConflict() }
+          : undefined,
+      },
+    );
+  }, [persistence.error, readOnly]);
 
   const [motherPicker, setMotherPicker] = useState<{
     fatherId: string;
@@ -826,7 +935,8 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const onToggleCollapsed = useCallback((id: string) => {
     setCollapsed((current) => {
       const next = new Set(current);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
@@ -841,19 +951,31 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   }, [members]);
 
   const visibleMembers = useMemo(() => {
-    let result = !subfamilyFilterEnabled || !selectedSubfamilyId ? members : familyStore.getSubfamilyMembers(selectedSubfamilyId);
+    const result =
+      !subfamilyFilterEnabled || !selectedSubfamilyId
+        ? members
+        : familyStore.getSubfamilyMembers(selectedSubfamilyId);
     return result;
   }, [members, selectedSubfamilyId, subfamilyFilterEnabled]);
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => layout(visibleMembers, collapsed, onOpen, highlightId, previewType === "chronological", onToggleCollapsed),
+    () =>
+      layout(
+        visibleMembers,
+        collapsed,
+        onOpen,
+        highlightId,
+        previewType === "chronological",
+        onToggleCollapsed,
+      ),
     [visibleMembers, collapsed, onOpen, highlightId, previewType, onToggleCollapsed],
   );
 
   const earliestGeneration = generations[0]?.start ?? 0;
   const activeGeneration = useMemo(() => {
     if (!generations.length) return null;
-    const graphCenterY = (((typeof window === "undefined" ? 800 : window.innerHeight) / 2) - viewport.y) / viewport.zoom;
+    const graphCenterY =
+      ((typeof window === "undefined" ? 800 : window.innerHeight) / 2 - viewport.y) / viewport.zoom;
     return generations.reduce((closest, band) => {
       const bandY = ((band.start - earliestGeneration) / 10) * 340;
       const closestY = ((closest.start - earliestGeneration) / 10) * 340;
@@ -865,7 +987,9 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
     const year = Number.parseInt(generationYear, 10);
     if (!Number.isFinite(year) || !generations.length) return;
     const requestedStart = Math.floor(year / 10) * 10;
-    const closest = generations.reduce((best, band) => Math.abs(band.start - requestedStart) < Math.abs(best.start - requestedStart) ? band : best);
+    const closest = generations.reduce((best, band) =>
+      Math.abs(band.start - requestedStart) < Math.abs(best.start - requestedStart) ? band : best,
+    );
     const y = ((closest.start - earliestGeneration) / 10) * 340 + NODE_H / 2;
     setCenter(0, y, { zoom: Math.max(viewport.zoom, 0.65), duration: 600 });
     setGenerationYear(String(year));
@@ -948,9 +1072,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
     (removed: Edge[]) => {
       let cleared = 0;
       for (const e of removed) {
-        const data = e.data as
-          | { parentId?: string; childId?: string; kind?: string }
-          | undefined;
+        const data = e.data as { parentId?: string; childId?: string; kind?: string } | undefined;
         if (data?.kind === "spouse") {
           const a = familyStore.get(e.source);
           const b = familyStore.get(e.target);
@@ -981,8 +1103,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       edgeUpdateSuccessful.current = true;
       if (!newConn.source || !newConn.target) return;
       const data = oldEdge.data as
-        | { parentId?: string; childId?: string; kind?: string }
-        | undefined;
+        { parentId?: string; childId?: string; kind?: string } | undefined;
 
       if (data?.kind === "spouse") {
         const oldA = familyStore.get(oldEdge.source);
@@ -1126,22 +1247,41 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
             </div>
           )}
         </div>
-        {!readOnly && <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2">
-          <div className="inline-flex items-center gap-2 rounded-full border bg-card/90 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
-            <Info className="h-3 w-3" />
-            {t("connect_hint")}
+        {!readOnly && (
+          <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2">
+            <div className="inline-flex items-center gap-2 rounded-full border bg-card/90 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
+              <Info className="h-3 w-3" />
+              {t("connect_hint")}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => familyStore.undo()}
+              disabled={!familyStore.canUndo()}
+              className="shadow-sm"
+            >
+              {t("undo")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => familyStore.redo()}
+              disabled={!familyStore.canRedo()}
+              className="shadow-sm"
+            >
+              {t("redo")}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onAutoLayout}
+              className="gap-1.5 shadow-sm"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              {t("auto_layout")}
+            </Button>
           </div>
-          <Button size="sm" variant="outline" onClick={() => familyStore.undo()} disabled={!familyStore.canUndo()} className="shadow-sm">
-            {t("undo")}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => familyStore.redo()} disabled={!familyStore.canRedo()} className="shadow-sm">
-            {t("redo")}
-          </Button>
-          <Button size="sm" variant="secondary" onClick={onAutoLayout} className="gap-1.5 shadow-sm">
-            <LayoutGrid className="h-3.5 w-3.5" />
-            {t("auto_layout")}
-          </Button>
-        </div>}
+        )}
       </div>
 
       <ReactFlow
@@ -1166,7 +1306,12 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
         connectionLineStyle={{ stroke: "#0ea5e9", strokeWidth: 2, strokeDasharray: "6 4" }}
-        defaultEdgeOptions={{ type: "relationship", focusable: !readOnly, deletable: !readOnly, updatable: !readOnly }}
+        defaultEdgeOptions={{
+          type: "relationship",
+          focusable: !readOnly,
+          deletable: !readOnly,
+          updatable: !readOnly,
+        }}
         deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
         fitView
         onMove={(_event, nextViewport) => setViewport(nextViewport)}
@@ -1175,7 +1320,9 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         {previewType === "chronological" && activeGeneration && (
           <div
             className="pointer-events-none absolute inset-x-0 z-0 border-t-2 border-dashed border-primary/25"
-            style={{ top: `${((activeGeneration.start - earliestGeneration) / 10) * 340 * viewport.zoom + viewport.y}px` }}
+            style={{
+              top: `${((activeGeneration.start - earliestGeneration) / 10) * 340 * viewport.zoom + viewport.y}px`,
+            }}
           >
             <span className="ms-3 rounded-b bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground">
               {activeGeneration.start}–{activeGeneration.end}
@@ -1188,87 +1335,152 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
 
       <div className="absolute bottom-[180px] right-4 z-10 flex w-72 max-w-[calc(100%-2rem)] flex-col gap-2">
         <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
-          <button type="button" onClick={() => toggleWidget("preview")} className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.preview ? "" : "mb-2"}`}>
-            {t("preview_type")}<ChevronDown className={`h-4 w-4 transition-transform ${collapsedWidgets.preview ? "-rotate-90" : ""}`} />
+          <button
+            type="button"
+            onClick={() => toggleWidget("preview")}
+            className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.preview ? "" : "mb-2"}`}
+          >
+            {t("preview_type")}
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${collapsedWidgets.preview ? "-rotate-90" : ""}`}
+            />
           </button>
-          {!collapsedWidgets.preview && <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
-            <button onClick={() => setPreviewType("lineage")} className={`rounded px-2 py-1.5 ${previewType === "lineage" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{t("lineage_view")}</button>
-            <button onClick={() => setPreviewType("chronological")} className={`rounded px-2 py-1.5 ${previewType === "chronological" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{t("generation_view")}</button>
-          </div>}
+          {!collapsedWidgets.preview && (
+            <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+              <button
+                onClick={() => setPreviewType("lineage")}
+                className={`rounded px-2 py-1.5 ${previewType === "lineage" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {t("lineage_view")}
+              </button>
+              <button
+                onClick={() => setPreviewType("chronological")}
+                className={`rounded px-2 py-1.5 ${previewType === "chronological" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {t("generation_view")}
+              </button>
+            </div>
+          )}
         </div>
-        {previewType === "chronological" && generations.length > 0 && <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
-          <button type="button" onClick={() => toggleWidget("generation")} className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.generation ? "" : "mb-2"}`}>
-            <span className="flex items-center gap-2"><CalendarRange className="h-4 w-4 text-primary" />{t("generation")}</span><ChevronDown className={`h-4 w-4 transition-transform ${collapsedWidgets.generation ? "-rotate-90" : ""}`} />
-          </button>
-          {!collapsedWidgets.generation && <><div className="flex gap-1">
-            <Input value={generationYear} onChange={(event) => setGenerationYear(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))} onKeyDown={(event) => event.key === "Enter" && scrollToGeneration()} inputMode="numeric" placeholder="1975" className="h-8 text-xs" />
-            <Button size="sm" onClick={scrollToGeneration} disabled={generationYear.length !== 4}>{t("go")}</Button>
+        {previewType === "chronological" && generations.length > 0 && (
+          <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
+            <button
+              type="button"
+              onClick={() => toggleWidget("generation")}
+              className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.generation ? "" : "mb-2"}`}
+            >
+              <span className="flex items-center gap-2">
+                <CalendarRange className="h-4 w-4 text-primary" />
+                {t("generation")}
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${collapsedWidgets.generation ? "-rotate-90" : ""}`}
+              />
+            </button>
+            {!collapsedWidgets.generation && (
+              <>
+                <div className="flex gap-1">
+                  <Input
+                    value={generationYear}
+                    onChange={(event) =>
+                      setGenerationYear(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))
+                    }
+                    onKeyDown={(event) => event.key === "Enter" && scrollToGeneration()}
+                    inputMode="numeric"
+                    placeholder="1975"
+                    className="h-8 text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={scrollToGeneration}
+                    disabled={generationYear.length !== 4}
+                  >
+                    {t("go")}
+                  </Button>
+                </div>
+                {activeGeneration && (
+                  <div className="mt-2 text-[10px] text-muted-foreground">
+                    {activeGeneration.start}–{activeGeneration.end}
+                  </div>
+                )}
+              </>
+            )}
           </div>
-          {activeGeneration && <div className="mt-2 text-[10px] text-muted-foreground">{activeGeneration.start}–{activeGeneration.end}</div>}</>}
-        </div>}
+        )}
         <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
-        <button type="button" onClick={() => toggleWidget("subfamilies")} className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.subfamilies ? "" : "mb-2"}`}>
-          {t("subfamilies")}<ChevronDown className={`h-4 w-4 transition-transform ${collapsedWidgets.subfamilies ? "-rotate-90" : ""}`} />
-        </button>
-        {!collapsedWidgets.subfamilies && <div className="max-h-[calc(100vh-260px)] overflow-y-auto overscroll-contain pr-1">
-          <SubfamilyPanel
-            mode="home"
-            selectedSubfamilyId={selectedSubfamilyId}
-            onSelectSubfamily={setSelectedSubfamilyId}
-            filterEnabled={subfamilyFilterEnabled}
-            onToggleFilter={setSubfamilyFilterEnabled}
-            hideHeading
-          />
-        </div>}
+          <button
+            type="button"
+            onClick={() => toggleWidget("subfamilies")}
+            className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.subfamilies ? "" : "mb-2"}`}
+          >
+            {t("subfamilies")}
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${collapsedWidgets.subfamilies ? "-rotate-90" : ""}`}
+            />
+          </button>
+          {!collapsedWidgets.subfamilies && (
+            <div className="max-h-[calc(100vh-260px)] overflow-y-auto overscroll-contain pr-1">
+              <SubfamilyPanel
+                mode="home"
+                selectedSubfamilyId={selectedSubfamilyId}
+                onSelectSubfamily={setSelectedSubfamilyId}
+                filterEnabled={subfamilyFilterEnabled}
+                onToggleFilter={setSubfamilyFilterEnabled}
+                hideHeading
+              />
+            </div>
+          )}
         </div>
       </div>
 
-      {!readOnly && <Dialog open={!!motherPicker} onOpenChange={(o) => !o && setMotherPicker(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("select_mother")}</DialogTitle>
-            <DialogDescription>{t("select_mother_desc")}</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            {motherPicker?.wives.map((w, i) => {
-              const c = wifeColorFor(i);
-              const father = motherPicker && familyStore.get(motherPicker.fatherId);
-              const divorced = father?.divorced_from?.includes(w.id);
-              return (
-                <button
-                  key={w.id}
-                  onClick={() => pickMother(w.id)}
-                  className="flex items-center gap-3 rounded-md border p-3 text-start hover:bg-accent"
-                >
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-full ring-2 ring-background"
-                    style={{ backgroundColor: divorced ? DIVORCED_COLOR : c.stroke }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium">
-                      <span className="opacity-60 me-1">{ordinal(i + 1, lang)}</span>
-                      {displayName(w, lang)}
+      {!readOnly && (
+        <Dialog open={!!motherPicker} onOpenChange={(o) => !o && setMotherPicker(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t("select_mother")}</DialogTitle>
+              <DialogDescription>{t("select_mother_desc")}</DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-2">
+              {motherPicker?.wives.map((w, i) => {
+                const c = wifeColorFor(i);
+                const father = motherPicker && familyStore.get(motherPicker.fatherId);
+                const divorced = father?.divorced_from?.includes(w.id);
+                return (
+                  <button
+                    key={w.id}
+                    onClick={() => pickMother(w.id)}
+                    className="flex items-center gap-3 rounded-md border p-3 text-start hover:bg-accent"
+                  >
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-full ring-2 ring-background"
+                      style={{ backgroundColor: divorced ? DIVORCED_COLOR : c.stroke }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium">
+                        <span className="opacity-60 me-1">{ordinal(i + 1, lang)}</span>
+                        {displayName(w, lang)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {w.birth_date?.slice(0, 4)}
+                        {w.death_date ? `–${w.death_date.slice(0, 4)}` : ""}
+                        {divorced ? ` · ${t("divorced")}` : ""}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {w.birth_date?.slice(0, 4)}
-                      {w.death_date ? `–${w.death_date.slice(0, 4)}` : ""}
-                      {divorced ? ` · ${t("divorced")}` : ""}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => pickMother(null)}>
-              {t("unknown_mother")}
-            </Button>
-            <Button variant="outline" onClick={() => setMotherPicker(null)}>
-              {t("cancel")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>}
+                  </button>
+                );
+              })}
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => pickMother(null)}>
+                {t("unknown_mother")}
+              </Button>
+              <Button variant="outline" onClick={() => setMotherPicker(null)}>
+                {t("cancel")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

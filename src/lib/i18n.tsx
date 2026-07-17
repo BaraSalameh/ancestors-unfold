@@ -6,32 +6,80 @@ type Dict = Record<string, { en: string; ar: string }>;
 
 const dict: Dict = {
   verify_email: { en: "Verify your email", ar: "تحقق من بريدك الإلكتروني" },
-  verification_sent: { en: "Check your inbox for the six-digit verification code.", ar: "تحقق من صندوق الوارد للحصول على رمز التحقق المكون من ستة أرقام." },
+  verification_sent: {
+    en: "Check your inbox for the six-digit verification code.",
+    ar: "تحقق من صندوق الوارد للحصول على رمز التحقق المكون من ستة أرقام.",
+  },
   confirm_code: { en: "Confirm code", ar: "تأكيد الرمز" },
   resend_code: { en: "Send another code", ar: "إرسال رمز آخر" },
   send_verification_code: { en: "Send verification code", ar: "إرسال رمز التحقق" },
-  email_not_verified: { en: "Your account is pending. We sent a new code; check your inbox.", ar: "حسابك قيد الانتظار. أرسلنا رمزًا جديدًا؛ تحقق من صندوق الوارد." },
-  invalid_or_expired_code: { en: "That code is invalid or expired. Request a new one.", ar: "هذا الرمز غير صالح أو منتهي الصلاحية. اطلب رمزًا جديدًا." },
-  invalid_or_expired_link: { en: "This password-reset link is invalid or expired.", ar: "رابط إعادة تعيين كلمة المرور غير صالح أو منتهي الصلاحية." },
-  resend_too_soon: { en: "Please wait one minute before requesting another code.", ar: "يرجى الانتظار دقيقة قبل طلب رمز آخر." },
-  delivery_failed: { en: "We could not send the email. Please try again shortly.", ar: "تعذر إرسال البريد الإلكتروني. يرجى المحاولة بعد قليل." },
+  email_not_verified: {
+    en: "Your account is pending. We sent a new code; check your inbox.",
+    ar: "حسابك قيد الانتظار. أرسلنا رمزًا جديدًا؛ تحقق من صندوق الوارد.",
+  },
+  invalid_or_expired_code: {
+    en: "That code is invalid or expired. Request a new one.",
+    ar: "هذا الرمز غير صالح أو منتهي الصلاحية. اطلب رمزًا جديدًا.",
+  },
+  invalid_or_expired_link: {
+    en: "This password-reset link is invalid or expired.",
+    ar: "رابط إعادة تعيين كلمة المرور غير صالح أو منتهي الصلاحية.",
+  },
+  resend_too_soon: {
+    en: "Please wait one minute before requesting another code.",
+    ar: "يرجى الانتظار دقيقة قبل طلب رمز آخر.",
+  },
+  delivery_failed: {
+    en: "We could not send the email. Please try again shortly.",
+    ar: "تعذر إرسال البريد الإلكتروني. يرجى المحاولة بعد قليل.",
+  },
   reset_password: { en: "Reset password", ar: "إعادة تعيين كلمة المرور" },
-  forgot_password_description: { en: "Enter your email and we’ll send a secure reset link.", ar: "أدخل بريدك الإلكتروني وسنرسل رابطًا آمنًا لإعادة التعيين." },
+  forgot_password_description: {
+    en: "Enter your email and we’ll send a secure reset link.",
+    ar: "أدخل بريدك الإلكتروني وسنرسل رابطًا آمنًا لإعادة التعيين.",
+  },
   send_reset_link: { en: "Send reset link", ar: "إرسال رابط إعادة التعيين" },
-  reset_email_sent: { en: "If an active account exists, a reset link has been sent.", ar: "إذا كان الحساب النشط موجودًا، فقد تم إرسال رابط إعادة التعيين." },
+  reset_email_sent: {
+    en: "If an active account exists, a reset link has been sent.",
+    ar: "إذا كان الحساب النشط موجودًا، فقد تم إرسال رابط إعادة التعيين.",
+  },
   back_to_login: { en: "Back to login", ar: "العودة إلى تسجيل الدخول" },
-  choose_new_password: { en: "Choose a new password with at least 12 characters.", ar: "اختر كلمة مرور جديدة تتكون من 12 حرفًا على الأقل." },
-  password_reset_success: { en: "Your password was changed. You can now log in.", ar: "تم تغيير كلمة المرور. يمكنك الآن تسجيل الدخول." },
-  change_email_description: { en: "Changing your email requires your current password and verification of the new address.", ar: "يتطلب تغيير البريد الإلكتروني كلمة المرور الحالية والتحقق من العنوان الجديد." },
+  choose_new_password: {
+    en: "Choose a new password with at least 12 characters.",
+    ar: "اختر كلمة مرور جديدة تتكون من 12 حرفًا على الأقل.",
+  },
+  password_reset_success: {
+    en: "Your password was changed. You can now log in.",
+    ar: "تم تغيير كلمة المرور. يمكنك الآن تسجيل الدخول.",
+  },
+  change_email_description: {
+    en: "Changing your email requires your current password and verification of the new address.",
+    ar: "يتطلب تغيير البريد الإلكتروني كلمة المرور الحالية والتحقق من العنوان الجديد.",
+  },
   new_email: { en: "New email", ar: "البريد الإلكتروني الجديد" },
   current_password: { en: "Current password", ar: "كلمة المرور الحالية" },
   email_changed: { en: "Email address changed", ar: "تم تغيير عنوان البريد الإلكتروني" },
-  registration_password_too_short: { en: "Password must be at least 12 characters.", ar: "يجب أن تتكون كلمة المرور من 12 حرفًا على الأقل." },
-  invalid_auth_input: { en: "Some account details are invalid. Check the form and try again.", ar: "بعض بيانات الحساب غير صالحة. تحقق من النموذج وحاول مرة أخرى." },
-  auth_rate_limited: { en: "Too many attempts. Please wait a while before trying again.", ar: "محاولات كثيرة جدًا. يرجى الانتظار قليلًا قبل المحاولة مرة أخرى." },
-  auth_service_unavailable: { en: "Account services are temporarily unavailable. Please try again later.", ar: "خدمات الحسابات غير متاحة مؤقتًا. حاول مرة أخرى لاحقًا." },
+  registration_password_too_short: {
+    en: "Password must be at least 12 characters.",
+    ar: "يجب أن تتكون كلمة المرور من 12 حرفًا على الأقل.",
+  },
+  invalid_auth_input: {
+    en: "Some account details are invalid. Check the form and try again.",
+    ar: "بعض بيانات الحساب غير صالحة. تحقق من النموذج وحاول مرة أخرى.",
+  },
+  auth_rate_limited: {
+    en: "Too many attempts. Please wait a while before trying again.",
+    ar: "محاولات كثيرة جدًا. يرجى الانتظار قليلًا قبل المحاولة مرة أخرى.",
+  },
+  auth_service_unavailable: {
+    en: "Account services are temporarily unavailable. Please try again later.",
+    ar: "خدمات الحسابات غير متاحة مؤقتًا. حاول مرة أخرى لاحقًا.",
+  },
   auth_title: { en: "Welcome to Ancestors Unfold", ar: "مرحبًا بك في أنسابنا" },
-  auth_description: { en: "Sign in or create an account to manage your family history.", ar: "سجّل الدخول أو أنشئ حسابًا لإدارة تاريخ عائلتك." },
+  auth_description: {
+    en: "Sign in or create an account to manage your family history.",
+    ar: "سجّل الدخول أو أنشئ حسابًا لإدارة تاريخ عائلتك.",
+  },
   login: { en: "Log in", ar: "تسجيل الدخول" },
   register: { en: "Register", ar: "إنشاء حساب" },
   create_account: { en: "Create account", ar: "إنشاء الحساب" },
@@ -40,10 +88,22 @@ const dict: Dict = {
   email_required: { en: "Email is required.", ar: "البريد الإلكتروني مطلوب." },
   email_invalid: { en: "Enter a valid email address.", ar: "أدخل عنوان بريد إلكتروني صالحًا." },
   password_required: { en: "Password is required.", ar: "كلمة المرور مطلوبة." },
-  password_too_short: { en: "Password must be at least 8 characters.", ar: "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل." },
-  email_exists: { en: "This email is already registered.", ar: "هذا البريد الإلكتروني مسجّل بالفعل." },
-  invalid_credentials: { en: "The email or password is incorrect.", ar: "البريد الإلكتروني أو كلمة المرور غير صحيحة." },
-  auth_error: { en: "Authentication could not be completed. Please try again.", ar: "تعذّر إكمال المصادقة. حاول مرة أخرى." },
+  password_too_short: {
+    en: "Password must be at least 8 characters.",
+    ar: "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.",
+  },
+  email_exists: {
+    en: "This email is already registered.",
+    ar: "هذا البريد الإلكتروني مسجّل بالفعل.",
+  },
+  invalid_credentials: {
+    en: "The email or password is incorrect.",
+    ar: "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+  },
+  auth_error: {
+    en: "Authentication could not be completed. Please try again.",
+    ar: "تعذّر إكمال المصادقة. حاول مرة أخرى.",
+  },
   user_profile: { en: "User profile", ar: "الملف الشخصي" },
   signed_in_as: { en: "Signed in as", ar: "تم تسجيل الدخول باسم" },
   logout: { en: "Log out", ar: "تسجيل الخروج" },
@@ -56,27 +116,57 @@ const dict: Dict = {
   forgot_password: { en: "Forgot password?", ar: "نسيت كلمة المرور؟" },
   or_continue_with: { en: "Or continue with", ar: "أو المتابعة باستخدام" },
   continue_with_google: { en: "Continue with Google", ar: "المتابعة باستخدام Google" },
-  feature_requires_backend: { en: "This feature will be available after secure backend setup.", ar: "ستتوفر هذه الميزة بعد إعداد الخادم الآمن." },
+  feature_requires_backend: {
+    en: "This feature will be available after secure backend setup.",
+    ar: "ستتوفر هذه الميزة بعد إعداد الخادم الآمن.",
+  },
   profile_settings: { en: "Profile settings", ar: "إعدادات الملف الشخصي" },
-  profile_description: { en: "Manage your account and security preferences.", ar: "إدارة حسابك وتفضيلات الأمان." },
+  profile_description: {
+    en: "Manage your account and security preferences.",
+    ar: "إدارة حسابك وتفضيلات الأمان.",
+  },
   account_information: { en: "Account information", ar: "معلومات الحساب" },
-  account_information_description: { en: "Your current account details.", ar: "تفاصيل حسابك الحالية." },
+  account_information_description: {
+    en: "Your current account details.",
+    ar: "تفاصيل حسابك الحالية.",
+  },
   two_factor_authentication: { en: "Two-factor authentication", ar: "المصادقة الثنائية" },
-  two_factor_description: { en: "Add an authenticator app as an extra layer of protection for your account.", ar: "أضف تطبيق مصادقة كطبقة حماية إضافية لحسابك." },
+  two_factor_description: {
+    en: "Add an authenticator app as an extra layer of protection for your account.",
+    ar: "أضف تطبيق مصادقة كطبقة حماية إضافية لحسابك.",
+  },
   authenticator_app: { en: "Authenticator app", ar: "تطبيق المصادقة" },
-  authenticator_app_description: { en: "The future setup will use a QR code, a six-digit verification code, and one-time recovery codes.", ar: "سيستخدم الإعداد المستقبلي رمز QR ورمز تحقق من ستة أرقام ورموز استرداد تستخدم مرة واحدة." },
+  authenticator_app_description: {
+    en: "The future setup will use a QR code, a six-digit verification code, and one-time recovery codes.",
+    ar: "سيستخدم الإعداد المستقبلي رمز QR ورمز تحقق من ستة أرقام ورموز استرداد تستخدم مرة واحدة.",
+  },
   enable_authenticator: { en: "Enable authenticator app", ar: "تفعيل تطبيق المصادقة" },
   not_enabled: { en: "Not enabled", ar: "غير مفعّلة" },
   full_name_en: { en: "Full name (English)", ar: "الاسم الكامل (بالإنجليزية)" },
   full_name_ar: { en: "Full name (Arabic)", ar: "الاسم الكامل (بالعربية)" },
-  full_name_en_placeholder: { en: "Enter your full name in English", ar: "أدخل اسمك الكامل بالإنجليزية" },
-  full_name_ar_placeholder: { en: "Enter your full name in Arabic", ar: "أدخل اسمك الكامل بالعربية" },
-  full_name_en_required: { en: "Full name in English is required.", ar: "الاسم الكامل بالإنجليزية مطلوب." },
-  full_name_ar_required: { en: "Full name in Arabic is required.", ar: "الاسم الكامل بالعربية مطلوب." },
+  full_name_en_placeholder: {
+    en: "Enter your full name in English",
+    ar: "أدخل اسمك الكامل بالإنجليزية",
+  },
+  full_name_ar_placeholder: {
+    en: "Enter your full name in Arabic",
+    ar: "أدخل اسمك الكامل بالعربية",
+  },
+  full_name_en_required: {
+    en: "Full name in English is required.",
+    ar: "الاسم الكامل بالإنجليزية مطلوب.",
+  },
+  full_name_ar_required: {
+    en: "Full name in Arabic is required.",
+    ar: "الاسم الكامل بالعربية مطلوب.",
+  },
   dashboard: { en: "Dashboard", ar: "لوحة التحكم" },
   family_archive: { en: "Your family archive", ar: "أرشيف عائلتك" },
   welcome_back_adam: { en: "Welcome back, Adam", ar: "مرحباً بك مجدداً، آدم" },
-  dashboard_intro: { en: "Continue documenting the people and stories that shaped your family.", ar: "واصل توثيق الأشخاص والقصص التي شكّلت تاريخ عائلتك." },
+  dashboard_intro: {
+    en: "Continue documenting the people and stories that shaped your family.",
+    ar: "واصل توثيق الأشخاص والقصص التي شكّلت تاريخ عائلتك.",
+  },
   create_family_tree: { en: "Create family tree", ar: "إنشاء شجرة عائلة" },
   family_trees: { en: "Family trees", ar: "أشجار العائلة" },
   across_account: { en: "Across your account", ar: "في حسابك" },
@@ -86,18 +176,30 @@ const dict: Dict = {
   today: { en: "Today", ar: "اليوم" },
   family_updated: { en: "Al-Rashid Family updated", ar: "تم تحديث عائلة الراشد" },
   your_family_trees: { en: "Your family trees", ar: "أشجار عائلتك" },
-  manage_family_history: { en: "Preview, edit and manage your family history.", ar: "عاين تاريخ عائلتك وعدّله وأدِره." },
+  manage_family_history: {
+    en: "Preview, edit and manage your family history.",
+    ar: "عاين تاريخ عائلتك وعدّله وأدِره.",
+  },
   search_family_trees: { en: "Search family trees...", ar: "ابحث في أشجار العائلة..." },
   rename_update: { en: "Rename & update", ar: "إعادة التسمية والتحديث" },
   members_count: { en: "members", ar: "أفراد" },
   generations_count: { en: "generations", ar: "أجيال" },
   preview: { en: "Preview", ar: "معاينة" },
   no_trees_found: { en: "No family trees found", ar: "لم يتم العثور على أشجار عائلة" },
-  no_trees_hint: { en: "Try another search or create a new tree.", ar: "جرّب بحثاً آخر أو أنشئ شجرة جديدة." },
+  no_trees_hint: {
+    en: "Try another search or create a new tree.",
+    ar: "جرّب بحثاً آخر أو أنشئ شجرة جديدة.",
+  },
   update_family_tree: { en: "Update family tree", ar: "تحديث شجرة العائلة" },
-  update_tree_desc: { en: "Change how this tree appears on your dashboard.", ar: "غيّر طريقة ظهور هذه الشجرة في لوحة التحكم." },
+  update_tree_desc: {
+    en: "Change how this tree appears on your dashboard.",
+    ar: "غيّر طريقة ظهور هذه الشجرة في لوحة التحكم.",
+  },
   create_tree_title: { en: "Create a family tree", ar: "إنشاء شجرة عائلة" },
-  create_tree_desc: { en: "Give your new family archive a name to get started.", ar: "امنح أرشيف عائلتك الجديد اسماً للبدء." },
+  create_tree_desc: {
+    en: "Give your new family archive a name to get started.",
+    ar: "امنح أرشيف عائلتك الجديد اسماً للبدء.",
+  },
   family_name: { en: "Family name", ar: "اسم العائلة" },
   family_name_en: { en: "Family name (English)", ar: "اسم العائلة (بالإنجليزية)" },
   family_name_ar: { en: "Family name (Arabic)", ar: "اسم العائلة (بالعربية)" },
@@ -110,9 +212,15 @@ const dict: Dict = {
   save_changes: { en: "Save changes", ar: "حفظ التغييرات" },
   create_tree: { en: "Create tree", ar: "إنشاء الشجرة" },
   delete_tree_title: { en: "Delete family tree?", ar: "حذف شجرة العائلة؟" },
-  delete_tree_desc: { en: "This removes the family tree from your dashboard. This action cannot be undone.", ar: "سيؤدي هذا إلى إزالة شجرة العائلة من لوحة التحكم. لا يمكن التراجع عن هذا الإجراء." },
+  delete_tree_desc: {
+    en: "This removes the family tree from your dashboard. This action cannot be undone.",
+    ar: "سيؤدي هذا إلى إزالة شجرة العائلة من لوحة التحكم. لا يمكن التراجع عن هذا الإجراء.",
+  },
   delete_family_tree: { en: "Delete family tree", ar: "حذف شجرة العائلة" },
-  new_family_story: { en: "A new family story waiting to unfold.", ar: "قصة عائلية جديدة تنتظر أن تُروى." },
+  new_family_story: {
+    en: "A new family story waiting to unfold.",
+    ar: "قصة عائلية جديدة تنتظر أن تُروى.",
+  },
   just_now: { en: "Just now", ar: "الآن" },
   app_name: { en: "Family Tree Hub", ar: "شجرة العائلة" },
   family_tree: { en: "Family Tree", ar: "شجرة العائلة" },
@@ -180,7 +288,10 @@ const dict: Dict = {
   deleted: { en: "Member deleted", ar: "تم الحذف" },
   reset_data: { en: "Reset to sample data", ar: "إعادة البيانات الأولية" },
   data_reset: { en: "Data reset", ar: "تمت إعادة الضبط" },
-  name_required: { en: "At least one name (English or Arabic) is required", ar: "يلزم إدخال الاسم بالإنجليزية أو العربية" },
+  name_required: {
+    en: "At least one name (English or Arabic) is required",
+    ar: "يلزم إدخال الاسم بالإنجليزية أو العربية",
+  },
   gender_required: { en: "Gender is required", ar: "الجنس مطلوب" },
   zoom_in: { en: "Zoom in", ar: "تكبير" },
   zoom_out: { en: "Zoom out", ar: "تصغير" },
@@ -193,9 +304,18 @@ const dict: Dict = {
   mother_label: { en: "Mother", ar: "الأم" },
   link_updated: { en: "Relationship updated", ar: "تم تحديث العلاقة" },
   link_removed: { en: "Relationship removed", ar: "تم إزالة العلاقة" },
-  cannot_link_self: { en: "A member cannot be their own parent", ar: "لا يمكن أن يكون الفرد والد نفسه" },
-  cannot_link_cycle: { en: "This would create a cycle in the tree", ar: "سيؤدي هذا إلى حلقة في الشجرة" },
-  connect_hint: { en: "Drag between dots to link. Drag cards to move. Click a connector to delete or drag its endpoint to reconnect.", ar: "اسحب بين النقاط للربط. اسحب البطاقات للتحريك. انقر على الرابط لحذفه أو اسحب طرفه لإعادة توصيله." },
+  cannot_link_self: {
+    en: "A member cannot be their own parent",
+    ar: "لا يمكن أن يكون الفرد والد نفسه",
+  },
+  cannot_link_cycle: {
+    en: "This would create a cycle in the tree",
+    ar: "سيؤدي هذا إلى حلقة في الشجرة",
+  },
+  connect_hint: {
+    en: "Drag between dots to link. Drag cards to move. Click a connector to delete or drag its endpoint to reconnect.",
+    ar: "اسحب بين النقاط للربط. اسحب البطاقات للتحريك. انقر على الرابط لحذفه أو اسحب طرفه لإعادة توصيله.",
+  },
   auto_layout: { en: "Auto layout", ar: "ترتيب تلقائي" },
   auto_layout_done: { en: "Layout rearranged", ar: "تمت إعادة الترتيب" },
   undo: { en: "Undo", ar: "تراجع" },
@@ -256,14 +376,22 @@ const dict: Dict = {
 
 export function ordinal(n: number, lang: Lang): string {
   if (lang === "ar") {
-    const arabic = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة"];
+    const arabic = [
+      "الأولى",
+      "الثانية",
+      "الثالثة",
+      "الرابعة",
+      "الخامسة",
+      "السادسة",
+      "السابعة",
+      "الثامنة",
+    ];
     return arabic[n - 1] ?? `${n}`;
   }
   const s = ["th", "st", "nd", "rd"];
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
-
 
 interface I18nCtx {
   lang: Lang;
@@ -278,7 +406,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>("en");
 
   useEffect(() => {
-    const saved = (typeof window !== "undefined" && window.localStorage.getItem("ft:lang")) as Lang | null;
+    const saved = (typeof window !== "undefined" &&
+      window.localStorage.getItem("ft:lang")) as Lang | null;
     if (saved === "en" || saved === "ar") setLangState(saved);
   }, []);
 

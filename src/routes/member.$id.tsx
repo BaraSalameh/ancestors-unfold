@@ -35,7 +35,7 @@ function MemberPage() {
 
   const father = member.father_id ? members.find((m) => m.id === member.father_id) : undefined;
   const mother = member.mother_id ? members.find((m) => m.id === member.mother_id) : undefined;
-  
+
   // Collect spouse IDs from explicit links and also from children (mothers/fathers of children)
   const spouseIds = new Set<string>();
   if (member.spouse_id) spouseIds.add(member.spouse_id);
@@ -54,7 +54,7 @@ function MemberPage() {
       if (m.mother_id === member.id && m.father_id) spouseIds.add(m.father_id);
     }
   }
-  
+
   const spouses = Array.from(spouseIds)
     .map((sid) => members.find((m) => m.id === sid))
     .filter((m): m is FamilyMember => !!m);
@@ -92,14 +92,21 @@ function MemberPage() {
     <div className="mx-auto max-w-4xl px-4 py-6">
       <div className="mb-4 flex items-center justify-between">
         <Button asChild variant="ghost" size="sm">
-          <Link to="/tree/$id" params={{ id: treeId }} search={{ mode: "edit" }}><ArrowLeft className="ltr:mr-2 rtl:ml-2 h-4 w-4" />{t("back")}</Link>
+          <Link to="/tree/$id" params={{ id: treeId }} search={{ mode: "edit" }}>
+            <ArrowLeft className="ltr:mr-2 rtl:ml-2 h-4 w-4" />
+            {t("back")}
+          </Link>
         </Button>
         <div className="flex gap-2">
           <Button asChild size="sm" variant="outline">
-            <Link to="/edit/$id" params={{ id: member.id }}><Edit className="ltr:mr-2 rtl:ml-2 h-4 w-4" />{t("edit")}</Link>
+            <Link to="/edit/$id" params={{ id: member.id }}>
+              <Edit className="ltr:mr-2 rtl:ml-2 h-4 w-4" />
+              {t("edit")}
+            </Link>
           </Button>
           <Button size="sm" variant="destructive" onClick={() => setConfirmOpen(true)}>
-            <Trash2 className="ltr:mr-2 rtl:ml-2 h-4 w-4" />{t("delete")}
+            <Trash2 className="ltr:mr-2 rtl:ml-2 h-4 w-4" />
+            {t("delete")}
           </Button>
         </div>
       </div>
@@ -123,8 +130,12 @@ function MemberPage() {
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               <Badge>{t(member.gender)}</Badge>
               <Badge>{member.death_date ? t("deceased") : t("living")}</Badge>
-              <Badge>{member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}</Badge>
-              <Badge>{t("generation")}: {generation}</Badge>
+              <Badge>
+                {member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}
+              </Badge>
+              <Badge>
+                {t("generation")}: {generation}
+              </Badge>
             </div>
           </div>
         </div>
@@ -132,7 +143,10 @@ function MemberPage() {
         <Section title={t("basic_info")}>
           <Field label={t("birth_date")} value={member.birth_date ?? "—"} />
           <Field label={t("death_date")} value={member.death_date ?? "—"} />
-          <Field label={t("citizen_status")} value={member.citizen_status === "non_resident" ? t("non_resident") : t("resident")} />
+          <Field
+            label={t("citizen_status")}
+            value={member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}
+          />
         </Section>
 
         {member.notes && (
@@ -148,11 +162,17 @@ function MemberPage() {
           </div>
         </Section>
 
-        <Section title={t("spouses") ?? t("spouse")} action={
-          <Button asChild size="sm" variant="outline">
-            <Link to="/edit/$id" params={{ id: member.id }}><Plus className="h-4 w-4 ltr:mr-1 rtl:ml-1" />{t("add_spouse")}</Link>
-          </Button>
-        }>
+        <Section
+          title={t("spouses") ?? t("spouse")}
+          action={
+            <Button asChild size="sm" variant="outline">
+              <Link to="/edit/$id" params={{ id: member.id }}>
+                <Plus className="h-4 w-4 ltr:mr-1 rtl:ml-1" />
+                {t("add_spouse")}
+              </Link>
+            </Button>
+          }
+        >
           {spouses.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("none")}</p>
           ) : (
@@ -181,35 +201,52 @@ function MemberPage() {
           )}
         </Section>
 
-
-        <Section title={t("children")} action={
-          <Button asChild size="sm" variant="outline">
-            <Link to="/add" search={{ parentId: member.id }}><Plus className="h-4 w-4 ltr:mr-1 rtl:ml-1" />{t("add_child")}</Link>
-          </Button>
-        }>
+        <Section
+          title={t("children")}
+          action={
+            <Button asChild size="sm" variant="outline">
+              <Link to="/add" search={{ parentId: member.id }}>
+                <Plus className="h-4 w-4 ltr:mr-1 rtl:ml-1" />
+                {t("add_child")}
+              </Link>
+            </Button>
+          }
+        >
           {children.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("none")}</p>
           ) : (
             <div className="grid gap-2 sm:grid-cols-2">
-              {children.map((c) => <RelCard key={c.id} label="" m={c} />)}
+              {children.map((c) => (
+                <RelCard key={c.id} label="" m={c} />
+              ))}
             </div>
           )}
         </Section>
 
-        <Section title={t("ancestors")} action={
-          !father ? (
-            <Button asChild size="sm" variant="outline">
-              <Link to="/add" search={{ childId: member.id }}><Plus className="h-4 w-4 ltr:mr-1 rtl:ml-1" />{t("add_parent")}</Link>
-            </Button>
-          ) : undefined
-        }>
+        <Section
+          title={t("ancestors")}
+          action={
+            !father ? (
+              <Button asChild size="sm" variant="outline">
+                <Link to="/add" search={{ childId: member.id }}>
+                  <Plus className="h-4 w-4 ltr:mr-1 rtl:ml-1" />
+                  {t("add_parent")}
+                </Link>
+              </Button>
+            ) : undefined
+          }
+        >
           {ancestors.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("none")}</p>
           ) : (
             <div className="flex flex-wrap items-center gap-2 text-sm">
               {ancestors.map((a, i) => (
                 <span key={a.id} className="flex items-center gap-2">
-                  <Link to="/member/$id" params={{ id: a.id }} className="rounded-md border px-2 py-1 hover:bg-accent">
+                  <Link
+                    to="/member/$id"
+                    params={{ id: a.id }}
+                    className="rounded-md border px-2 py-1 hover:bg-accent"
+                  >
                     {displayName(a, lang)}
                   </Link>
                   {i < ancestors.length - 1 && <span className="text-muted-foreground">←</span>}
@@ -227,7 +264,8 @@ function MemberPage() {
               {descendants.map(({ m, depth }) => (
                 <li key={m.id} style={{ paddingInlineStart: depth * 16 }}>
                   <Link to="/member/$id" params={{ id: m.id }} className="hover:underline">
-                    {"• "}{displayName(m, lang)}
+                    {"• "}
+                    {displayName(m, lang)}
                   </Link>
                 </li>
               ))}
@@ -242,12 +280,17 @@ function MemberPage() {
             <AlertDialogTitle>{t("confirm_delete")}</AlertDialogTitle>
             <AlertDialogDescription>
               {t("confirm_delete_desc")}
-              {children.length > 0 && <span className="mt-2 block text-destructive">{t("delete_warning_children")}</span>}
+              {children.length > 0 && (
+                <span className="mt-2 block text-destructive">{t("delete_warning_children")}</span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -258,14 +301,28 @@ function MemberPage() {
 }
 
 function Badge({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-full border bg-muted px-2.5 py-0.5 text-muted-foreground">{children}</span>;
+  return (
+    <span className="rounded-full border bg-muted px-2.5 py-0.5 text-muted-foreground">
+      {children}
+    </span>
+  );
 }
 
-function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+function Section({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="mt-6 border-t pt-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h2>
         {action}
       </div>
       {children}
@@ -293,7 +350,11 @@ function RelCard({ label, m }: { label: string; m?: FamilyMember }) {
     );
   }
   return (
-    <Link to="/member/$id" params={{ id: m.id }} className="block rounded-lg border bg-background p-3 text-sm hover:bg-accent">
+    <Link
+      to="/member/$id"
+      params={{ id: m.id }}
+      className="block rounded-lg border bg-background p-3 text-sm hover:bg-accent"
+    >
       {label && <div className="text-xs text-muted-foreground">{label}</div>}
       <div className="font-medium text-foreground">{displayName(m, lang)}</div>
       <div className="text-xs text-muted-foreground">{m.birth_date?.slice(0, 4) ?? "—"}</div>

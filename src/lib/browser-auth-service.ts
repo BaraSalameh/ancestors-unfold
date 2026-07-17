@@ -1,4 +1,4 @@
-import { AuthError, type AuthSession } from "./auth-service";
+import { AuthError, type AuthSession, type RegistrationInput } from "./auth-service";
 
 // Development-only persistence. This adapter is intentionally replaceable and is
 // not a substitute for server-side authentication and a database in production.
@@ -31,7 +31,7 @@ function readAccounts(): StoredAccount[] {
 }
 
 export const browserAuthService = {
-  async register(input) {
+  async register(input: RegistrationInput) {
     const email = normalizeEmail(input.email);
     const accounts = readAccounts();
     if (accounts.some((account) => account.email === email)) throw new AuthError("EMAIL_EXISTS");
@@ -59,7 +59,7 @@ export const browserAuthService = {
     return session;
   },
 
-  async login(rawEmail, password) {
+  async login(rawEmail: string, password: string) {
     const email = normalizeEmail(rawEmail);
     const account = readAccounts().find((candidate) => candidate.email === email);
     if (!account || (await hashPassword(password, account.salt)) !== account.passwordHash) {

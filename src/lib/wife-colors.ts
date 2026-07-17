@@ -19,9 +19,7 @@ export type WifeColor = (typeof WIFE_COLORS)[number];
  * or points back to him through spouse_id. This keeps older one-way records
  * visible inside the husband's card.
  */
-export function computeWivesByHusband(
-  members: FamilyMember[],
-): Map<string, FamilyMember[]> {
+export function computeWivesByHusband(members: FamilyMember[]): Map<string, FamilyMember[]> {
   const byId = new Map(members.map((m) => [m.id, m]));
   const map = new Map<string, FamilyMember[]>();
 

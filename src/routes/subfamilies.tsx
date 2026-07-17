@@ -16,9 +16,14 @@ function SubfamiliesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Sub-families</h1>
-          <p className="text-sm text-muted-foreground">Create a label first, then connect it to a male branch and manage attachments.</p>
+          <p className="text-sm text-muted-foreground">
+            Create a label first, then connect it to a male branch and manage attachments.
+          </p>
         </div>
-        <Link to="/" className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"
+        >
           <ArrowLeft className="h-4 w-4" />
           Back to tree
         </Link>

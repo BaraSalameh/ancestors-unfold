@@ -29,10 +29,18 @@ function AddPage() {
   const spouseTo = spouseId ? members.find((m) => m.id === spouseId) : undefined;
 
   const initial = {
-    father_id: parentId && members.find((m) => m.id === parentId)?.gender === "male" ? parentId : undefined,
-    mother_id: parentId && members.find((m) => m.id === parentId)?.gender === "female" ? parentId : undefined,
+    father_id:
+      parentId && members.find((m) => m.id === parentId)?.gender === "male" ? parentId : undefined,
+    mother_id:
+      parentId && members.find((m) => m.id === parentId)?.gender === "female"
+        ? parentId
+        : undefined,
     spouse_id: spouseId,
-    gender: spouseTo ? (spouseTo.gender === "male" ? "female" as const : "male" as const) : "male" as const,
+    gender: spouseTo
+      ? spouseTo.gender === "male"
+        ? ("female" as const)
+        : ("male" as const)
+      : ("male" as const),
   };
 
   return (

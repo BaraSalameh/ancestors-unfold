@@ -10,11 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -67,7 +63,9 @@ export function MemberForm({
   const [name_en, setNameEn] = useState(initial?.name_en ?? "");
   const [name_ar, setNameAr] = useState(initial?.name_ar ?? "");
   const [gender, setGender] = useState<Gender>(initial?.gender ?? "male");
-  const [citizen_status, setCitizenStatus] = useState<CitizenStatus>(initial?.citizen_status ?? "resident");
+  const [citizen_status, setCitizenStatus] = useState<CitizenStatus>(
+    initial?.citizen_status ?? "resident",
+  );
   const [birth_date, setBirth] = useState(initial?.birth_date ?? "");
   const [death_date, setDeath] = useState(initial?.death_date ?? "");
   const [image_url, setImage] = useState(initial?.image_url ?? "");
@@ -150,7 +148,10 @@ export function MemberForm({
         </div>
         <div className="space-y-2">
           <Label>{t("citizen_status")}</Label>
-          <Select value={citizen_status} onValueChange={(v) => setCitizenStatus(v as CitizenStatus)}>
+          <Select
+            value={citizen_status}
+            onValueChange={(v) => setCitizenStatus(v as CitizenStatus)}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -216,25 +217,15 @@ export function MemberForm({
         )}
       </div>
 
-      {showSpouseEditor && memberId && (
-        <SpousesEditor maleId={memberId} allMembers={members} />
-      )}
+      {showSpouseEditor && memberId && <SpousesEditor maleId={memberId} allMembers={members} />}
 
       {gender === "female" && (
-        <ExternalChildrenEditor
-          value={external_children}
-          onChange={setExternalChildren}
-        />
+        <ExternalChildrenEditor value={external_children} onChange={setExternalChildren} />
       )}
 
       <div className="space-y-2">
         <Label htmlFor="notes">{t("notes")}</Label>
-        <Textarea
-          id="notes"
-          rows={4}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-        />
+        <Textarea id="notes" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -270,8 +261,7 @@ function RelationSearch({
   const results = normalizedQuery
     ? options.filter(
         (m) =>
-          m.name_en.toLowerCase().includes(normalizedQuery) ||
-          m.name_ar.includes(query.trim()),
+          m.name_en.toLowerCase().includes(normalizedQuery) || m.name_ar.includes(query.trim()),
       )
     : options;
 
@@ -328,7 +318,9 @@ function RelationSearch({
                         setOpen(false);
                       }}
                     >
-                      <Check className={`me-2 h-4 w-4 ${value === m.id ? "opacity-100" : "opacity-0"}`} />
+                      <Check
+                        className={`me-2 h-4 w-4 ${value === m.id ? "opacity-100" : "opacity-0"}`}
+                      />
                       <span className="truncate">{displayName(m, lang)}</span>
                     </CommandItem>
                   ))}
@@ -342,13 +334,7 @@ function RelationSearch({
   );
 }
 
-function SpousesEditor({
-  maleId,
-  allMembers,
-}: {
-  maleId: string;
-  allMembers: FamilyMember[];
-}) {
+function SpousesEditor({ maleId, allMembers }: { maleId: string; allMembers: FamilyMember[] }) {
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -378,11 +364,7 @@ function SpousesEditor({
     if (!q) return [];
     return allMembers
       .filter((m) => m.gender === "female" && !m.is_unknown)
-      .filter(
-        (m) =>
-          m.name_en.toLowerCase().includes(q) ||
-          m.name_ar.includes(query.trim()),
-      )
+      .filter((m) => m.name_en.toLowerCase().includes(q) || m.name_ar.includes(query.trim()))
       .slice(0, 10);
   }, [query, allMembers]);
 
@@ -494,9 +476,7 @@ function SpousesEditor({
                           >
                             <div className="flex w-full items-center gap-2">
                               <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm">
-                                  {displayName(m, lang)}
-                                </div>
+                                <div className="truncate text-sm">{displayName(m, lang)}</div>
                                 <div className="truncate text-[11px] text-muted-foreground">
                                   {lang === "ar" ? m.name_en : m.name_ar}
                                 </div>
@@ -547,10 +527,7 @@ function ExternalChildrenEditor({
   const { t } = useI18n();
 
   const add = () =>
-    onChange([
-      ...value,
-      { id: crypto.randomUUID(), name: "", other_parent_name: "" },
-    ]);
+    onChange([...value, { id: crypto.randomUUID(), name: "", other_parent_name: "" }]);
   const patch = (id: string, p: Partial<ExternalChild>) =>
     onChange(value.map((c) => (c.id === id ? { ...c, ...p } : c)));
   const remove = (id: string) => onChange(value.filter((c) => c.id !== id));
@@ -563,9 +540,7 @@ function ExternalChildrenEditor({
             <UserPlus className="h-4 w-4 text-amber-600" />
             {t("external_children")}
           </Label>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {t("external_children_desc")}
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("external_children_desc")}</p>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={add} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" />

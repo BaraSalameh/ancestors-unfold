@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z, type ZodType } from "zod";
 import { query } from "./db";
+import { serverConfig } from "./config";
 
 export class ApiError extends Error {
   constructor(
@@ -13,7 +14,7 @@ export class ApiError extends Error {
 
 export function assertJsonRequest(request: Request) {
   const length = Number(request.headers.get("content-length") ?? 0);
-  const max = Number(process.env.MAX_REQUEST_BYTES ?? 1_000_000);
+  const max = serverConfig.MAX_REQUEST_BYTES;
   if (length > max) throw new ApiError("PAYLOAD_TOO_LARGE", 413);
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
     throw new ApiError("UNSUPPORTED_MEDIA_TYPE", 415);
@@ -22,7 +23,7 @@ export function assertJsonRequest(request: Request) {
 export function assertSameOrigin(request: Request) {
   if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return;
   const origin = request.headers.get("origin");
-  const expected = process.env.PUBLIC_ORIGIN ?? new URL(request.url).origin;
+  const expected = serverConfig.PUBLIC_ORIGIN ?? new URL(request.url).origin;
   if (!origin || origin !== expected) throw new ApiError("CSRF_REJECTED", 403);
 }
 
@@ -40,7 +41,7 @@ export async function parseBody<T>(request: Request, schema: ZodType<T>): Promis
 }
 
 export function requestIp(request: Request): string | null {
-  if (process.env.TRUST_PROXY === "true")
+  if (serverConfig.TRUST_PROXY)
     return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   return null;
 }
@@ -132,4 +133,75 @@ export const schemas = {
       isPrimary: z.boolean().default(false),
     })
     .strict(),
+  snapshot: z
+    .object({
+      batchId: z.string().uuid().optional(),
+      expectedVersion: z.number().int().positive(),
+      members: z
+        .array(
+          z
+            .object({
+              id: z.string().min(1).max(200),
+              name_en: z.string().trim().min(1).max(200),
+              name_ar: z.string().trim().max(200),
+              gender: z.enum(["male", "female"]),
+              birth_date: z.string().max(50).optional(),
+              death_date: z.string().max(50).optional(),
+              citizen_status: z.enum(["resident", "non_resident"]).optional(),
+              image_url: z.string().max(2048).optional(),
+              notes: z.string().max(10_000).optional(),
+              father_id: z.string().max(200).optional(),
+              mother_id: z.string().max(200).optional(),
+              spouse_id: z.string().max(200).optional(),
+              spouse_ids: z.array(z.string().max(200)).max(100).optional(),
+              divorced_from: z.array(z.string().max(200)).max(100).optional(),
+              is_unknown: z.boolean().optional(),
+              external_children: z
+                .array(
+                  z
+                    .object({
+                      id: z.string().min(1).max(200),
+                      name: z.string().trim().min(1).max(200),
+                      other_parent_name: z.string().max(200).optional(),
+                      birth_year: z
+                        .string()
+                        .regex(/^\d{1,4}$/)
+                        .optional(),
+                      notes: z.string().max(5000).optional(),
+                    })
+                    .strict(),
+                )
+                .max(500)
+                .optional(),
+              subfamily_id: z.string().max(200).optional(),
+              pos_x: z.number().finite().optional(),
+              pos_y: z.number().finite().optional(),
+              created_at: z.string().max(50),
+              updated_at: z.string().max(50),
+            })
+            .strict(),
+        )
+        .max(10_000),
+      subfamilies: z
+        .array(
+          z
+            .object({
+              id: z.string().min(1).max(200),
+              name_en: z.string().trim().min(1).max(200),
+              name_ar: z.string().trim().max(200),
+              linked_male_id: z.string().max(200).optional(),
+              parent_subfamily_id: z.string().max(200).optional(),
+              notes: z.string().max(10_000).optional(),
+              attachments: z.array(z.unknown()).max(100).optional(),
+              color: z.string().max(100).optional(),
+              created_at: z.string().max(50),
+              updated_at: z.string().max(50),
+            })
+            .strict(),
+        )
+        .max(2000),
+    })
+    .strict(),
 };
+
+export type SnapshotInput = z.infer<(typeof schemas)["snapshot"]>;

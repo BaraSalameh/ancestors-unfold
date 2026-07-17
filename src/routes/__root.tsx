@@ -125,7 +125,9 @@ function RootComponent() {
           <AuthProvider>
             <div className="min-h-screen bg-background text-foreground">
               <Header />
-              <AuthGuard><Outlet /></AuthGuard>
+              <AuthGuard>
+                <Outlet />
+              </AuthGuard>
             </div>
           </AuthProvider>
           <Toaster richColors position="top-center" />

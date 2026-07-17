@@ -67,7 +67,7 @@ function ResetPasswordPage() {
         <CardContent>
           {done ? (
             <Button asChild className="w-full">
-              <Link to="/auth" search={{ redirect: "/" }}>
+              <Link to="/auth" search={{ redirect: "/", oauthError: undefined }}>
                 {t("back_to_login")}
               </Link>
             </Button>

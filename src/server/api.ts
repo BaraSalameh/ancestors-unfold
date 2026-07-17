@@ -1,18 +1,19 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID } from "node:crypto";
 import argon2 from "argon2";
-import { OAuth2Client } from "google-auth-library";
+import { CodeChallengeMethod, OAuth2Client } from "google-auth-library";
 import type { PoolClient } from "pg";
 import { databaseConfigured, query, transaction } from "./db";
 import {
   ApiError,
-  assertJsonRequest,
   assertSameOrigin,
   enforceRateLimit,
   parseBody,
   requestIp,
   schemas,
+  type SnapshotInput,
 } from "./security";
 import { passwordResetMail, sendMail, verificationMail } from "./email";
+import { logError } from "./logger";
 
 const COOKIE = "ancestors_session";
 const OAUTH_COOKIE = "ancestors_google_oauth";
@@ -75,10 +76,6 @@ async function authenticate(request: Request): Promise<Session | null> {
   return result.rows[0] ?? null;
 }
 
-async function body(request: Request) {
-  assertJsonRequest(request);
-  return request.json() as Promise<Record<string, any>>;
-}
 function userDto(s: Session) {
   return { id: s.user_id, email: s.email, fullNameEn: s.full_name_en, fullNameAr: s.full_name_ar };
 }
@@ -186,7 +183,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
         state,
         nonce,
         code_challenge: createHash("sha256").update(verifier).digest("base64url"),
-        code_challenge_method: "S256",
+        code_challenge_method: CodeChallengeMethod.S256,
         prompt: "select_account",
       });
       return new Response(null, {
@@ -600,7 +597,14 @@ export async function handleApi(request: Request): Promise<Response | null> {
     if (snapshotMatch && request.method === "GET")
       return json(await readSnapshot(session, requestId, snapshotMatch[1]));
     if (snapshotMatch && request.method === "PUT")
-      return json(await importSnapshot(session, requestId, snapshotMatch[1], await body(request)));
+      return json(
+        await importSnapshot(
+          session,
+          requestId,
+          snapshotMatch[1],
+          await parseBody(request, schemas.snapshot),
+        ),
+      );
     const shareMatch = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/share-links$/);
     if (shareMatch && request.method === "POST") {
       const b = await parseBody(request, schemas.shareLink),
@@ -749,7 +753,11 @@ export async function handleApi(request: Request): Promise<Response | null> {
     }
     return json({ code: "NOT_FOUND" }, 404);
   } catch (error) {
-    console.error(error);
+    logError("API request failed", error, {
+      requestId,
+      method: request.method,
+      path: url.pathname,
+    });
     if (url.pathname === "/api/auth/google/callback")
       return new Response(null, {
         status: 302,
@@ -801,11 +809,19 @@ async function readSnapshot(s: Session, rid: string, treeId: string) {
       "SELECT * FROM app.external_children WHERE tree_id=$1 AND deleted_at IS NULL",
       [treeId],
     );
-    const partners = await c.query(
+    type PartnerRow = {
+      union_id: string;
+      status: string;
+      member_id: string;
+      display_order: number;
+    };
+    type MemberRow = Record<string, unknown> & { id: string };
+    type ExternalRow = Record<string, unknown> & { mother_id: string };
+    const partners = await c.query<PartnerRow>(
       `SELECT u.id union_id,u.status,p.member_id,p.display_order FROM app.unions u JOIN app.union_partners p ON p.union_id=u.id WHERE u.tree_id=$1 AND u.deleted_at IS NULL ORDER BY u.display_order,p.display_order`,
       [treeId],
     );
-    const byUnion = new Map<string, any[]>();
+    const byUnion = new Map<string, PartnerRow[]>();
     for (const p of partners.rows) byUnion.set(p.union_id, [...(byUnion.get(p.union_id) ?? []), p]);
     const spouseMap = new Map<string, string[]>(),
       divorceMap = new Map<string, string[]>();
@@ -821,19 +837,19 @@ async function readSnapshot(s: Session, rid: string, treeId: string) {
         }
     return {
       version: tree.rows[0].version,
-      members: members.rows.map((m: any) => ({
+      members: (members.rows as MemberRow[]).map((m) => ({
         ...m,
         spouse_id: spouseMap.get(m.id)?.[0],
         spouse_ids: spouseMap.get(m.id),
         divorced_from: divorceMap.get(m.id),
-        external_children: external.rows.filter((x: any) => x.mother_id === m.id),
+        external_children: (external.rows as ExternalRow[]).filter((x) => x.mother_id === m.id),
       })),
       subfamilies: subfamilies.rows,
     };
   });
 }
 
-async function importSnapshot(s: Session, rid: string, treeId: string, b: any) {
+async function importSnapshot(s: Session, rid: string, treeId: string, b: SnapshotInput) {
   return transaction(s.user_id, s.id, rid, async (c) => {
     const access = await c.query(
       "SELECT 1 FROM app.tree_memberships WHERE tree_id=$1 AND user_id=$2 AND role IN ('owner','administrator','editor') AND revoked_at IS NULL",

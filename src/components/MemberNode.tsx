@@ -1,6 +1,16 @@
 import { memo, useState } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
-import { User, Cake, Heart, Unlink, Link2, UserPlus, HelpCircle, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  User,
+  Cake,
+  Heart,
+  Unlink,
+  Link2,
+  UserPlus,
+  HelpCircle,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { displayName, ordinal, useI18n } from "@/lib/i18n";
 import type { FamilyMember } from "@/lib/family-types";
@@ -47,17 +57,21 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
   const birthY = member.birth_date?.slice(0, 4);
   const deathY = member.death_date?.slice(0, 4);
 
-
   return (
     <div className="relative">
-      {hasDescendants && <button
-        type="button"
-        onClick={(event) => { event.stopPropagation(); onToggleCollapsed?.(member.id); }}
-        className="nodrag absolute -end-2 -top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground"
-        title={collapsed ? t("expand_descendants") : t("collapse_descendants")}
-      >
-        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      </button>}
+      {hasDescendants && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleCollapsed?.(member.id);
+          }}
+          className="nodrag absolute -end-2 -top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground"
+          title={collapsed ? t("expand_descendants") : t("collapse_descendants")}
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+      )}
       <Handle
         id="parent-in"
         type="target"
@@ -121,38 +135,45 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
               <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:text-emerald-300">
                 {member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}
               </span>
-              {currentSubfamily ? <Popover open={subfamilyOpen} onOpenChange={setSubfamilyOpen}>
-                <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                  <button disabled className="pointer-events-none inline-flex cursor-default items-center gap-1 rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium text-purple-600 dark:text-purple-300">
-                    {displayName(currentSubfamily, lang)}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-40 p-2" onClick={(e) => e.stopPropagation()}>
-                  <div className="space-y-1 text-[10px]">
+              {currentSubfamily ? (
+                <Popover open={subfamilyOpen} onOpenChange={setSubfamilyOpen}>
+                  <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <button
-                      onClick={() => {
-                        familyStore.assignSubfamily(member.id, undefined);
-                        setSubfamilyOpen(false);
-                      }}
-                      className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
+                      disabled
+                      className="pointer-events-none inline-flex cursor-default items-center gap-1 rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium text-purple-600 dark:text-purple-300"
                     >
-                      {!currentSubfamily ? "✓ " : "  "}{t("none")}
+                      {displayName(currentSubfamily, lang)}
                     </button>
-                    {subfamilies.map((sf) => (
+                  </PopoverTrigger>
+                  <PopoverContent className="w-40 p-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="space-y-1 text-[10px]">
                       <button
-                        key={sf.id}
                         onClick={() => {
-                          familyStore.assignSubfamily(member.id, sf.id);
+                          familyStore.assignSubfamily(member.id, undefined);
                           setSubfamilyOpen(false);
                         }}
                         className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
                       >
-                        {currentSubfamily?.id === sf.id ? "✓ " : "  "}{displayName(sf, lang)}
+                        {!currentSubfamily ? "✓ " : "  "}
+                        {t("none")}
                       </button>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover> : null}
+                      {subfamilies.map((sf) => (
+                        <button
+                          key={sf.id}
+                          onClick={() => {
+                            familyStore.assignSubfamily(member.id, sf.id);
+                            setSubfamilyOpen(false);
+                          }}
+                          className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
+                        >
+                          {currentSubfamily?.id === sf.id ? "✓ " : "  "}
+                          {displayName(sf, lang)}
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : null}
               {birthY && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
                   <Cake className="h-2.5 w-2.5" />
@@ -179,103 +200,97 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
           </div>
         </div>
 
-
         {member.gender === "male" && (
           <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
             <div className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               <Heart className="h-2.5 w-2.5" />
               <span>{t("spouses")}</span>
             </div>
-            {(!wives || wives.length === 0) ? (
+            {!wives || wives.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/80 bg-background/60 px-2 py-1.5 text-[10px] italic text-muted-foreground">
                 {t("no_spouses_recorded")}
               </div>
             ) : (
-            <div className="flex max-h-24 flex-col gap-1 overflow-y-auto pr-1">
-              {wives.map((w, i) => {
+              <div className="flex max-h-24 flex-col gap-1 overflow-y-auto pr-1">
+                {wives.map((w, i) => {
+                  const c = wifeColorFor(i);
+                  const divorced = (member.divorced_from ?? []).includes(w.id);
+                  const wBirth = w.birth_date?.slice(0, 4);
+                  const wDeath = w.death_date?.slice(0, 4);
+                  const years = wBirth ? `${wBirth}${wDeath ? `–${wDeath}` : ""}` : "";
+                  return (
+                    <div
+                      key={w.id}
+                      className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] font-medium ring-1"
+                      style={
+                        (divorced
+                          ? {
+                              backgroundColor: "hsl(var(--muted))",
+                              color: "hsl(var(--muted-foreground))",
+                              ["--tw-ring-color" as never]: "hsl(var(--border))",
+                            }
+                          : {
+                              backgroundColor: `${c.stroke}1a`,
+                              color: c.stroke,
+                              ["--tw-ring-color" as never]: `${c.stroke}55`,
+                            }) as React.CSSProperties
+                      }
 
-                const c = wifeColorFor(i);
-                const divorced = (member.divorced_from ?? []).includes(w.id);
-                const wBirth = w.birth_date?.slice(0, 4);
-                const wDeath = w.death_date?.slice(0, 4);
-                const years = wBirth ? `${wBirth}${wDeath ? `–${wDeath}` : ""}` : "";
-                return (
-                  <div
-                    key={w.id}
-                    className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] font-medium ring-1"
-                    style={
-                      (divorced
-                        ? {
-                            backgroundColor: "hsl(var(--muted))",
-                            color: "hsl(var(--muted-foreground))",
-                            ["--tw-ring-color" as never]: "hsl(var(--border))",
-                          }
-                        : {
-                            backgroundColor: `${c.stroke}1a`,
-                            color: c.stroke,
-                            ["--tw-ring-color" as never]: `${c.stroke}55`,
-                          }) as React.CSSProperties
-                    }
-
-
-                    title={`${ordinal(i + 1, lang)} — ${displayName(w, lang)}${years ? ` (${years})` : ""}${
-                      divorced ? ` · ${t("divorced")}` : ""
-                    }`}
-                  >
-                    <span
-                      className="h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: divorced ? "#94a3b8" : c.stroke }}
-                    />
-                    <span className="shrink-0 opacity-70">{ordinal(i + 1, lang)}</span>
-                    <span className={`truncate ${divorced ? "line-through" : ""}`}>
-                      {w.is_unknown ? (
-                        <span className="italic opacity-80">{t("unknown_wife")}</span>
-                      ) : (
-                        displayName(w, lang)
-                      )}
-                    </span>
-                    {w.is_unknown && <HelpCircle className="h-2.5 w-2.5 shrink-0 opacity-60" />}
-                    {(w.external_children?.length ?? 0) > 0 && (
+                      title={`${ordinal(i + 1, lang)} — ${displayName(w, lang)}${years ? ` (${years})` : ""}${
+                        divorced ? ` · ${t("divorced")}` : ""
+                      }`}
+                    >
                       <span
-                        className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-1 text-[9px] text-amber-700 dark:text-amber-300"
-                        title={t("has_external_children")}
-                      >
-                        <UserPlus className="h-2 w-2" />
-                        {w.external_children!.length}
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: divorced ? "#94a3b8" : c.stroke }}
+                      />
+                      <span className="shrink-0 opacity-70">{ordinal(i + 1, lang)}</span>
+                      <span className={`truncate ${divorced ? "line-through" : ""}`}>
+                        {w.is_unknown ? (
+                          <span className="italic opacity-80">{t("unknown_wife")}</span>
+                        ) : (
+                          displayName(w, lang)
+                        )}
                       </span>
-                    )}
-                    {years && (
-                      <span className="shrink-0 opacity-70 tabular-nums">{years}</span>
-                    )}
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        familyStore.toggleDivorce(member.id, w.id);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
+                      {w.is_unknown && <HelpCircle className="h-2.5 w-2.5 shrink-0 opacity-60" />}
+                      {(w.external_children?.length ?? 0) > 0 && (
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-1 text-[9px] text-amber-700 dark:text-amber-300"
+                          title={t("has_external_children")}
+                        >
+                          <UserPlus className="h-2 w-2" />
+                          {w.external_children!.length}
+                        </span>
+                      )}
+                      {years && <span className="shrink-0 opacity-70 tabular-nums">{years}</span>}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
                           e.stopPropagation();
                           familyStore.toggleDivorce(member.id, w.id);
-                        }
-                      }}
-                      title={divorced ? t("mark_married") : t("mark_divorced")}
-                      className="ms-auto inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full opacity-70 transition hover:opacity-100 hover:scale-110"
-                    >
-                      {divorced ? (
-                        <Link2 className="h-2.5 w-2.5" />
-                      ) : (
-                        <Unlink className="h-2.5 w-2.5" />
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.stopPropagation();
+                            familyStore.toggleDivorce(member.id, w.id);
+                          }
+                        }}
+                        title={divorced ? t("mark_married") : t("mark_divorced")}
+                        className="ms-auto inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full opacity-70 transition hover:opacity-100 hover:scale-110"
+                      >
+                        {divorced ? (
+                          <Link2 className="h-2.5 w-2.5" />
+                        ) : (
+                          <Unlink className="h-2.5 w-2.5" />
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
-
         )}
       </button>
     </div>

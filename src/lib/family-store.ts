@@ -22,16 +22,51 @@ const SAMPLE: FamilyMember[] = (() => {
     ...extra,
   });
   return [
-    m("1", "Abdullah Al-Rashid", "عبدالله الراشد", "male", { birth_date: "1920-03-12", death_date: "1998-11-04" }),
-    m("2", "Fatimah Al-Saeed", "فاطمة السعيد", "female", { birth_date: "1925-06-22", death_date: "2002-01-18", spouse_id: "1" }),
-    m("3", "Mohammed Al-Rashid", "محمد الراشد", "male", { birth_date: "1948-09-01", father_id: "1", mother_id: "2" }),
-    m("4", "Aisha Al-Mansour", "عائشة المنصور", "female", { birth_date: "1952-04-14", spouse_id: "3" }),
-    m("5", "Khalid Al-Rashid", "خالد الراشد", "male", { birth_date: "1950-02-20", father_id: "1", mother_id: "2" }),
-    m("6", "Omar Al-Rashid", "عمر الراشد", "male", { birth_date: "1975-07-08", father_id: "3", mother_id: "4", citizen_status: "non_resident" }),
+    m("1", "Abdullah Al-Rashid", "عبدالله الراشد", "male", {
+      birth_date: "1920-03-12",
+      death_date: "1998-11-04",
+    }),
+    m("2", "Fatimah Al-Saeed", "فاطمة السعيد", "female", {
+      birth_date: "1925-06-22",
+      death_date: "2002-01-18",
+      spouse_id: "1",
+    }),
+    m("3", "Mohammed Al-Rashid", "محمد الراشد", "male", {
+      birth_date: "1948-09-01",
+      father_id: "1",
+      mother_id: "2",
+    }),
+    m("4", "Aisha Al-Mansour", "عائشة المنصور", "female", {
+      birth_date: "1952-04-14",
+      spouse_id: "3",
+    }),
+    m("5", "Khalid Al-Rashid", "خالد الراشد", "male", {
+      birth_date: "1950-02-20",
+      father_id: "1",
+      mother_id: "2",
+    }),
+    m("6", "Omar Al-Rashid", "عمر الراشد", "male", {
+      birth_date: "1975-07-08",
+      father_id: "3",
+      mother_id: "4",
+      citizen_status: "non_resident",
+    }),
     m("7", "Layla Hassan", "ليلى حسن", "female", { birth_date: "1978-10-30", spouse_id: "6" }),
-    m("8", "Sara Al-Rashid", "سارة الراشد", "female", { birth_date: "1980-12-05", father_id: "3", mother_id: "4" }),
-    m("9", "Yusuf Al-Rashid", "يوسف الراشد", "male", { birth_date: "2005-05-19", father_id: "6", mother_id: "7" }),
-    m("10", "Mariam Al-Rashid", "مريم الراشد", "female", { birth_date: "2008-03-22", father_id: "6", mother_id: "7" }),
+    m("8", "Sara Al-Rashid", "سارة الراشد", "female", {
+      birth_date: "1980-12-05",
+      father_id: "3",
+      mother_id: "4",
+    }),
+    m("9", "Yusuf Al-Rashid", "يوسف الراشد", "male", {
+      birth_date: "2005-05-19",
+      father_id: "6",
+      mother_id: "7",
+    }),
+    m("10", "Mariam Al-Rashid", "مريم الراشد", "female", {
+      birth_date: "2008-03-22",
+      father_id: "6",
+      mother_id: "7",
+    }),
     m("11", "Hassan Al-Rashid", "حسن الراشد", "male", { birth_date: "1977-01-11", father_id: "5" }),
   ];
 })();
@@ -44,30 +79,98 @@ let future: FamilyMember[][] = [];
 let remoteSaveTimer: ReturnType<typeof setTimeout> | undefined;
 let remoteVersion = 1;
 let persistenceError: string | null = null;
+let saveInFlight = false;
+let savePending = false;
+let saveGeneration = 0;
+
+export type PersistenceState = {
+  dirty: boolean;
+  saving: boolean;
+  error: string | null;
+  conflicted: boolean;
+};
+
+let cachedPersistenceState: PersistenceState = {
+  dirty: false,
+  saving: false,
+  error: null,
+  conflicted: false,
+};
 
 async function hydrateFromServer(treeId: string) {
   try {
     const response = await fetch(`/api/trees/${treeId}/snapshot`, { credentials: "include" });
     if (!response.ok || activeTreeId !== treeId) return;
-    const snapshot = await response.json() as { version: number; members: FamilyMember[]; subfamilies: SubFamily[] };
+    const snapshot = (await response.json()) as {
+      version: number;
+      members: FamilyMember[];
+      subfamilies: SubFamily[];
+    };
     remoteVersion = snapshot.version;
     state = snapshot.members;
     subfamilies = snapshot.subfamilies;
-    past = []; future = []; emit();
-  } catch { /* readiness and auth surfaces report connection failures */ }
+    past = [];
+    future = [];
+    savePending = false;
+    persistenceError = null;
+    emit();
+  } catch {
+    /* readiness and auth surfaces report connection failures */
+  }
+}
+
+async function flushRemoteSave() {
+  if (saveInFlight || !savePending || persistenceError === "VERSION_CONFLICT") return;
+  const treeId = activeTreeId;
+  const generation = saveGeneration;
+  const members = cloneMembers(state);
+  const currentSubfamilies = subfamilies.map((subfamily) => ({ ...subfamily }));
+  savePending = false;
+  saveInFlight = true;
+  emit();
+  try {
+    const response = await fetch(`/api/trees/${treeId}/snapshot`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        batchId: crypto.randomUUID(),
+        expectedVersion: remoteVersion,
+        members,
+        subfamilies: currentSubfamilies,
+      }),
+    });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({ code: "SAVE_FAILED" }))) as {
+        code?: string;
+      };
+      persistenceError = body.code ?? "SAVE_FAILED";
+      savePending = true;
+      return;
+    }
+    const result = (await response.json()) as { version: number };
+    if (activeTreeId === treeId) remoteVersion = result.version;
+    persistenceError = null;
+    if (saveGeneration !== generation) savePending = true;
+  } catch {
+    persistenceError = "NETWORK_ERROR";
+    savePending = true;
+  } finally {
+    saveInFlight = false;
+    emit();
+    if (savePending && !persistenceError) void flushRemoteSave();
+  }
 }
 
 function scheduleRemoteSave() {
   if (typeof window === "undefined") return;
+  saveGeneration += 1;
+  savePending = true;
+  persistenceError = persistenceError === "VERSION_CONFLICT" ? persistenceError : null;
+  emit();
   clearTimeout(remoteSaveTimer);
   remoteSaveTimer = setTimeout(() => {
-    void fetch(`/api/trees/${activeTreeId}/snapshot`, {
-      method: "PUT", credentials: "include", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ batchId: crypto.randomUUID(), expectedVersion: remoteVersion, members: state, subfamilies }),
-    }).then(async (response) => {
-      if (!response.ok) { persistenceError = (await response.json().catch(()=>({code:"SAVE_FAILED"}))).code; emit(); return; }
-      const result = await response.json() as { version: number }; remoteVersion = result.version; persistenceError = null;
-    }).catch(() => { persistenceError = "NETWORK_ERROR"; emit(); });
+    void flushRemoteSave();
   }, 250);
 }
 
@@ -85,6 +188,12 @@ function save() {
 }
 
 function emit() {
+  cachedPersistenceState = {
+    dirty: savePending || saveInFlight,
+    saving: saveInFlight,
+    error: persistenceError,
+    conflicted: persistenceError === "VERSION_CONFLICT",
+  };
   for (const l of listeners) l();
 }
 
@@ -137,7 +246,18 @@ export const familyStore = {
   getActiveTreeId(): string {
     return activeTreeId;
   },
-  getPersistenceError(): string | null { return persistenceError; },
+  getPersistenceError(): string | null {
+    return persistenceError;
+  },
+  getPersistenceState(): PersistenceState {
+    return cachedPersistenceState;
+  },
+  reloadAfterConflict(): void {
+    persistenceError = null;
+    savePending = false;
+    void hydrateFromServer(activeTreeId);
+    emit();
+  },
   activateTree(treeId: string): void {
     if (!treeId || activeTreeId === treeId) return;
     activeTreeId = treeId;
@@ -179,12 +299,22 @@ export const familyStore = {
           if (created.gender === "female" && spouse.gender === "male" && m.id === spouse.id) {
             const set = new Set(m.spouse_ids ?? []);
             set.add(created.id);
-            return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? created.id, updated_at: now };
+            return {
+              ...m,
+              spouse_ids: [...set],
+              spouse_id: m.spouse_id ?? created.id,
+              updated_at: now,
+            };
           }
           if (created.gender === "male" && spouse.gender === "female" && m.id === created.id) {
             const set = new Set(m.spouse_ids ?? []);
             set.add(spouse.id);
-            return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? spouse.id, updated_at: now };
+            return {
+              ...m,
+              spouse_ids: [...set],
+              spouse_id: m.spouse_id ?? spouse.id,
+              updated_at: now,
+            };
           }
           if (created.gender === "male" && spouse.gender === "female" && m.id === spouse.id) {
             return { ...m, spouse_id: m.spouse_id ?? created.id, updated_at: now };
@@ -197,11 +327,7 @@ export const familyStore = {
   },
   setPosition(id: string, pos: { x: number; y: number } | null): void {
     commit(() => {
-      state = state.map((m) =>
-        m.id === id
-          ? { ...m, pos_x: pos?.x, pos_y: pos?.y }
-          : m,
-      );
+      state = state.map((m) => (m.id === id ? { ...m, pos_x: pos?.x, pos_y: pos?.y } : m));
     });
   },
   clearPositions(): void {
@@ -221,12 +347,22 @@ export const familyStore = {
           if (member.gender === "female" && spouse.gender === "male" && m.id === spouse.id) {
             const set = new Set(m.spouse_ids ?? []);
             set.add(member.id);
-            return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? member.id, updated_at: now };
+            return {
+              ...m,
+              spouse_ids: [...set],
+              spouse_id: m.spouse_id ?? member.id,
+              updated_at: now,
+            };
           }
           if (member.gender === "male" && spouse.gender === "female" && m.id === member.id) {
             const set = new Set(m.spouse_ids ?? []);
             set.add(spouse.id);
-            return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? spouse.id, updated_at: now };
+            return {
+              ...m,
+              spouse_ids: [...set],
+              spouse_id: m.spouse_id ?? spouse.id,
+              updated_at: now,
+            };
           }
           if (member.gender === "male" && spouse.gender === "female" && m.id === spouse.id) {
             return { ...m, spouse_id: m.spouse_id ?? member.id, updated_at: now };
@@ -273,7 +409,12 @@ export const familyStore = {
         if (m.id === maleId) {
           const set = new Set(m.spouse_ids ?? []);
           set.add(femaleId);
-          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? femaleId, updated_at: now };
+          return {
+            ...m,
+            spouse_ids: [...set],
+            spouse_id: m.spouse_id ?? femaleId,
+            updated_at: now,
+          };
         }
         if (m.id === femaleId) {
           return { ...m, spouse_id: m.spouse_id ?? maleId, updated_at: now };
@@ -366,7 +507,12 @@ export const familyStore = {
         if (m.id === maleId) {
           const set = new Set(m.spouse_ids ?? []);
           set.add(createdWife.id);
-          return { ...m, spouse_ids: [...set], spouse_id: m.spouse_id ?? createdWife.id, updated_at: now };
+          return {
+            ...m,
+            spouse_ids: [...set],
+            spouse_id: m.spouse_id ?? createdWife.id,
+            updated_at: now,
+          };
         }
         return m;
       });
@@ -415,7 +561,13 @@ export const familyStore = {
     });
   },
 
-  addSubfamily(name_en: string, name_ar: string, color?: string, linked_male_id?: string, parent_subfamily_id?: string): SubFamily {
+  addSubfamily(
+    name_en: string,
+    name_ar: string,
+    color?: string,
+    linked_male_id?: string,
+    parent_subfamily_id?: string,
+  ): SubFamily {
     const now = new Date().toISOString();
     const sf: SubFamily = {
       id: crypto.randomUUID(),
@@ -438,10 +590,13 @@ export const familyStore = {
     return subfamilies;
   },
 
-  updateSubfamily(id: string, patch: Partial<Omit<SubFamily, "id" | "created_at" | "updated_at">>): void {
+  updateSubfamily(
+    id: string,
+    patch: Partial<Omit<SubFamily, "id" | "created_at" | "updated_at">>,
+  ): void {
     const now = new Date().toISOString();
     subfamilies = subfamilies.map((sf) =>
-      sf.id === id ? { ...sf, ...patch, updated_at: now } : sf
+      sf.id === id ? { ...sf, ...patch, updated_at: now } : sf,
     );
     saveSubfamilies();
     emit();
@@ -450,10 +605,10 @@ export const familyStore = {
   deleteSubfamily(id: string): void {
     subfamilies = subfamilies
       .filter((sf) => sf.id !== id)
-      .map((sf) => sf.parent_subfamily_id === id ? { ...sf, parent_subfamily_id: undefined } : sf);
-    state = state.map((m) =>
-      m.subfamily_id === id ? { ...m, subfamily_id: undefined } : m
-    );
+      .map((sf) =>
+        sf.parent_subfamily_id === id ? { ...sf, parent_subfamily_id: undefined } : sf,
+      );
+    state = state.map((m) => (m.subfamily_id === id ? { ...m, subfamily_id: undefined } : m));
     save();
     saveSubfamilies();
     emit();
@@ -461,9 +616,7 @@ export const familyStore = {
 
   assignSubfamily(memberId: string, subfamilyId: string | undefined): void {
     commit(() => {
-      state = state.map((m) =>
-        m.id === memberId ? { ...m, subfamily_id: subfamilyId } : m
-      );
+      state = state.map((m) => (m.id === memberId ? { ...m, subfamily_id: subfamilyId } : m));
     });
   },
 
@@ -481,8 +634,10 @@ export const familyStore = {
       if (distances.has(current.id)) continue;
       distances.set(current.id, current.distance);
       const currentMember = state.find((m) => m.id === current.id);
-      if (currentMember?.father_id) queue.push({ id: currentMember.father_id, distance: current.distance + 1 });
-      if (currentMember?.mother_id) queue.push({ id: currentMember.mother_id, distance: current.distance + 1 });
+      if (currentMember?.father_id)
+        queue.push({ id: currentMember.father_id, distance: current.distance + 1 });
+      if (currentMember?.mother_id)
+        queue.push({ id: currentMember.mother_id, distance: current.distance + 1 });
     }
     const inferred = subfamilies
       .filter((sf) => sf.linked_male_id && distances.has(sf.linked_male_id))
@@ -533,11 +688,23 @@ export function useFamily(): FamilyMember[] {
   );
 }
 
+export function useFamilyPersistence(): PersistenceState {
+  return useSyncExternalStore(
+    familyStore.subscribe,
+    familyStore.getPersistenceState,
+    familyStore.getPersistenceState,
+  );
+}
+
 export function getChildren(members: FamilyMember[], id: string): FamilyMember[] {
   return members.filter((m) => m.father_id === id || m.mother_id === id);
 }
 
-export function getGeneration(members: FamilyMember[], id: string, cache = new Map<string, number>()): number {
+export function getGeneration(
+  members: FamilyMember[],
+  id: string,
+  cache = new Map<string, number>(),
+): number {
   if (cache.has(id)) return cache.get(id)!;
   const m = members.find((x) => x.id === id);
   if (!m) return 0;

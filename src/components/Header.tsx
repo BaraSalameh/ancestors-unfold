@@ -4,7 +4,14 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function Header() {
   const { t, lang, setLang } = useI18n();
@@ -12,7 +19,8 @@ export function Header() {
   const { user, isLoading, logout } = useAuth();
   const location = useRouterState({ select: (state) => state.location });
   const isTreeEdit = location.pathname.startsWith("/tree/") && location.search.mode === "edit";
-  const isTreePreview = location.pathname.startsWith("/tree/") && location.search.mode === "preview";
+  const isTreePreview =
+    location.pathname.startsWith("/tree/") && location.search.mode === "preview";
   const isAuthPage = location.pathname === "/auth";
 
   return (
@@ -23,19 +31,29 @@ export function Header() {
           <span className="hidden sm:inline">{t("app_name")}</span>
         </Link>
 
-        {!isTreePreview && !isAuthPage && <nav className="ms-2 hidden items-center gap-1 md:flex">
-          {isTreeEdit && <Link to="/subfamilies" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" activeProps={{ className: "bg-accent text-accent-foreground" }}>
-            {t("subfamilies_nav")}
-          </Link>}
-        </nav>}
+        {!isTreePreview && !isAuthPage && (
+          <nav className="ms-2 hidden items-center gap-1 md:flex">
+            {isTreeEdit && (
+              <Link
+                to="/subfamilies"
+                className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                activeProps={{ className: "bg-accent text-accent-foreground" }}
+              >
+                {t("subfamilies_nav")}
+              </Link>
+            )}
+          </nav>
+        )}
 
         <div className="ms-auto flex items-center gap-1">
-          {isTreeEdit && <Button asChild size="sm" variant="default" className="hidden gap-1 sm:flex">
-            <Link to="/add">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">{t("add_member")}</span>
-            </Link>
-          </Button>}
+          {isTreeEdit && (
+            <Button asChild size="sm" variant="default" className="hidden gap-1 sm:flex">
+              <Link to="/add">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">{t("add_member")}</span>
+              </Link>
+            </Button>
+          )}
           <Button
             size="icon"
             variant="ghost"
@@ -46,18 +64,58 @@ export function Header() {
             <Languages className="h-4 w-4" />
             <span className="sr-only">{lang.toUpperCase()}</span>
           </Button>
-          <Button size="icon" variant="ghost" onClick={toggle} title={t("theme")} aria-label={t("theme")}>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={toggle}
+            title={t("theme")}
+            aria-label={t("theme")}
+          >
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
-          {!isLoading && user ? <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label={t("user_profile")}><UserRound className="h-4 w-4" /></Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-w-64">
-              <DropdownMenuLabel><span className="block truncate">{(lang === "ar" ? user.fullNameAr : user.fullNameEn) || user.email}</span><span className="block truncate text-xs font-normal text-muted-foreground">{user.email}</span></DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild><Link to="/profile"><Settings className="h-4 w-4" />{t("profile_settings")}</Link></DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void logout().then(() => { window.location.assign("/auth"); })} className="text-destructive"><LogOut className="h-4 w-4" />{t("logout")}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu> : !isLoading && isTreePreview ? <Button asChild size="sm"><Link to="/auth" search={{ redirect: location.href }}>{t("login")}</Link></Button> : null}
+          {!isLoading && user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" aria-label={t("user_profile")}>
+                  <UserRound className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-w-64">
+                <DropdownMenuLabel>
+                  <span className="block truncate">
+                    {(lang === "ar" ? user.fullNameAr : user.fullNameEn) || user.email}
+                  </span>
+                  <span className="block truncate text-xs font-normal text-muted-foreground">
+                    {user.email}
+                  </span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/profile">
+                    <Settings className="h-4 w-4" />
+                    {t("profile_settings")}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    void logout().then(() => {
+                      window.location.assign("/auth");
+                    })
+                  }
+                  className="text-destructive"
+                >
+                  <LogOut className="h-4 w-4" />
+                  {t("logout")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : !isLoading && isTreePreview ? (
+            <Button asChild size="sm">
+              <Link to="/auth" search={{ redirect: location.href, oauthError: undefined }}>
+                {t("login")}
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </div>
     </header>

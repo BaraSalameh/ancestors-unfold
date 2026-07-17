@@ -2,7 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import { familyStore } from "@/lib/family-store";
@@ -24,7 +30,9 @@ function SettingsPage() {
         <div className="space-y-2">
           <Label>{t("language")}</Label>
           <Select value={lang} onValueChange={(v) => setLang(v as "en" | "ar")}>
-            <SelectTrigger className="w-60"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-60">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="en">{t("english")}</SelectItem>
               <SelectItem value="ar">{t("arabic")}</SelectItem>
@@ -35,7 +43,9 @@ function SettingsPage() {
         <div className="space-y-2">
           <Label>{t("theme")}</Label>
           <Select value={theme} onValueChange={(v) => setTheme(v as "light" | "dark")}>
-            <SelectTrigger className="w-60"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-60">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="light">{t("light")}</SelectItem>
               <SelectItem value="dark">{t("dark")}</SelectItem>

@@ -16,7 +16,11 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLoading || mayView) return;
     const destination = `${location.pathname}${location.href.includes("?") ? `?${location.href.split("?")[1]}` : ""}`;
-    void navigate({ to: "/auth", search: { redirect: destination }, replace: true });
+    void navigate({
+      to: "/auth",
+      search: { redirect: destination, oauthError: undefined },
+      replace: true,
+    });
   }, [isLoading, mayView, location.pathname, location.href, navigate]);
 
   if (isLoading || !mayView) {
