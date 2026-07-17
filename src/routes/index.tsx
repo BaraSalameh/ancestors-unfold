@@ -41,6 +41,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useI18n } from "@/lib/i18n";
 import { familyStore } from "@/lib/family-store";
+import { useAuth } from "@/lib/auth";
+import { accountDisplayName } from "@/lib/account-name";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -70,6 +72,8 @@ type TreeApiRecord = Omit<TreeRecord, "members" | "generations" | "updatedAt"> &
 
 function Dashboard() {
   const { t, dir, lang } = useI18n();
+  const { user } = useAuth();
+  const userName = accountDisplayName(user, lang);
   const [trees, setTrees] = useState<TreeRecord[]>([]);
   useEffect(() => {
     void fetch("/api/trees", { credentials: "include" })
@@ -194,7 +198,7 @@ function Dashboard() {
             <div>
               <p className="mb-2 text-sm font-medium text-primary">{t("family_archive")}</p>
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                {t("welcome_back_adam")}
+                {userName ? t("welcome_back", { name: userName }) : t("dashboard")}
               </h1>
               <p className="mt-2 max-w-xl text-muted-foreground">{t("dashboard_intro")}</p>
             </div>
