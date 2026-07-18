@@ -1,13 +1,19 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { SubfamilyPanel } from "@/components/FamilyTree";
+import { familyStore } from "@/lib/family-store";
 import { useState } from "react";
 
 export const Route = createFileRoute("/subfamilies")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    treeId: typeof search.treeId === "string" ? search.treeId : undefined,
+  }),
   component: SubfamiliesPage,
 });
 
 function SubfamiliesPage() {
+  const { treeId: treeIdFromSearch } = Route.useSearch();
+  const treeId = treeIdFromSearch ?? familyStore.getActiveTreeId();
   const [selectedSubfamilyId, setSelectedSubfamilyId] = useState<string | null>(null);
   const [filterEnabled, setFilterEnabled] = useState(false);
 
@@ -21,7 +27,9 @@ function SubfamiliesPage() {
           </p>
         </div>
         <Link
-          to="/"
+          to="/tree/$id"
+          params={{ id: treeId }}
+          search={{ mode: "edit" }}
           className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"
         >
           <ArrowLeft className="h-4 w-4" />

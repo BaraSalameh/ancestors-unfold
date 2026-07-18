@@ -1,10 +1,21 @@
 import { useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, X } from "lucide-react";
 import { familyStore, useFamily } from "@/lib/family-store";
 import { displayName, useI18n } from "@/lib/i18n";
 import type { SubFamily } from "@/lib/family-types";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // This controller preserves the intertwined home/manage modes while its data operations are extracted.
+/* eslint-disable max-lines */
 // eslint-disable-next-line max-lines-per-function, complexity
 export function SubfamilyPanel({
   selectedSubfamilyId,
@@ -32,6 +43,7 @@ export function SubfamilyPanel({
   const [attachmentName, setAttachmentName] = useState("");
   const [attachmentType, setAttachmentType] = useState("Document");
   const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const subfamilies = familyStore.getSubfamilies();
   const maleMembers = members.filter((member) => member.gender === "male");
 
@@ -148,7 +160,8 @@ export function SubfamilyPanel({
           }}
           className="text-xs hover:underline"
         >
-          â† {t("back")}
+          <ArrowLeft className="me-1 inline h-3 w-3 rtl:rotate-180" />
+          {t("back")}
         </button>
         <h3 className="font-semibold text-card-foreground">{displayName(selected, lang)}</h3>
         <div className="space-y-1 text-[10px] text-muted-foreground">
@@ -170,7 +183,8 @@ export function SubfamilyPanel({
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <button onClick={() => onSelectSubfamily(null)} className="text-xs hover:underline">
-            â† {t("back")}
+            <ArrowLeft className="me-1 inline h-3 w-3 rtl:rotate-180" />
+            {t("back")}
           </button>
           <div className="flex items-center gap-1">
             <button
@@ -183,7 +197,7 @@ export function SubfamilyPanel({
             </button>
             <button
               type="button"
-              onClick={handleDeleteSubfamily}
+              onClick={() => setConfirmDeleteOpen(true)}
               className="rounded border p-1 text-muted-foreground hover:bg-accent"
               title={t("delete")}
             >
@@ -334,7 +348,7 @@ export function SubfamilyPanel({
                         className="text-[10px] text-muted-foreground hover:text-destructive"
                         title={t("delete")}
                       >
-                        Ã—
+                        <X className="h-3 w-3" />
                       </button>
                     </div>
                   ))}
@@ -343,6 +357,23 @@ export function SubfamilyPanel({
             </div>
           </>
         )}
+        <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("delete_subfamily_title")}</AlertDialogTitle>
+              <AlertDialogDescription>{t("delete_subfamily_desc")}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteSubfamily}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {t("delete")}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }

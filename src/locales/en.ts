@@ -242,6 +242,9 @@ export const en = {
   add_attachment: "Add attachment",
   no_attachments: "No attachments yet",
   view_subfamily: "View sub-family",
+  delete_subfamily_title: "Delete this sub-family?",
+  delete_subfamily_desc:
+    "This action cannot be undone. Members assigned to this sub-family will be unassigned.",
   loading_tree: "Loading family tree",
   tree_unavailable: "Family tree unavailable",
   tree_unavailable_hint: "This tree does not exist or could not be loaded.",
