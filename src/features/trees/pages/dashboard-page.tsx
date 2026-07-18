@@ -247,7 +247,7 @@ export function DashboardPage() {
                 key={tree.id}
                 className="group overflow-hidden rounded-xl border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
-                <div className={`relative h-32 bg-gradient-to-br ${tree.color}`}>
+                <div className={`relative h-32 bg-linear-to-br ${tree.color}`}>
                   <div
                     className="absolute inset-0 opacity-20"
                     style={{
@@ -256,13 +256,13 @@ export function DashboardPage() {
                       backgroundSize: "52px 52px",
                     }}
                   />
-                  <GitBranch className="absolute bottom-4 start-5 h-9 w-9 text-white/90" />
+                  <GitBranch className="absolute bottom-4 inset-s-5 h-9 w-9 text-white/90" />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         size="icon"
                         variant="secondary"
-                        className="absolute end-3 top-3 h-8 w-8 bg-card/90 text-card-foreground hover:bg-card"
+                        className="absolute inset-e-3 top-3 h-8 w-8 bg-card/90 text-card-foreground hover:bg-card"
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>

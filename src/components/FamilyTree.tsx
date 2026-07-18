@@ -813,7 +813,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         fitView
         onMove={(_event, nextViewport) => setViewport(nextViewport)}
       >
-        <Background gap={24} className="!bg-background" />
+        <Background gap={24} className="bg-background!" />
         {previewType === "chronological" && activeGeneration && (
           <div
             className="pointer-events-none absolute inset-x-0 z-0 border-t-2 border-dashed border-primary/25"
@@ -822,15 +822,17 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
             }}
           >
             <span className="ms-3 rounded-b bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground">
-              {activeGeneration.start}{"\u2013"}{activeGeneration.end}
+              {activeGeneration.start}
+              {"\u2013"}
+              {activeGeneration.end}
             </span>
           </div>
         )}
-        <MiniMap pannable zoomable className="!bg-card !border" />
-        <Controls showInteractive={false} className="!bg-card !border" />
+        <MiniMap pannable zoomable className="bg-card! border!" />
+        <Controls showInteractive={false} className="bg-card! border!" />
       </ReactFlow>
 
-      <div className="absolute bottom-[180px] right-4 z-10 flex w-72 max-w-[calc(100%-2rem)] flex-col gap-2">
+      <div className="absolute bottom-45 right-4 z-10 flex w-72 max-w-[calc(100%-2rem)] flex-col gap-2">
         <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
           <button
             type="button"
@@ -897,7 +899,9 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
                 </div>
                 {activeGeneration && (
                   <div className="mt-2 text-[10px] text-muted-foreground">
-                    {activeGeneration.start}{"\u2013"}{activeGeneration.end}
+                    {activeGeneration.start}
+                    {"\u2013"}
+                    {activeGeneration.end}
                   </div>
                 )}
               </>

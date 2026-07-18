@@ -394,7 +394,7 @@ function Field({
       {label && <Label>{label}</Label>}
       <div className="relative">
         {icon && (
-          <span className="absolute start-3 top-2.5 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:text-muted-foreground">
+          <span className="absolute inset-s-3 top-2.5 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:text-muted-foreground">
             {icon}
           </span>
         )}
