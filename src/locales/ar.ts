@@ -247,4 +247,7 @@ export const ar = {
   loading_tree: "جارٍ تحميل شجرة العائلة",
   tree_unavailable: "شجرة العائلة غير متاحة",
   tree_unavailable_hint: "هذه الشجرة غير موجودة أو تعذر تحميلها.",
+  copy_preview_link: "نسخ رابط المعاينة",
+  preview_link_copied: "تم نسخ رابط المعاينة",
+  preview_link_copy_failed: "تعذر نسخ رابط المعاينة",
 } satisfies Record<TranslationKey, string>;

@@ -533,8 +533,29 @@ export async function handleApi(request: Request): Promise<Response | null> {
     }
     if (url.pathname === "/api/trees" && request.method === "GET") {
       const r = await transaction(session.user_id, session.id, requestId, (c) =>
-        c.query(`SELECT t.id,t.name_en,t.name_ar,coalesce(t.description_en,'') description_en,
-        coalesce(t.description_ar,'') description_ar,t.color,t.updated_at FROM app.family_trees t WHERE t.deleted_at IS NULL ORDER BY t.updated_at DESC`),
+        c.query(`WITH RECURSIVE visible_members AS (
+          SELECT m.id,m.tree_id FROM app.family_members m WHERE m.deleted_at IS NULL
+        ), lineage AS (
+          SELECT m.tree_id,m.id,1 AS depth,ARRAY[m.id] AS path FROM visible_members m
+          UNION ALL
+          SELECT l.tree_id,child.id,l.depth+1,l.path || child.id
+          FROM lineage l
+          JOIN app.parent_child_relationships relationship
+            ON relationship.tree_id=l.tree_id AND relationship.parent_id=l.id
+            AND relationship.deleted_at IS NULL
+          JOIN visible_members child
+            ON child.tree_id=relationship.tree_id AND child.id=relationship.child_id
+          WHERE NOT child.id=ANY(l.path)
+        ), tree_stats AS (
+          SELECT m.tree_id,count(*)::integer AS members,
+            coalesce((SELECT max(l.depth) FROM lineage l WHERE l.tree_id=m.tree_id),0)::integer AS generations
+          FROM visible_members m GROUP BY m.tree_id
+        )
+        SELECT t.id,t.name_en,t.name_ar,coalesce(t.description_en,'') description_en,
+          coalesce(t.description_ar,'') description_ar,t.color,t.updated_at,
+          coalesce(s.members,0)::integer AS members,coalesce(s.generations,0)::integer AS generations
+        FROM app.family_trees t LEFT JOIN tree_stats s ON s.tree_id=t.id
+        WHERE t.deleted_at IS NULL ORDER BY t.updated_at DESC`),
       );
       return json(r.rows);
     }

@@ -5,15 +5,16 @@ import {
   Activity,
   ArrowUpRight,
   CalendarDays,
-  Eye,
   GitBranch,
   MoreHorizontal,
   Pencil,
   Plus,
   Search,
+  Share2,
   Trash2,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -44,6 +45,8 @@ import { useI18n } from "@/lib/i18n";
 import { familyStore } from "@/lib/family-store";
 import { useAuth } from "@/lib/auth";
 import { accountDisplayName } from "@/lib/account-name";
+import { copyTreePreviewUrl } from "@/features/trees/pages/dashboard-share";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type TreeRecord = {
   id: string;
@@ -57,7 +60,7 @@ type TreeRecord = {
   color: string;
 };
 
-type TreeApiRecord = Omit<TreeRecord, "members" | "generations" | "updatedAt"> & {
+type TreeApiRecord = Omit<TreeRecord, "updatedAt"> & {
   updated_at: string;
 };
 
@@ -75,8 +78,6 @@ export function DashboardPage() {
         setTrees(
           rows.map((tree) => ({
             ...tree,
-            members: 0,
-            generations: 0,
             updatedAt: new Date(tree.updated_at).toLocaleDateString(),
             color: tree.color || "from-violet-500 to-fuchsia-700",
           })),
@@ -104,6 +105,14 @@ export function DashboardPage() {
     [trees, query],
   );
   const members = trees.reduce((sum, t) => sum + t.members, 0);
+  const copyPreview = async (treeId: string) => {
+    try {
+      await copyTreePreviewUrl(treeId, window.location.origin, navigator.clipboard);
+      toast.success(t("preview_link_copied"));
+    } catch {
+      toast.error(t("preview_link_copy_failed"));
+    }
+  };
   const openCreate = () => {
     setNameEn("");
     setNameAr("");
@@ -307,12 +316,23 @@ export function DashboardPage() {
                       {tree.updatedAt}
                     </span>
                     <div className="flex gap-1">
-                      <Button asChild size="sm" variant="ghost">
-                        <Link to="/tree/$id" params={{ id: tree.id }} search={{ mode: "preview" }}>
-                          <Eye className="me-1 h-4 w-4" />
-                          {t("preview")}
-                        </Link>
-                      </Button>
+                      <TooltipProvider delayDuration={300}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-9 w-9"
+                              aria-label={t("copy_preview_link")}
+                              onClick={() => void copyPreview(tree.id)}
+                            >
+                              <Share2 className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{t("copy_preview_link")}</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <Button asChild size="sm">
                         <Link to="/tree/$id" params={{ id: tree.id }} search={{ mode: "edit" }}>
                           {t("edit")}
