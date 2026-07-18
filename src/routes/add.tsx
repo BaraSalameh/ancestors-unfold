@@ -5,24 +5,40 @@ import { MemberForm } from "@/components/MemberForm";
 import { familyStore, useFamily } from "@/lib/family-store";
 import { useI18n } from "@/lib/i18n";
 
-const searchSchema = z.object({
+export const addMemberSearchSchema = z.object({
   parentId: z.string().optional(),
   childId: z.string().optional(),
   spouseId: z.string().optional(),
 });
 
 export const Route = createFileRoute("/add")({
-  validateSearch: searchSchema,
+  validateSearch: addMemberSearchSchema,
   head: () => ({ meta: [{ title: "Add Member — Family Tree Hub" }] }),
   component: AddPage,
 });
 
 function AddPage() {
+  const { parentId, childId, spouseId } = useSearch({ from: "/add" });
+  const treeId = familyStore.getActiveTreeId();
+  return (
+    <AddMemberPage treeId={treeId} parentId={parentId} childId={childId} spouseId={spouseId} />
+  );
+}
+
+export function AddMemberPage({
+  treeId,
+  parentId,
+  childId,
+  spouseId,
+}: {
+  treeId: string;
+  parentId?: string;
+  childId?: string;
+  spouseId?: string;
+}) {
   const navigate = useNavigate();
   const members = useFamily();
   const { t } = useI18n();
-  const { parentId, childId, spouseId } = useSearch({ from: "/add" });
-  const treeId = familyStore.getActiveTreeId();
 
   // Pre-fill based on context
   const child = childId ? members.find((m) => m.id === childId) : undefined;

@@ -32,6 +32,26 @@ describe("snapshot trust boundary", () => {
     ).toMatchObject({ name_en: "", name_ar: "مثال" });
   });
 
+  it("accepts an English-only member name", () => {
+    expect(
+      schemas.snapshot.parse({
+        expectedVersion: 1,
+        members: [{ ...member, name_en: "Example", name_ar: "" }],
+        subfamilies: [],
+      }).members[0],
+    ).toMatchObject({ name_en: "Example", name_ar: "" });
+  });
+
+  it("rejects a member without either name", () => {
+    expect(() =>
+      schemas.snapshot.parse({
+        expectedVersion: 1,
+        members: [{ ...member, name_en: "", name_ar: "" }],
+        subfamilies: [],
+      }),
+    ).toThrow();
+  });
+
   it("rejects unknown properties and invalid versions", () => {
     expect(() =>
       schemas.snapshot.parse({

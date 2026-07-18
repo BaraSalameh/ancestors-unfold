@@ -13,7 +13,10 @@ export async function readSnapshot(s: SessionContext, rid: string, treeId: strin
     );
     if (!tree.rowCount) throw new Error("FORBIDDEN");
     const members = await c.query(
-      `SELECT m.*,f.parent_id father_id,mo.parent_id mother_id FROM app.family_members m
+      `SELECT m.*,
+        coalesce(m.name_en, '') name_en,
+        coalesce(m.name_ar, '') name_ar,
+        f.parent_id father_id,mo.parent_id mother_id FROM app.family_members m
       LEFT JOIN app.parent_child_relationships f ON f.child_id=m.id AND f.parent_role='father' AND f.deleted_at IS NULL
       LEFT JOIN app.parent_child_relationships mo ON mo.child_id=m.id AND mo.parent_role='mother' AND mo.deleted_at IS NULL
       WHERE m.tree_id=$1 AND m.deleted_at IS NULL`,
@@ -56,13 +59,46 @@ export async function readSnapshot(s: SessionContext, rid: string, treeId: strin
     return {
       version: tree.rows[0].version,
       members: (members.rows as MemberRow[]).map((m) => ({
-        ...m,
+        id: m.id,
+        name_en: m.name_en ?? "",
+        name_ar: m.name_ar ?? "",
+        gender: m.gender,
+        birth_date: m.birth_date ?? undefined,
+        death_date: m.death_date ?? undefined,
+        citizen_status: m.citizen_status ?? undefined,
+        notes: m.notes ?? undefined,
+        father_id: m.father_id ?? undefined,
+        mother_id: m.mother_id ?? undefined,
         spouse_id: spouseMap.get(m.id)?.[0],
         spouse_ids: spouseMap.get(m.id),
         divorced_from: divorceMap.get(m.id),
-        external_children: (external.rows as ExternalRow[]).filter((x) => x.mother_id === m.id),
+        is_unknown: m.is_unknown || undefined,
+        external_children: (external.rows as ExternalRow[])
+          .filter((x) => x.mother_id === m.id)
+          .map((x) => ({
+            id: x.id,
+            name: x.name,
+            other_parent_name: x.other_parent_name ?? undefined,
+            birth_year: x.birth_year == null ? undefined : String(x.birth_year),
+            notes: x.notes ?? undefined,
+          })),
+        subfamily_id: m.subfamily_id ?? undefined,
+        pos_x: m.pos_x ?? undefined,
+        pos_y: m.pos_y ?? undefined,
+        created_at: m.created_at,
+        updated_at: m.updated_at,
       })),
-      subfamilies: subfamilies.rows,
+      subfamilies: (subfamilies.rows as Array<Record<string, unknown>>).map((sf) => ({
+        id: sf.id,
+        name_en: sf.name_en,
+        name_ar: sf.name_ar ?? "",
+        linked_male_id: sf.linked_male_id ?? undefined,
+        parent_subfamily_id: sf.parent_subfamily_id ?? undefined,
+        notes: sf.notes ?? undefined,
+        color: sf.color ?? undefined,
+        created_at: sf.created_at,
+        updated_at: sf.updated_at,
+      })),
     };
   });
 }
@@ -137,8 +173,8 @@ export async function importSnapshot(
         [
           id,
           treeId,
-          m.name_en,
-          m.name_ar,
+          m.name_en || null,
+          m.name_ar || null,
           m.gender,
           m.birth_date || null,
           m.death_date || null,

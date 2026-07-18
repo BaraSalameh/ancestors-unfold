@@ -21,6 +21,7 @@ export function Header() {
   const isTreeEdit = location.pathname.startsWith("/tree/") && location.search.mode === "edit";
   const isTreePreview =
     location.pathname.startsWith("/tree/") && location.search.mode === "preview";
+  const activeTreeId = location.pathname.match(/^\/tree\/([^/]+)/)?.[1];
   const isAuthPage = location.pathname === "/auth";
 
   return (
@@ -46,9 +47,9 @@ export function Header() {
         )}
 
         <div className="ms-auto flex items-center gap-1">
-          {isTreeEdit && (
+          {isTreeEdit && activeTreeId && (
             <Button asChild size="sm" variant="default" className="hidden gap-1 sm:flex">
-              <Link to="/add">
+              <Link to="/tree/$id/add" params={{ id: activeTreeId }}>
                 <Plus className="h-4 w-4" />
                 <span className="hidden sm:inline">{t("add_member")}</span>
               </Link>

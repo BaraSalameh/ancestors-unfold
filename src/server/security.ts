@@ -179,7 +179,10 @@ export const schemas = {
               created_at: z.string().max(50),
               updated_at: z.string().max(50),
             })
-            .strict(),
+            .strict()
+            .refine((member) => !!member.name_en || !!member.name_ar, {
+              message: "At least one member name is required",
+            }),
         )
         .max(10_000),
       subfamilies: z

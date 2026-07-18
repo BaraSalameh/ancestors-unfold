@@ -205,7 +205,7 @@ function MemberPage() {
           title={t("children")}
           action={
             <Button asChild size="sm" variant="outline">
-              <Link to="/add" search={{ parentId: member.id }}>
+              <Link to="/tree/$id/add" params={{ id: treeId }} search={{ parentId: member.id }}>
                 <Plus className="h-4 w-4 ltr:mr-1 rtl:ml-1" />
                 {t("add_child")}
               </Link>
@@ -228,7 +228,7 @@ function MemberPage() {
           action={
             !father ? (
               <Button asChild size="sm" variant="outline">
-                <Link to="/add" search={{ childId: member.id }}>
+                <Link to="/tree/$id/add" params={{ id: treeId }} search={{ childId: member.id }}>
                   <Plus className="h-4 w-4 ltr:mr-1 rtl:ml-1" />
                   {t("add_parent")}
                 </Link>
