@@ -822,7 +822,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
             }}
           >
             <span className="ms-3 rounded-b bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground">
-              {activeGeneration.start}â€“{activeGeneration.end}
+              {activeGeneration.start}{"\u2013"}{activeGeneration.end}
             </span>
           </div>
         )}
@@ -897,7 +897,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
                 </div>
                 {activeGeneration && (
                   <div className="mt-2 text-[10px] text-muted-foreground">
-                    {activeGeneration.start}â€“{activeGeneration.end}
+                    {activeGeneration.start}{"\u2013"}{activeGeneration.end}
                   </div>
                 )}
               </>
