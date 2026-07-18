@@ -9,6 +9,8 @@ DECLARE
   father_id uuid := gen_random_uuid();
   mother_id uuid := gen_random_uuid();
   child_id uuid := gen_random_uuid();
+  english_only_id uuid := gen_random_uuid();
+  arabic_only_id uuid := gen_random_uuid();
   sf_root uuid := gen_random_uuid();
   sf_child uuid := gen_random_uuid();
 BEGIN
@@ -20,6 +22,9 @@ BEGIN
   INSERT INTO app.family_members(id,tree_id,name_en,name_ar,gender) VALUES
     (father_id,v_tree_id,'Father','الأب','male'),(mother_id,v_tree_id,'Mother','الأم','female'),
     (child_id,v_tree_id,'Child','الطفل','male');
+  INSERT INTO app.family_members(id,tree_id,name_en,name_ar,gender) VALUES
+    (english_only_id,v_tree_id,'English only',NULL,'male'),
+    (arabic_only_id,v_tree_id,NULL,'Arabic only','female');
   INSERT INTO app.parent_child_relationships(tree_id,child_id,parent_id,parent_role) VALUES
     (v_tree_id,child_id,father_id,'father'),(v_tree_id,child_id,mother_id,'mother');
   INSERT INTO app.subfamilies(id,tree_id,name_en,linked_male_id) VALUES(sf_root,v_tree_id,'Root',father_id);
