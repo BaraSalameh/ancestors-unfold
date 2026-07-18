@@ -16,7 +16,11 @@ import { passwordResetMail, sendMail, verificationMail } from "./infrastructure/
 import { logError } from "./infrastructure/logger";
 import { jsonResponse as json } from "./http/response";
 import { handleOperationsRequest } from "./modules/operations/handler";
-import { importSnapshot, readSnapshot } from "./modules/trees/snapshot-repository";
+import {
+  importSnapshot,
+  readPublicSnapshot,
+  readSnapshot,
+} from "./modules/trees/snapshot-repository";
 
 const COOKIE = "ancestors_session";
 const OAUTH_COOKIE = "ancestors_google_oauth";
@@ -262,28 +266,6 @@ export async function handleApi(request: Request): Promise<Response | null> {
       headers.append("set-cookie", sessionCookie(login.token, login.maxAge));
       return new Response(null, { status: 302, headers });
     }
-    const publicPreview = url.pathname.match(/^\/api\/previews\/([A-Za-z0-9_-]{40,100})$/);
-    if (publicPreview && request.method === "GET") {
-      const token = sha256(publicPreview[1]);
-      const link = await query<{ id: string; tree_id: string }>(
-        `UPDATE app.tree_share_links SET usage_count=usage_count+1,last_used_at=now() WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now() AND (usage_limit IS NULL OR usage_count<usage_limit) RETURNING id,tree_id`,
-        [token],
-      );
-      if (!link.rowCount) return json({ code: "NOT_FOUND" }, 404);
-      const members = await query(
-        `SELECT id,name_en,name_ar,gender,extract(year from birth_date)::int birth_year,death_date,citizen_status,is_unknown,subfamily_id,pos_x,pos_y FROM app.family_members WHERE tree_id=$1 AND deleted_at IS NULL`,
-        [link.rows[0].tree_id],
-      );
-      const subfamilies = await query(
-        `SELECT id,parent_subfamily_id,linked_male_id,name_en,name_ar,color FROM app.subfamilies WHERE tree_id=$1 AND deleted_at IS NULL`,
-        [link.rows[0].tree_id],
-      );
-      await query(
-        "INSERT INTO audit.events(tree_id,entity_type,entity_id,action,metadata) VALUES($1,'tree_share_links',$2,'preview_use','{}')",
-        [link.rows[0].tree_id, link.rows[0].id],
-      );
-      return json({ members: members.rows, subfamilies: subfamilies.rows });
-    }
     if (url.pathname === "/api/auth/register" && request.method === "POST") {
       const b = await parseBody(request, schemas.register),
         email = normalizeEmail(b.email);
@@ -457,6 +439,11 @@ export async function handleApi(request: Request): Promise<Response | null> {
         "set-cookie": sessionCookie(s.token, s.maxAge),
       });
     }
+    const publicTreePreview = url.pathname.match(
+      /^\/api\/trees\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/preview$/i,
+    );
+    if (publicTreePreview && request.method === "GET")
+      return json(await readPublicSnapshot(publicTreePreview[1]));
     const session = await authenticate(request);
     if (url.pathname === "/api/auth/session" && request.method === "GET")
       return json(session ? { user: userDto(session), createdAt: new Date().toISOString() } : null);
@@ -585,25 +572,6 @@ export async function handleApi(request: Request): Promise<Response | null> {
           await parseBody(request, schemas.snapshot),
         ),
       );
-    const shareMatch = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/share-links$/);
-    if (shareMatch && request.method === "POST") {
-      const b = await parseBody(request, schemas.shareLink),
-        raw = randomBytes(32).toString("base64url");
-      const link = await transaction(session.user_id, session.id, requestId, async (c) => {
-        const allowed = await c.query(
-          "SELECT 1 FROM app.tree_memberships WHERE tree_id=$1 AND user_id=$2 AND role IN ('owner','administrator') AND revoked_at IS NULL",
-          [shareMatch[1], session.user_id],
-        );
-        if (!allowed.rowCount) throw new Error("FORBIDDEN");
-        return (
-          await c.query(
-            `INSERT INTO app.tree_share_links(tree_id,token_hash,created_by,expires_at,usage_limit) VALUES($1,$2,$3,now()+($4||' hours')::interval,$5) RETURNING id,expires_at,usage_limit`,
-            [shareMatch[1], sha256(raw), session.user_id, b.expiresInHours, b.usageLimit ?? null],
-          )
-        ).rows[0];
-      });
-      return json({ ...link, token: raw }, 201);
-    }
     const grantsMatch = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/branch-grants$/);
     if (grantsMatch && request.method === "GET") {
       const r = await transaction(session.user_id, session.id, requestId, async (c) => {

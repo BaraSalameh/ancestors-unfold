@@ -101,17 +101,6 @@ export const schemas = {
       color: z.string().trim().max(100).optional(),
     })
     .strict(),
-  shareLink: z
-    .object({
-      expiresInHours: z
-        .number()
-        .int()
-        .min(1)
-        .max(24 * 90)
-        .default(168),
-      usageLimit: z.number().int().min(1).max(100000).nullable().optional(),
-    })
-    .strict(),
   branchGrant: z
     .object({
       userId: z.string().uuid(),

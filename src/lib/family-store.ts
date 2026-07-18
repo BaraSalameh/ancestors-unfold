@@ -14,6 +14,8 @@ import {
 } from "@/features/members/domain/relationships";
 
 let activeTreeId = "al-rashid";
+export type TreeAccessMode = "edit" | "preview";
+let activeAccessMode: TreeAccessMode = "edit";
 
 const SAMPLE: FamilyMember[] = (() => {
   const now = new Date().toISOString();
@@ -109,13 +111,18 @@ let cachedPersistenceState: PersistenceState = {
   error: null,
   conflicted: false,
 };
+export type FamilyLoadState = "idle" | "loading" | "ready" | "error";
+let loadState: FamilyLoadState = "idle";
 
-async function hydrateFromServer(treeId: string) {
+async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
   const generation = saveGeneration;
   try {
-    const snapshot = await treeClient.readSnapshot(treeId);
+    const snapshot = await (accessMode === "preview"
+      ? treeClient.readPublicSnapshot(treeId)
+      : treeClient.readSnapshot(treeId));
     // Never let a late hydration response replace edits made while it was loading.
-    if (activeTreeId !== treeId || saveGeneration !== generation) return;
+    if (activeTreeId !== treeId || activeAccessMode !== accessMode || saveGeneration !== generation)
+      return;
     remoteVersion = snapshot.version;
     state = snapshot.members;
     subfamilies = snapshot.subfamilies;
@@ -123,9 +130,14 @@ async function hydrateFromServer(treeId: string) {
     future = [];
     savePending = false;
     persistenceError = null;
+    loadState = "ready";
     emit();
   } catch {
-    /* readiness and auth surfaces report connection failures */
+    if (activeTreeId !== treeId || activeAccessMode !== accessMode) return;
+    state = [];
+    subfamilies = [];
+    loadState = "error";
+    emit();
   }
 }
 
@@ -161,7 +173,7 @@ async function flushRemoteSave() {
 }
 
 function scheduleRemoteSave() {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || activeAccessMode === "preview") return;
   saveGeneration += 1;
   savePending = true;
   persistenceError = persistenceError === "VERSION_CONFLICT" ? persistenceError : null;
@@ -178,7 +190,8 @@ function load() {
     return;
   }
   state = [];
-  void hydrateFromServer(activeTreeId);
+  loadState = "loading";
+  void hydrateFromServer(activeTreeId, activeAccessMode);
 }
 
 function save() {
@@ -250,15 +263,20 @@ export const familyStore = {
   getPersistenceState(): PersistenceState {
     return cachedPersistenceState;
   },
+  getLoadState(): FamilyLoadState {
+    return loadState;
+  },
   reloadAfterConflict(): void {
     persistenceError = null;
     savePending = false;
-    void hydrateFromServer(activeTreeId);
+    loadState = "loading";
+    void hydrateFromServer(activeTreeId, activeAccessMode);
     emit();
   },
-  activateTree(treeId: string): void {
-    if (!treeId || activeTreeId === treeId) return;
+  activateTree(treeId: string, accessMode: TreeAccessMode = "edit"): void {
+    if (!treeId || (activeTreeId === treeId && activeAccessMode === accessMode)) return;
     activeTreeId = treeId;
+    activeAccessMode = accessMode;
     past = [];
     future = [];
     remoteVersion = 1;
@@ -268,8 +286,8 @@ export const familyStore = {
     loadSubfamilies();
     emit();
   },
-  initializeTree(treeId: string): void {
-    familyStore.activateTree(treeId);
+  initializeTree(treeId: string, accessMode: TreeAccessMode = "edit"): void {
+    familyStore.activateTree(treeId, accessMode);
   },
   async flushPendingSave(): Promise<void> {
     clearTimeout(remoteSaveTimer);
@@ -630,6 +648,10 @@ export function useFamilyPersistence(): PersistenceState {
     familyStore.getPersistenceState,
     familyStore.getPersistenceState,
   );
+}
+
+export function useFamilyLoadState(): FamilyLoadState {
+  return useSyncExternalStore(familyStore.subscribe, familyStore.getLoadState, () => "idle");
 }
 
 export function getChildren(members: FamilyMember[], id: string): FamilyMember[] {

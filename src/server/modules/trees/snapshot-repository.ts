@@ -1,8 +1,139 @@
 import { randomUUID } from "node:crypto";
-import { transaction } from "@/server/infrastructure/database";
+import { query, transaction } from "@/server/infrastructure/database";
 import { ApiError, type SnapshotInput } from "@/server/security";
 
 type SessionContext = { id: string; user_id: string };
+
+type QueryRunner = {
+  query: <T extends Record<string, unknown>>(
+    text: string,
+    values?: unknown[],
+  ) => Promise<{ rows: T[]; rowCount: number | null }>;
+};
+
+type PartnerRow = {
+  union_id: string;
+  status: string;
+  member_id: string;
+  display_order: number;
+};
+type MemberRow = Record<string, unknown> & { id: string };
+type ExternalRow = Record<string, unknown> & { mother_id: string };
+
+export async function loadRenderableSnapshot(
+  runner: QueryRunner,
+  treeId: string,
+  version: number,
+  includePrivate: boolean,
+) {
+  const members = await runner.query<MemberRow>(
+    `SELECT m.id,coalesce(m.name_en, '') name_en,coalesce(m.name_ar, '') name_ar,
+      m.gender,m.birth_date,m.death_date,m.citizen_status,m.notes,m.is_unknown,m.subfamily_id,
+      m.pos_x,m.pos_y,m.created_at,m.updated_at,
+      f.parent_id father_id,mo.parent_id mother_id FROM app.family_members m
+    LEFT JOIN app.parent_child_relationships f ON f.child_id=m.id AND f.parent_role='father' AND f.deleted_at IS NULL
+    LEFT JOIN app.parent_child_relationships mo ON mo.child_id=m.id AND mo.parent_role='mother' AND mo.deleted_at IS NULL
+    WHERE m.tree_id=$1 AND m.deleted_at IS NULL`,
+    [treeId],
+  );
+  const subfamilies = await runner.query<Record<string, unknown>>(
+    `SELECT id,name_en,name_ar,linked_male_id,parent_subfamily_id,notes,color,created_at,updated_at
+    FROM app.subfamilies WHERE tree_id=$1 AND deleted_at IS NULL`,
+    [treeId],
+  );
+  const partners = await runner.query<PartnerRow>(
+    `SELECT u.id union_id,u.status,p.member_id,p.display_order FROM app.unions u
+    JOIN app.union_partners p ON p.union_id=u.id
+    WHERE u.tree_id=$1 AND u.deleted_at IS NULL ORDER BY u.display_order,p.display_order`,
+    [treeId],
+  );
+  const external = includePrivate
+    ? await runner.query<ExternalRow>(
+        "SELECT * FROM app.external_children WHERE tree_id=$1 AND deleted_at IS NULL",
+        [treeId],
+      )
+    : { rows: [] as ExternalRow[], rowCount: 0 };
+  const byUnion = new Map<string, PartnerRow[]>();
+  for (const partner of partners.rows)
+    byUnion.set(partner.union_id, [...(byUnion.get(partner.union_id) ?? []), partner]);
+  const spouseMap = new Map<string, string[]>(),
+    divorceMap = new Map<string, string[]>();
+  for (const unionPartners of byUnion.values())
+    if (unionPartners.length === 2)
+      for (const [member, spouse] of [
+        [unionPartners[0], unionPartners[1]],
+        [unionPartners[1], unionPartners[0]],
+      ]) {
+        spouseMap.set(member.member_id, [
+          ...(spouseMap.get(member.member_id) ?? []),
+          spouse.member_id,
+        ]);
+        if (member.status === "divorced")
+          divorceMap.set(member.member_id, [
+            ...(divorceMap.get(member.member_id) ?? []),
+            spouse.member_id,
+          ]);
+      }
+  return {
+    version,
+    // The DTO projection intentionally normalizes nullable database fields at this boundary.
+    // eslint-disable-next-line complexity
+    members: members.rows.map((member) => ({
+      id: member.id,
+      name_en: member.name_en ?? "",
+      name_ar: member.name_ar ?? "",
+      gender: member.gender,
+      birth_date: member.birth_date ?? undefined,
+      death_date: member.death_date ?? undefined,
+      citizen_status: member.citizen_status ?? undefined,
+      ...(includePrivate ? { notes: member.notes ?? undefined } : {}),
+      father_id: member.father_id ?? undefined,
+      mother_id: member.mother_id ?? undefined,
+      spouse_id: spouseMap.get(member.id)?.[0],
+      spouse_ids: spouseMap.get(member.id),
+      divorced_from: divorceMap.get(member.id),
+      is_unknown: member.is_unknown || undefined,
+      ...(includePrivate
+        ? {
+            external_children: external.rows
+              .filter((child) => child.mother_id === member.id)
+              .map((child) => ({
+                id: child.id,
+                name: child.name,
+                other_parent_name: child.other_parent_name ?? undefined,
+                birth_year: child.birth_year == null ? undefined : String(child.birth_year),
+                notes: child.notes ?? undefined,
+              })),
+          }
+        : {}),
+      subfamily_id: member.subfamily_id ?? undefined,
+      pos_x: member.pos_x ?? undefined,
+      pos_y: member.pos_y ?? undefined,
+      created_at: member.created_at,
+      updated_at: member.updated_at,
+    })),
+    subfamilies: subfamilies.rows.map((subfamily) => ({
+      id: subfamily.id,
+      name_en: subfamily.name_en,
+      name_ar: subfamily.name_ar ?? "",
+      linked_male_id: subfamily.linked_male_id ?? undefined,
+      parent_subfamily_id: subfamily.parent_subfamily_id ?? undefined,
+      ...(includePrivate ? { notes: subfamily.notes ?? undefined } : {}),
+      color: subfamily.color ?? undefined,
+      created_at: subfamily.created_at,
+      updated_at: subfamily.updated_at,
+    })),
+  };
+}
+
+export async function readPublicSnapshot(treeId: string) {
+  const tree = await query<{ version: number }>(
+    "SELECT version FROM app.family_trees WHERE id=$1 AND deleted_at IS NULL",
+    [treeId],
+  );
+  if (!tree.rowCount) throw new ApiError("NOT_FOUND", 404);
+  return loadRenderableSnapshot({ query }, treeId, tree.rows[0].version, false);
+}
 
 export async function readSnapshot(s: SessionContext, rid: string, treeId: string) {
   return transaction(s.user_id, s.id, rid, async (c) => {
@@ -12,94 +143,7 @@ export async function readSnapshot(s: SessionContext, rid: string, treeId: strin
       [treeId, s.user_id],
     );
     if (!tree.rowCount) throw new Error("FORBIDDEN");
-    const members = await c.query(
-      `SELECT m.*,
-        coalesce(m.name_en, '') name_en,
-        coalesce(m.name_ar, '') name_ar,
-        f.parent_id father_id,mo.parent_id mother_id FROM app.family_members m
-      LEFT JOIN app.parent_child_relationships f ON f.child_id=m.id AND f.parent_role='father' AND f.deleted_at IS NULL
-      LEFT JOIN app.parent_child_relationships mo ON mo.child_id=m.id AND mo.parent_role='mother' AND mo.deleted_at IS NULL
-      WHERE m.tree_id=$1 AND m.deleted_at IS NULL`,
-      [treeId],
-    );
-    const subfamilies = await c.query(
-      "SELECT * FROM app.subfamilies WHERE tree_id=$1 AND deleted_at IS NULL",
-      [treeId],
-    );
-    const external = await c.query(
-      "SELECT * FROM app.external_children WHERE tree_id=$1 AND deleted_at IS NULL",
-      [treeId],
-    );
-    type PartnerRow = {
-      union_id: string;
-      status: string;
-      member_id: string;
-      display_order: number;
-    };
-    type MemberRow = Record<string, unknown> & { id: string };
-    type ExternalRow = Record<string, unknown> & { mother_id: string };
-    const partners = await c.query<PartnerRow>(
-      `SELECT u.id union_id,u.status,p.member_id,p.display_order FROM app.unions u JOIN app.union_partners p ON p.union_id=u.id WHERE u.tree_id=$1 AND u.deleted_at IS NULL ORDER BY u.display_order,p.display_order`,
-      [treeId],
-    );
-    const byUnion = new Map<string, PartnerRow[]>();
-    for (const p of partners.rows) byUnion.set(p.union_id, [...(byUnion.get(p.union_id) ?? []), p]);
-    const spouseMap = new Map<string, string[]>(),
-      divorceMap = new Map<string, string[]>();
-    for (const ps of byUnion.values())
-      if (ps.length === 2)
-        for (const [a, b] of [
-          [ps[0], ps[1]],
-          [ps[1], ps[0]],
-        ]) {
-          spouseMap.set(a.member_id, [...(spouseMap.get(a.member_id) ?? []), b.member_id]);
-          if (a.status === "divorced")
-            divorceMap.set(a.member_id, [...(divorceMap.get(a.member_id) ?? []), b.member_id]);
-        }
-    return {
-      version: tree.rows[0].version,
-      members: (members.rows as MemberRow[]).map((m) => ({
-        id: m.id,
-        name_en: m.name_en ?? "",
-        name_ar: m.name_ar ?? "",
-        gender: m.gender,
-        birth_date: m.birth_date ?? undefined,
-        death_date: m.death_date ?? undefined,
-        citizen_status: m.citizen_status ?? undefined,
-        notes: m.notes ?? undefined,
-        father_id: m.father_id ?? undefined,
-        mother_id: m.mother_id ?? undefined,
-        spouse_id: spouseMap.get(m.id)?.[0],
-        spouse_ids: spouseMap.get(m.id),
-        divorced_from: divorceMap.get(m.id),
-        is_unknown: m.is_unknown || undefined,
-        external_children: (external.rows as ExternalRow[])
-          .filter((x) => x.mother_id === m.id)
-          .map((x) => ({
-            id: x.id,
-            name: x.name,
-            other_parent_name: x.other_parent_name ?? undefined,
-            birth_year: x.birth_year == null ? undefined : String(x.birth_year),
-            notes: x.notes ?? undefined,
-          })),
-        subfamily_id: m.subfamily_id ?? undefined,
-        pos_x: m.pos_x ?? undefined,
-        pos_y: m.pos_y ?? undefined,
-        created_at: m.created_at,
-        updated_at: m.updated_at,
-      })),
-      subfamilies: (subfamilies.rows as Array<Record<string, unknown>>).map((sf) => ({
-        id: sf.id,
-        name_en: sf.name_en,
-        name_ar: sf.name_ar ?? "",
-        linked_male_id: sf.linked_male_id ?? undefined,
-        parent_subfamily_id: sf.parent_subfamily_id ?? undefined,
-        notes: sf.notes ?? undefined,
-        color: sf.color ?? undefined,
-        created_at: sf.created_at,
-        updated_at: sf.updated_at,
-      })),
-    };
+    return loadRenderableSnapshot(c, treeId, tree.rows[0].version, true);
   });
 }
 

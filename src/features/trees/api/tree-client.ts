@@ -16,6 +16,9 @@ export const treeClient = {
   readSnapshot(treeId: string): Promise<TreeSnapshot> {
     return apiRequest(`/api/trees/${treeId}/snapshot`);
   },
+  readPublicSnapshot(treeId: string): Promise<TreeSnapshot> {
+    return apiRequest(`/api/trees/${treeId}/preview`);
+  },
   async saveSnapshot(treeId: string, snapshot: SaveTreeSnapshot): Promise<{ version: number }> {
     try {
       return await apiRequest(`/api/trees/${treeId}/snapshot`, { method: "PUT", body: snapshot });

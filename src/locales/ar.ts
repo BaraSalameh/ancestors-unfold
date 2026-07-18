@@ -241,4 +241,7 @@ export const ar = {
   add_attachment: "إضافة مرفق",
   no_attachments: "لا توجد مرفقات بعد",
   view_subfamily: "عرض العائلة الجزئية",
+  loading_tree: "جارٍ تحميل شجرة العائلة",
+  tree_unavailable: "شجرة العائلة غير متاحة",
+  tree_unavailable_hint: "هذه الشجرة غير موجودة أو تعذر تحميلها.",
 } satisfies Record<TranslationKey, string>;

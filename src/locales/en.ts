@@ -242,6 +242,9 @@ export const en = {
   add_attachment: "Add attachment",
   no_attachments: "No attachments yet",
   view_subfamily: "View sub-family",
+  loading_tree: "Loading family tree",
+  tree_unavailable: "Family tree unavailable",
+  tree_unavailable_hint: "This tree does not exist or could not be loaded.",
 } as const;
 
 export type TranslationKey = keyof typeof en;
