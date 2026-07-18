@@ -1,5 +1,17 @@
 import { useSyncExternalStore } from "react";
 import type { FamilyMember, MemberInput, SubFamily } from "./family-types";
+import { ApiClientError } from "@/shared/api/client";
+import { treeClient } from "@/features/trees/api/tree-client";
+import {
+  getChildren as queryChildren,
+  getGeneration as queryGeneration,
+  getSubfamilyMembers as querySubfamilyMembers,
+} from "@/features/members/domain/queries";
+import {
+  linkSpouses,
+  removeMember,
+  toggleDivorce as toggleDivorceRelationship,
+} from "@/features/members/domain/relationships";
 
 let activeTreeId = "al-rashid";
 
@@ -80,6 +92,7 @@ let remoteSaveTimer: ReturnType<typeof setTimeout> | undefined;
 let remoteVersion = 1;
 let persistenceError: string | null = null;
 let saveInFlight = false;
+const saveWaiters = new Set<() => void>();
 let savePending = false;
 let saveGeneration = 0;
 
@@ -98,14 +111,11 @@ let cachedPersistenceState: PersistenceState = {
 };
 
 async function hydrateFromServer(treeId: string) {
+  const generation = saveGeneration;
   try {
-    const response = await fetch(`/api/trees/${treeId}/snapshot`, { credentials: "include" });
-    if (!response.ok || activeTreeId !== treeId) return;
-    const snapshot = (await response.json()) as {
-      version: number;
-      members: FamilyMember[];
-      subfamilies: SubFamily[];
-    };
+    const snapshot = await treeClient.readSnapshot(treeId);
+    // Never let a late hydration response replace edits made while it was loading.
+    if (activeTreeId !== treeId || saveGeneration !== generation) return;
     remoteVersion = snapshot.version;
     state = snapshot.members;
     subfamilies = snapshot.subfamilies;
@@ -129,34 +139,22 @@ async function flushRemoteSave() {
   saveInFlight = true;
   emit();
   try {
-    const response = await fetch(`/api/trees/${treeId}/snapshot`, {
-      method: "PUT",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        batchId: crypto.randomUUID(),
-        expectedVersion: remoteVersion,
-        members,
-        subfamilies: currentSubfamilies,
-      }),
+    const result = await treeClient.saveSnapshot(treeId, {
+      batchId: crypto.randomUUID(),
+      expectedVersion: remoteVersion,
+      members,
+      subfamilies: currentSubfamilies,
     });
-    if (!response.ok) {
-      const body = (await response.json().catch(() => ({ code: "SAVE_FAILED" }))) as {
-        code?: string;
-      };
-      persistenceError = body.code ?? "SAVE_FAILED";
-      savePending = true;
-      return;
-    }
-    const result = (await response.json()) as { version: number };
     if (activeTreeId === treeId) remoteVersion = result.version;
     persistenceError = null;
     if (saveGeneration !== generation) savePending = true;
-  } catch {
-    persistenceError = "NETWORK_ERROR";
+  } catch (error) {
+    persistenceError = error instanceof ApiClientError ? error.code : "NETWORK_ERROR";
     savePending = true;
   } finally {
     saveInFlight = false;
+    for (const resolve of saveWaiters) resolve();
+    saveWaiters.clear();
     emit();
     if (savePending && !persistenceError) void flushRemoteSave();
   }
@@ -263,15 +261,26 @@ export const familyStore = {
     activeTreeId = treeId;
     past = [];
     future = [];
+    remoteVersion = 1;
+    persistenceError = null;
+    savePending = false;
     load();
     loadSubfamilies();
     emit();
   },
   initializeTree(treeId: string): void {
-    void hydrateFromServer(treeId);
+    familyStore.activateTree(treeId);
+  },
+  async flushPendingSave(): Promise<void> {
+    clearTimeout(remoteSaveTimer);
+    if (saveInFlight) {
+      await new Promise<void>((resolve) => saveWaiters.add(resolve));
+    }
+    if (savePending && !persistenceError) await flushRemoteSave();
+    if (persistenceError) throw new ApiClientError(persistenceError, 0);
   },
   deleteTreeData(treeId: string): void {
-    void fetch(`/api/trees/${treeId}`, { method: "DELETE", credentials: "include" });
+    void treeClient.deleteTree(treeId);
   },
   getAll(): FamilyMember[] {
     return state;
@@ -374,53 +383,14 @@ export const familyStore = {
   },
   toggleDivorce(aId: string, bId: string): void {
     const now = new Date().toISOString();
-    const has = (m: FamilyMember, id: string) => (m.divorced_from ?? []).includes(id);
-    const add = (arr: string[] | undefined, id: string) =>
-      arr && arr.includes(id) ? arr : [...(arr ?? []), id];
-    const remove = (arr: string[] | undefined, id: string) => (arr ?? []).filter((x) => x !== id);
-    const a = state.find((m) => m.id === aId);
-    if (!a) return;
-    const currently = has(a, bId);
     commit(() => {
-      state = state.map((m) => {
-        if (m.id === aId)
-          return {
-            ...m,
-            divorced_from: currently ? remove(m.divorced_from, bId) : add(m.divorced_from, bId),
-            updated_at: now,
-          };
-        if (m.id === bId)
-          return {
-            ...m,
-            divorced_from: currently ? remove(m.divorced_from, aId) : add(m.divorced_from, aId),
-            updated_at: now,
-          };
-        return m;
-      });
+      state = toggleDivorceRelationship(state, aId, bId, now);
     });
   },
   addSpouse(maleId: string, femaleId: string): void {
     const now = new Date().toISOString();
-    const male = state.find((m) => m.id === maleId);
-    const female = state.find((m) => m.id === femaleId);
-    if (!male || male.gender !== "male" || !female || female.gender !== "female") return;
     commit(() => {
-      state = state.map((m) => {
-        if (m.id === maleId) {
-          const set = new Set(m.spouse_ids ?? []);
-          set.add(femaleId);
-          return {
-            ...m,
-            spouse_ids: [...set],
-            spouse_id: m.spouse_id ?? femaleId,
-            updated_at: now,
-          };
-        }
-        if (m.id === femaleId) {
-          return { ...m, spouse_id: m.spouse_id ?? maleId, updated_at: now };
-        }
-        return m;
-      });
+      state = linkSpouses(state, maleId, femaleId, now);
     });
   },
   reorderSpouse(maleId: string, femaleId: string, direction: -1 | 1): void {
@@ -521,16 +491,7 @@ export const familyStore = {
   },
   remove(id: string): void {
     commit(() => {
-      state = state
-        .filter((m) => m.id !== id)
-        .map((m) => ({
-          ...m,
-          father_id: m.father_id === id ? undefined : m.father_id,
-          mother_id: m.mother_id === id ? undefined : m.mother_id,
-          spouse_id: m.spouse_id === id ? undefined : m.spouse_id,
-          spouse_ids: m.spouse_ids?.filter((x) => x !== id),
-          divorced_from: m.divorced_from?.filter((x) => x !== id),
-        }));
+      state = removeMember(state, id);
     });
   },
 
@@ -646,32 +607,7 @@ export const familyStore = {
   },
 
   getSubfamilyMembers(subfamilyId: string): FamilyMember[] {
-    const subfamily = subfamilies.find((sf) => sf.id === subfamilyId);
-    if (!subfamily?.linked_male_id) {
-      return state.filter((m) => m.subfamily_id === subfamilyId);
-    }
-
-    const linkedMale = state.find((m) => m.id === subfamily.linked_male_id);
-    if (!linkedMale) {
-      return state.filter((m) => m.subfamily_id === subfamilyId);
-    }
-
-    const branchIds = new Set<string>();
-    const queue = [linkedMale.id];
-
-    while (queue.length > 0) {
-      const currentId = queue.shift()!;
-      if (branchIds.has(currentId)) continue;
-      branchIds.add(currentId);
-
-      state
-        .filter((m) => m.father_id === currentId || m.mother_id === currentId)
-        .forEach((child) => {
-          if (!branchIds.has(child.id)) queue.push(child.id);
-        });
-    }
-
-    return state.filter((m) => m.subfamily_id === subfamilyId || branchIds.has(m.id));
+    return querySubfamilyMembers(state, subfamilies, subfamilyId);
   },
 
   subscribe(l: () => void) {
@@ -697,7 +633,7 @@ export function useFamilyPersistence(): PersistenceState {
 }
 
 export function getChildren(members: FamilyMember[], id: string): FamilyMember[] {
-  return members.filter((m) => m.father_id === id || m.mother_id === id);
+  return queryChildren(members, id);
 }
 
 export function getGeneration(
@@ -705,12 +641,5 @@ export function getGeneration(
   id: string,
   cache = new Map<string, number>(),
 ): number {
-  if (cache.has(id)) return cache.get(id)!;
-  const m = members.find((x) => x.id === id);
-  if (!m) return 0;
-  const fGen = m.father_id ? getGeneration(members, m.father_id, cache) + 1 : 0;
-  const mGen = m.mother_id ? getGeneration(members, m.mother_id, cache) + 1 : 0;
-  const gen = Math.max(fGen, mGen);
-  cache.set(id, gen);
-  return gen;
+  return queryGeneration(members, id, cache);
 }

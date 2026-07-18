@@ -169,6 +169,7 @@ export const en = {
   delete_warning_children:
     "This member has children. Deleting will unlink them but keep their records.",
   created: "Member added",
+  save_failed: "The member could not be saved. Please try again.",
   updated: "Member updated",
   deleted: "Member deleted",
   reset_data: "Reset to sample data",

@@ -48,6 +48,8 @@ export function passwordResetMail(to: string, token: string): Mail {
   };
 }
 
+// Delivery backends intentionally share one boundary so callers receive identical errors.
+// eslint-disable-next-line complexity
 export async function sendMail(mail: Mail): Promise<void> {
   const delivery = process.env.AUTH_TOKEN_DELIVERY ?? "console";
   if (delivery === "console") {

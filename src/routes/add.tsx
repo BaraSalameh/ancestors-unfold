@@ -54,15 +54,20 @@ function AddPage() {
           onCancel={() =>
             navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } })
           }
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
             const m = familyStore.add(data);
             // If creating a parent for an existing child, attach the child
             if (child) {
               if (m.gender === "male") familyStore.update(child.id, { father_id: m.id });
               else familyStore.update(child.id, { mother_id: m.id });
             }
-            toast.success(t("created"));
-            navigate({ to: "/member/$id", params: { id: m.id } });
+            try {
+              await familyStore.flushPendingSave();
+              toast.success(t("created"));
+              navigate({ to: "/member/$id", params: { id: m.id } });
+            } catch {
+              toast.error(t("save_failed"));
+            }
           }}
         />
       </div>

@@ -22,6 +22,16 @@ describe("snapshot trust boundary", () => {
     ).toBeTruthy();
   });
 
+  it("accepts an Arabic-only member name", () => {
+    expect(
+      schemas.snapshot.parse({
+        expectedVersion: 1,
+        members: [{ ...member, name_en: "", name_ar: "مثال" }],
+        subfamilies: [],
+      }).members[0],
+    ).toMatchObject({ name_en: "", name_ar: "مثال" });
+  });
+
   it("rejects unknown properties and invalid versions", () => {
     expect(() =>
       schemas.snapshot.parse({

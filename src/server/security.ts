@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z, type ZodType } from "zod";
-import { query } from "./db";
-import { serverConfig } from "./config";
+import { query } from "./infrastructure/database";
+import { serverConfig } from "./infrastructure/config";
 
 export class ApiError extends Error {
   constructor(
@@ -142,7 +142,7 @@ export const schemas = {
           z
             .object({
               id: z.string().min(1).max(200),
-              name_en: z.string().trim().min(1).max(200),
+              name_en: z.string().trim().max(200),
               name_ar: z.string().trim().max(200),
               gender: z.enum(["male", "female"]),
               birth_date: z.string().max(50).optional(),
