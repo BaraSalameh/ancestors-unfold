@@ -10,6 +10,7 @@ export type RegistrationInput = {
 export type AuthSession = {
   user: AuthUser;
   createdAt: string;
+  showGoogleWelcome?: boolean;
 };
 export type RegistrationResult = { verificationRequired: true; email: string };
 

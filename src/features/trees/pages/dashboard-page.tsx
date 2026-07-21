@@ -68,7 +68,7 @@ type TreeApiRecord = Omit<TreeRecord, "updatedAt"> & {
 // eslint-disable-next-line max-lines-per-function
 export function DashboardPage() {
   const { t, dir, lang } = useI18n();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const userName = accountDisplayName(user, lang);
   const [trees, setTrees] = useState<TreeRecord[]>([]);
   useEffect(() => {
@@ -200,7 +200,9 @@ export function DashboardPage() {
             <div>
               <p className="mb-2 text-sm font-medium text-primary">{t("family_archive")}</p>
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                {userName ? t("welcome_back", { name: userName }) : t("dashboard")}
+                {userName
+                  ? t(session?.showGoogleWelcome ? "welcome" : "welcome_back", { name: userName })
+                  : t("dashboard")}
               </h1>
               <p className="mt-2 max-w-xl text-muted-foreground">{t("dashboard_intro")}</p>
             </div>

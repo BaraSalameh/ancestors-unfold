@@ -73,6 +73,7 @@ export const en = {
   dashboard: "Dashboard",
   family_archive: "Your family archive",
   welcome_back: "Welcome back, {name}",
+  welcome: "Welcome, {name}",
   dashboard_intro: "Continue documenting the people and stories that shaped your family.",
   create_family_tree: "Create family tree",
   family_trees: "Family trees",

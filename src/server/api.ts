@@ -64,12 +64,13 @@ type Session = {
   email: string;
   full_name_en: string;
   full_name_ar: string;
+  show_google_welcome: boolean;
 };
 async function authenticate(request: Request): Promise<Session | null> {
   const token = cookieValue(request);
   if (!token || !databaseConfigured) return null;
   const result = await query<Session>(
-    `SELECT s.id,s.user_id,u.email,u.full_name_en,u.full_name_ar FROM app.sessions s
+    `SELECT s.id,s.user_id,u.email,u.full_name_en,u.full_name_ar,s.show_google_welcome FROM app.sessions s
     JOIN app.users u ON u.id=s.user_id LEFT JOIN app.password_credentials p ON p.user_id=u.id
     WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.idle_expires_at>now() AND s.absolute_expires_at>now()
       AND u.status='active' AND (p.user_id IS NULL OR p.credential_version=s.credential_version)`,
@@ -86,13 +87,14 @@ async function createSession(
   userId: string,
   version: number,
   request: Request,
+  showGoogleWelcome = false,
 ) {
   const token = randomBytes(32).toString("base64url"),
     idle = Number(process.env.SESSION_IDLE_HOURS ?? 24),
     days = Number(process.env.SESSION_ABSOLUTE_DAYS ?? 30);
   await client.query(
-    `INSERT INTO app.sessions(user_id,token_hash,credential_version,idle_expires_at,absolute_expires_at,ip_address,user_agent)
-    VALUES($1,$2,$3,now()+($4||' hours')::interval,now()+($5||' days')::interval,$6,$7)`,
+    `INSERT INTO app.sessions(user_id,token_hash,credential_version,idle_expires_at,absolute_expires_at,ip_address,user_agent,show_google_welcome)
+    VALUES($1,$2,$3,now()+($4||' hours')::interval,now()+($5||' days')::interval,$6,$7,$8)`,
     [
       userId,
       sha256(token),
@@ -101,6 +103,7 @@ async function createSession(
       days,
       requestIp(request),
       request.headers.get("user-agent")?.slice(0, 1000),
+      showGoogleWelcome,
     ],
   );
   return { token, maxAge: days * 86400 };
@@ -213,6 +216,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
           [profile.sub],
         );
         let userId = identity.rows[0]?.user_id;
+        const firstGoogleLogin = !userId;
         if (identity.rows[0] && ["suspended", "deleted"].includes(identity.rows[0].status))
           throw new ApiError("ACCOUNT_UNAVAILABLE", 403);
         if (!userId) {
@@ -256,7 +260,13 @@ export async function handleApi(request: Request): Promise<Response | null> {
           "SELECT credential_version FROM app.password_credentials WHERE user_id=$1",
           [userId],
         );
-        return createSession(c, userId, credential.rows[0]?.credential_version ?? 1, request);
+        return createSession(
+          c,
+          userId,
+          credential.rows[0]?.credential_version ?? 1,
+          request,
+          firstGoogleLogin,
+        );
       });
       const headers = new Headers({
         location: safeRedirect(saved.redirect),
@@ -445,8 +455,16 @@ export async function handleApi(request: Request): Promise<Response | null> {
     if (publicTreePreview && request.method === "GET")
       return json(await readPublicSnapshot(publicTreePreview[1]));
     const session = await authenticate(request);
-    if (url.pathname === "/api/auth/session" && request.method === "GET")
-      return json(session ? { user: userDto(session), createdAt: new Date().toISOString() } : null);
+    if (url.pathname === "/api/auth/session" && request.method === "GET") {
+      if (!session) return json(null);
+      if (session.show_google_welcome)
+        await query("UPDATE app.sessions SET show_google_welcome=false WHERE id=$1", [session.id]);
+      return json({
+        user: userDto(session),
+        createdAt: new Date().toISOString(),
+        showGoogleWelcome: session.show_google_welcome,
+      });
+    }
     if (!session) return json({ code: "UNAUTHENTICATED" }, 401);
     if (url.pathname === "/api/auth/logout" && request.method === "POST") {
       await query(

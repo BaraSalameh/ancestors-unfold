@@ -1,6 +1,7 @@
 import type { TranslationKey } from "./en";
 
 export const ar = {
+  welcome: "مرحباً، {name}",
   verify_email: "تحقق من بريدك الإلكتروني",
   verification_sent: "تحقق من صندوق الوارد للحصول على رمز التحقق المكون من ستة أرقام.",
   confirm_code: "تأكيد الرمز",
