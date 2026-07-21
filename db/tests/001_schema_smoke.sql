@@ -3,6 +3,35 @@ BEGIN;
 
 DO $$
 DECLARE
+  oauth_user uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO app.users(id,email,full_name_en,full_name_ar,status,email_verified_at)
+  VALUES(oauth_user,'oauth-reset@example.test','OAuth user','OAuth user','active',now());
+
+  INSERT INTO app.password_credentials AS credentials(user_id,password_hash)
+  VALUES(oauth_user,'$argon2id$first')
+  ON CONFLICT (user_id) DO UPDATE SET
+    password_hash=EXCLUDED.password_hash,
+    credential_version=credentials.credential_version+1,
+    password_changed_at=now(),updated_at=now();
+
+  INSERT INTO app.password_credentials AS credentials(user_id,password_hash)
+  VALUES(oauth_user,'$argon2id$second')
+  ON CONFLICT (user_id) DO UPDATE SET
+    password_hash=EXCLUDED.password_hash,
+    credential_version=credentials.credential_version+1,
+    password_changed_at=now(),updated_at=now();
+
+  IF NOT EXISTS (
+    SELECT 1 FROM app.password_credentials
+    WHERE user_id=oauth_user AND password_hash='$argon2id$second' AND credential_version=2
+  ) THEN
+    RAISE EXCEPTION 'password reset credential upsert failed';
+  END IF;
+END $$;
+
+DO $$
+DECLARE
   owner_id uuid := gen_random_uuid();
   editor_id uuid := gen_random_uuid();
   v_tree_id uuid := gen_random_uuid();

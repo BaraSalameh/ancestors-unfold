@@ -401,7 +401,12 @@ export async function handleApi(request: Request): Promise<Response | null> {
           token.rows[0].id,
         ]);
         await c.query(
-          "UPDATE app.password_credentials SET password_hash=$2,credential_version=credential_version+1,password_changed_at=now() WHERE user_id=$1",
+          `INSERT INTO app.password_credentials AS credentials(user_id,password_hash)
+           VALUES($1,$2)
+           ON CONFLICT (user_id) DO UPDATE SET
+             password_hash=EXCLUDED.password_hash,
+             credential_version=credentials.credential_version+1,
+             password_changed_at=now(),updated_at=now()`,
           [token.rows[0].user_id, await argon2.hash(b.password, { type: argon2.argon2id })],
         );
         await c.query(
