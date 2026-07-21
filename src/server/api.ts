@@ -533,8 +533,13 @@ export async function handleApi(request: Request): Promise<Response | null> {
     }
     if (url.pathname === "/api/trees" && request.method === "GET") {
       const r = await transaction(session.user_id, session.id, requestId, (c) =>
-        c.query(`WITH RECURSIVE visible_members AS (
-          SELECT m.id,m.tree_id FROM app.family_members m WHERE m.deleted_at IS NULL
+        c.query(`WITH RECURSIVE visible_trees AS (
+          SELECT t.id FROM app.family_trees t
+          WHERE t.deleted_at IS NULL AND app.can_view_tree(t.id)
+        ), visible_members AS (
+          SELECT m.id,m.tree_id FROM app.family_members m
+          JOIN visible_trees t ON t.id=m.tree_id
+          WHERE m.deleted_at IS NULL
         ), lineage AS (
           SELECT m.tree_id,m.id,1 AS depth,ARRAY[m.id] AS path FROM visible_members m
           UNION ALL
@@ -554,8 +559,10 @@ export async function handleApi(request: Request): Promise<Response | null> {
         SELECT t.id,t.name_en,t.name_ar,coalesce(t.description_en,'') description_en,
           coalesce(t.description_ar,'') description_ar,t.color,t.updated_at,
           coalesce(s.members,0)::integer AS members,coalesce(s.generations,0)::integer AS generations
-        FROM app.family_trees t LEFT JOIN tree_stats s ON s.tree_id=t.id
-        WHERE t.deleted_at IS NULL ORDER BY t.updated_at DESC`),
+        FROM visible_trees visible
+        JOIN app.family_trees t ON t.id=visible.id
+        LEFT JOIN tree_stats s ON s.tree_id=t.id
+        ORDER BY t.updated_at DESC`),
       );
       return json(r.rows);
     }

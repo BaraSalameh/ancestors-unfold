@@ -61,4 +61,75 @@ BEGIN
   END;
 END $$;
 
+-- Tree discovery must enforce request-context authorization even for roles that bypass RLS.
+DO $$
+DECLARE
+  owner_a uuid := gen_random_uuid();
+  owner_b uuid := gen_random_uuid();
+  shared_user uuid := gen_random_uuid();
+  tree_a uuid := gen_random_uuid();
+  tree_b uuid := gen_random_uuid();
+  branch_root uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO app.users(id,email,full_name_en,full_name_ar,status) VALUES
+    (owner_a,'tree-owner-a@example.test','Tree owner A','Tree owner A','active'),
+    (owner_b,'tree-owner-b@example.test','Tree owner B','Tree owner B','active'),
+    (shared_user,'tree-shared@example.test','Shared user','Shared user','active');
+
+  INSERT INTO app.family_trees(id,owner_user_id,name_en) VALUES
+    (tree_a,owner_a,'Owner A tree'),
+    (tree_b,owner_b,'Owner B tree');
+  INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES
+    (tree_a,owner_a,'owner'),
+    (tree_b,owner_b,'owner');
+  INSERT INTO app.subfamilies(id,tree_id,name_en) VALUES(branch_root,tree_a,'Shared branch');
+
+  PERFORM app.set_request_context(owner_a,NULL,gen_random_uuid());
+  IF (SELECT count(*) FROM app.family_trees t WHERE t.deleted_at IS NULL AND app.can_view_tree(t.id)) <> 1
+     OR NOT app.can_view_tree(tree_a) OR app.can_view_tree(tree_b) THEN
+    RAISE EXCEPTION 'tree listing exposed a tree belonging to another owner';
+  END IF;
+
+  INSERT INTO app.tree_memberships(tree_id,user_id,role)
+    VALUES(tree_a,shared_user,'viewer');
+  PERFORM app.set_request_context(shared_user,NULL,gen_random_uuid());
+  IF NOT app.can_view_tree(tree_a) THEN
+    RAISE EXCEPTION 'active tree membership did not make the tree visible';
+  END IF;
+  UPDATE app.tree_memberships
+    SET revoked_at=now(),revoked_by=owner_a
+    WHERE tree_id=tree_a AND user_id=shared_user AND role='viewer';
+  IF app.can_view_tree(tree_a) THEN
+    RAISE EXCEPTION 'revoked tree membership still made the tree visible';
+  END IF;
+
+  INSERT INTO app.tree_memberships(tree_id,user_id,role,granted_at,expires_at)
+    VALUES(tree_a,shared_user,'viewer',now()-interval '2 days',now()-interval '1 day');
+  IF app.can_view_tree(tree_a) THEN
+    RAISE EXCEPTION 'expired tree membership still made the tree visible';
+  END IF;
+
+  INSERT INTO app.branch_grants(user_id,tree_id,root_subfamily_id,role,granted_by)
+    VALUES(shared_user,tree_a,branch_root,'branch_viewer',owner_a);
+  IF NOT app.can_view_tree(tree_a) THEN
+    RAISE EXCEPTION 'active branch grant did not make the tree visible';
+  END IF;
+  UPDATE app.branch_grants
+    SET revoked_at=now(),revoked_by=owner_a
+    WHERE tree_id=tree_a AND user_id=shared_user;
+  IF app.can_view_tree(tree_a) THEN
+    RAISE EXCEPTION 'revoked branch grant still made the tree visible';
+  END IF;
+
+  INSERT INTO app.branch_grants(
+    user_id,tree_id,root_subfamily_id,role,granted_by,granted_at,expires_at
+  ) VALUES(
+    shared_user,tree_a,branch_root,'branch_viewer',owner_a,
+    now()-interval '2 days',now()-interval '1 day'
+  );
+  IF app.can_view_tree(tree_a) THEN
+    RAISE EXCEPTION 'expired branch grant still made the tree visible';
+  END IF;
+END $$;
+
 ROLLBACK;
