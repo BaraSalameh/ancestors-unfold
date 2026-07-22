@@ -4,11 +4,13 @@ A bilingual family-tree application built with React, TanStack Start, Nitro, and
 
 ## Local development
 
-1. Copy `.env.example` to `.env` and replace the development database password and email-code secret.
+1. Connect the Vercel project to a Neon development database and rotate any exposed credentials.
 2. Run `npm ci`.
-3. Start PostgreSQL with `npm run db:up`.
-4. Apply migrations with `npm run db:migrate`.
+3. Pull Vercel's Development variables with `vercel env pull .env.local --environment=development` and add the remaining values from `.env.example`.
+4. Apply migrations to Neon with `npm run db:migrate`.
 5. Start the application with `npm run dev`.
+
+Local development uses the pooled `DATABASE_URL`. Migrations prefer `DATABASE_URL_UNPOOLED` so schema changes do not pass through PgBouncer. Both files containing secrets (`.env` and `.env.local`) are git-ignored.
 
 Authentication email is printed to the server terminal by default. See `docs/email-delivery.md` before configuring SMTP or Resend.
 

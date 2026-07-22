@@ -4,7 +4,7 @@ import pg from "pg";
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
 const client = new pg.Client({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: true } : false,
+  ssl: process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: true },
 });
 await client.connect();
 try {

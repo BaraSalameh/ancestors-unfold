@@ -1,11 +1,11 @@
 import { readdir, readFile } from "node:fs/promises";
 import pg from "pg";
 
-const url = process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL is required");
+const url = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
+if (!url) throw new Error("DATABASE_URL_UNPOOLED or DATABASE_URL is required");
 const client = new pg.Client({
   connectionString: url,
-  ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: true } : false,
+  ssl: process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: true },
 });
 await client.connect();
 await client.query(`CREATE TABLE IF NOT EXISTS public.schema_migrations (

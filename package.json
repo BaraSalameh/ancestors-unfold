@@ -4,10 +4,8 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose down",
-    "db:migrate": "node --env-file=.env scripts/migrate.mjs",
-    "db:test": "node --env-file=.env scripts/db-test.mjs",
+    "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
+    "db:test": "node --env-file=.env.local scripts/db-test.mjs",
     "dev": "vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",

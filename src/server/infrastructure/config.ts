@@ -6,7 +6,7 @@ const positiveInteger = (fallback: number) => z.coerce.number().int().positive()
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1).optional(),
-  DATABASE_SSL: booleanString.default("false"),
+  DATABASE_SSL: booleanString.default("true"),
   SESSION_COOKIE_SECURE: booleanString.default("false"),
   SESSION_IDLE_HOURS: positiveInteger(24),
   SESSION_ABSOLUTE_DAYS: positiveInteger(30),

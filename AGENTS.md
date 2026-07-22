@@ -11,7 +11,7 @@ Ancestors Unfold is a React 19 and TanStack Start TypeScript monolith backed by 
 - Typecheck: `npm run typecheck`
 - Lint: `npm run lint`
 - Format check: `npm run format:check`
-- Database: `npm run db:up`, `npm run db:migrate`, `npm run db:test`
+- Database: `npm run db:migrate`, `npm run db:test`
 - Build: `npm run build`
 - Full available validation: `npm run validate`
 

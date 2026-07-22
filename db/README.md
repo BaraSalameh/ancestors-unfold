@@ -7,13 +7,12 @@ This directory is the PostgreSQL contract for the future server. The current bro
 PostgreSQL 16 or newer is recommended. Apply migrations in filename order using a migration-only database role:
 
 ```powershell
-docker compose up -d postgres
 npm run db:migrate
 npm run db:test
 npm run dev
 ```
 
-Copy `.env.example` to `.env` before running these commands. A development `.env` has been created locally and is git-ignored. Production must replace it with the managed PostgreSQL connection string and enable TLS/cookie security.
+Connect Neon to the Vercel project, then pull its Development variables into `.env.local` before running these commands. The application uses the pooled `DATABASE_URL`; migrations prefer the direct `DATABASE_URL_UNPOOLED`. Both must require TLS. Production variables remain separately scoped in Vercel.
 
 Each request must begin a transaction and call `app.set_request_context(user_id, session_id, request_id, ip, user_agent)` with server-validated values. Use `SET LOCAL ROLE` for the restricted application role. Never let clients set PostgreSQL context variables themselves.
 
