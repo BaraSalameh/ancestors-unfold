@@ -128,7 +128,9 @@ function MemberPage() {
               {lang === "ar" ? member.name_en : member.name_ar}
             </p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              <Badge>{t(member.gender)}</Badge>
+              <Badge>
+                {t(member.gender === "unspecified" ? "gender_unspecified" : member.gender)}
+              </Badge>
               <Badge>{member.death_date ? t("deceased") : t("living")}</Badge>
               <Badge>
                 {member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}

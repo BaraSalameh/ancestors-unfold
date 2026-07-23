@@ -6,7 +6,12 @@ import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/tree/$id")({
   validateSearch: (search: Record<string, unknown>) => ({
-    mode: search.mode === "preview" ? ("preview" as const) : ("edit" as const),
+    mode:
+      search.mode === "preview"
+        ? ("preview" as const)
+        : search.mode === "view"
+          ? ("view" as const)
+          : ("edit" as const),
   }),
   head: () => ({ meta: [{ title: "Family Tree | Ancestors Unfold" }] }),
   component: TreePage,
@@ -39,7 +44,7 @@ function TreePage() {
     );
   return (
     <div className="h-[calc(100vh-3.5rem)] w-full">
-      <FamilyTree readOnly={mode === "preview"} />
+      <FamilyTree readOnly={mode !== "edit"} />
     </div>
   );
 }

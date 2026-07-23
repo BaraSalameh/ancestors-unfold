@@ -5,6 +5,8 @@ export type RegistrationInput = {
   password: string;
   fullNameEn: string;
   fullNameAr: string;
+  gender: "male" | "female";
+  invitationToken?: string;
 };
 
 export type AuthSession = {
@@ -25,6 +27,8 @@ export type AuthErrorCode =
   | "RESEND_TOO_SOON"
   | "DELIVERY_FAILED"
   | "SERVICE_UNAVAILABLE"
+  | "INVALID_INVITATION"
+  | "INVITEE_ALREADY_REGISTERED"
   | "STORAGE_ERROR";
 
 export class AuthError extends Error {

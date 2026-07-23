@@ -9,9 +9,11 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const isAuthPage = location.pathname === "/auth";
   const isPasswordReset = location.pathname === "/reset-password";
+  const isInvitation = location.pathname.startsWith("/invitation/");
   const isPublicPreview =
     location.pathname.startsWith("/tree/") && location.search.mode === "preview";
-  const mayView = isAuthPage || isPasswordReset || isPublicPreview || isAuthenticated;
+  const mayView =
+    isAuthPage || isPasswordReset || isInvitation || isPublicPreview || isAuthenticated;
 
   useEffect(() => {
     if (isLoading || mayView) return;

@@ -146,6 +146,7 @@ export function MemberForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="unspecified">{t("gender_unspecified")}</SelectItem>
               <SelectItem value="male">{t("male")}</SelectItem>
               <SelectItem value="female">{t("female")}</SelectItem>
             </SelectContent>

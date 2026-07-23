@@ -17,6 +17,12 @@ import { logError } from "./infrastructure/logger";
 import { jsonResponse as json } from "./http/response";
 import { handleOperationsRequest } from "./modules/operations/handler";
 import {
+  acceptRegistrationInvitation,
+  handleCollaborationRequest,
+  provisionOwnedTree,
+  validatePublicInvitation,
+} from "./modules/collaboration/handler";
+import {
   importSnapshot,
   readPublicSnapshot,
   readSnapshot,
@@ -151,6 +157,8 @@ export async function handleApi(request: Request): Promise<Response | null> {
     assertSameOrigin(request);
     const operationsResponse = await handleOperationsRequest(request);
     if (operationsResponse) return operationsResponse;
+    const publicInvitationResponse = await validatePublicInvitation(request);
+    if (publicInvitationResponse) return publicInvitationResponse;
     if (url.pathname === "/api/auth/google" && request.method === "GET") {
       const { client } = googleConfig(request);
       const state = randomBytes(32).toString("base64url"),
@@ -255,6 +263,20 @@ export async function handleApi(request: Request): Promise<Response | null> {
             [profile.sub, email, JSON.stringify(profile)],
           );
         }
+        const account = (
+          await c.query<{
+            id: string;
+            email: string;
+            full_name_en: string;
+            full_name_ar: string;
+            profile_gender: "male" | "female" | "unspecified";
+          }>(
+            "SELECT id,email,full_name_en,full_name_ar,profile_gender FROM app.users WHERE id=$1",
+            [userId],
+          )
+        ).rows[0];
+        await c.query("SELECT app.set_request_context($1,NULL,$2)", [userId, requestId]);
+        await provisionOwnedTree(c, account);
         await c.query("UPDATE app.users SET last_login_at=now() WHERE id=$1", [userId]);
         const credential = await c.query<{ credential_version: number }>(
           "SELECT credential_version FROM app.password_credentials WHERE user_id=$1",
@@ -283,10 +305,22 @@ export async function handleApi(request: Request): Promise<Response | null> {
       const user = await transaction(null, null, requestId, async (c) => {
         const exists = await c.query("SELECT 1 FROM app.users WHERE email=$1", [email]);
         if (exists.rowCount) throw new Error("EMAIL_EXISTS");
+        let invitationId: string | null = null;
+        if (b.invitationToken) {
+          const invitation = await c.query<{ id: string }>(
+            `SELECT app.registration_invitation_id($1,$2) id`,
+            [sha256(b.invitationToken), email],
+          );
+          if (!invitation.rows[0]?.id) throw new ApiError("INVALID_INVITATION", 409);
+          invitationId = invitation.rows[0].id;
+        }
         const u = await c.query<{ user_id: string }>(
-          `INSERT INTO app.users(email,email_verified_at,full_name_en,full_name_ar,status) VALUES($1,NULL,$2,$3,'pending')
+          `INSERT INTO app.users(
+            email,email_verified_at,full_name_en,full_name_ar,profile_gender,status,
+            registration_invitation_id
+          ) VALUES($1,NULL,$2,$3,$4,'pending',$5)
           RETURNING id AS user_id,email,full_name_en,full_name_ar`,
-          [email, b.fullNameEn.trim(), b.fullNameAr.trim()],
+          [email, b.fullNameEn.trim(), b.fullNameAr.trim(), b.gender, invitationId],
         );
         await c.query("INSERT INTO app.password_credentials(user_id,password_hash) VALUES($1,$2)", [
           u.rows[0].user_id,
@@ -330,10 +364,33 @@ export async function handleApi(request: Request): Promise<Response | null> {
           "UPDATE app.email_verification_tokens SET invalidated_at=now() WHERE user_id=$1 AND id<>$2 AND consumed_at IS NULL AND invalidated_at IS NULL",
           [token.rows[0].user_id, token.rows[0].id],
         );
-        const u = await c.query<Session & { credential_version: number }>(
-          `UPDATE app.users SET email_verified_at=now(),status='active' WHERE id=$1 RETURNING id AS user_id,email,full_name_en,full_name_ar`,
+        const u = await c.query<
+          Session & {
+            credential_version: number;
+            registration_invitation_id: string | null;
+            profile_gender: "male" | "female" | "unspecified";
+          }
+        >(
+          `UPDATE app.users SET email_verified_at=now(),status='active'
+           WHERE id=$1
+           RETURNING id AS user_id,email,full_name_en,full_name_ar,profile_gender,
+             registration_invitation_id`,
           [token.rows[0].user_id],
         );
+        const account = {
+          id: u.rows[0].user_id,
+          email: u.rows[0].email,
+          full_name_en: u.rows[0].full_name_en,
+          full_name_ar: u.rows[0].full_name_ar,
+          profile_gender: u.rows[0].profile_gender,
+        };
+        await c.query("SELECT app.set_request_context($1,NULL,$2)", [
+          token.rows[0].user_id,
+          requestId,
+        ]);
+        if (u.rows[0].registration_invitation_id)
+          await acceptRegistrationInvitation(c, account, u.rows[0].registration_invitation_id);
+        else await provisionOwnedTree(c, account);
         const credential = await c.query<{ credential_version: number }>(
           "SELECT credential_version FROM app.password_credentials WHERE user_id=$1",
           [token.rows[0].user_id],
@@ -471,6 +528,8 @@ export async function handleApi(request: Request): Promise<Response | null> {
       });
     }
     if (!session) return json({ code: "UNAUTHENTICATED" }, 401);
+    const collaborationResponse = await handleCollaborationRequest(request, session, requestId);
+    if (collaborationResponse) return collaborationResponse;
     if (url.pathname === "/api/auth/logout" && request.method === "POST") {
       await query(
         "UPDATE app.sessions SET revoked_at=now(),revocation_reason='logout' WHERE id=$1",
@@ -590,26 +649,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
       return json(r.rows);
     }
     if (url.pathname === "/api/trees" && request.method === "POST") {
-      const b = await parseBody(request, schemas.tree);
-      const r = await transaction(session.user_id, session.id, requestId, async (c) => {
-        const t = await c.query(
-          `INSERT INTO app.family_trees(owner_user_id,name_en,name_ar,description_en,description_ar,color) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-          [
-            session.user_id,
-            b.name_en,
-            b.name_ar || null,
-            b.description_en || null,
-            b.description_ar || null,
-            b.color || null,
-          ],
-        );
-        await c.query(
-          "INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES($1,$2,'owner')",
-          [t.rows[0].id, session.user_id],
-        );
-        return t.rows[0];
-      });
-      return json(r, 201);
+      return json({ code: "SINGLE_TREE_ACCOUNT" }, 405);
     }
     const snapshotMatch = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/snapshot$/);
     if (snapshotMatch && request.method === "GET")
@@ -739,6 +779,12 @@ export async function handleApi(request: Request): Promise<Response | null> {
           [treeMatch[1], session.user_id],
         );
         if (!allowed.rowCount) throw new Error("FORBIDDEN");
+        const contributors = await c.query(
+          `SELECT 1 FROM app.branch_grants WHERE tree_id=$1 AND role='branch_editor'
+           AND revoked_at IS NULL LIMIT 1`,
+          [treeMatch[1]],
+        );
+        if (contributors.rowCount) throw new ApiError("TREE_HAS_CONTRIBUTORS", 409);
         await c.query("UPDATE app.family_trees SET deleted_at=now() WHERE id=$1", [treeMatch[1]]);
       });
       return json({ ok: true });
@@ -777,6 +823,16 @@ export async function handleApi(request: Request): Promise<Response | null> {
       (databaseError?.code === "23505" && databaseError.constraint === "users_email_uq")
     )
       return json({ code: "EMAIL_EXISTS" }, 409);
+    if (
+      databaseError?.code === "23505" &&
+      databaseError.constraint === "branch_grants_one_active_editor_per_branch_uq"
+    )
+      return json({ code: "BRANCH_ALREADY_ASSIGNED" }, 409);
+    if (
+      databaseError?.code === "23505" &&
+      databaseError.constraint === "tree_memberships_one_tree_per_user_uq"
+    )
+      return json({ code: "ONE_TREE_ACCOUNT" }, 409);
     if (message === "MAIL_NOT_CONFIGURED" || message === "MAIL_DELIVERY_FAILED")
       return json({ code: "DELIVERY_FAILED" }, 503);
     if (message === "DATABASE_NOT_CONFIGURED") return json({ code: message }, 503);

@@ -48,6 +48,39 @@ export function passwordResetMail(to: string, token: string): Mail {
   };
 }
 
+export function contributorInvitationMail(
+  to: string,
+  token: string,
+  treeName: string,
+  branchName: string,
+): Mail {
+  const origin = process.env.PUBLIC_ORIGIN;
+  if (!origin) throw new Error("MAIL_NOT_CONFIGURED");
+  const link = `${origin.replace(/\/$/, "")}/invitation/${encodeURIComponent(token)}`;
+  const safeLink = escapeHtml(link);
+  return {
+    to,
+    subject: `Invitation to contribute to ${treeName}`,
+    text: `You were invited to manage the ${branchName} branch of ${treeName}. This invitation is for an unregistered account and can be used once: ${link}`,
+    html: layout(
+      "Family tree contributor invitation",
+      `<p>You were invited to manage the <strong>${escapeHtml(branchName)}</strong> branch of <strong>${escapeHtml(treeName)}</strong>.</p><p><a href="${safeLink}">Accept invitation</a></p>`,
+    ),
+  };
+}
+
+export function ownershipTransferCodeMail(to: string, code: string): Mail {
+  return {
+    to,
+    subject: "Confirm family tree ownership transfer",
+    text: `Use code ${code} to confirm the ownership transfer request. It expires in 15 minutes.`,
+    html: layout(
+      "Confirm ownership transfer",
+      `<p>Use this code to confirm the ownership transfer request:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>It expires in 15 minutes.</p>`,
+    ),
+  };
+}
+
 // Delivery backends intentionally share one boundary so callers receive identical errors.
 // eslint-disable-next-line complexity
 export async function sendMail(mail: Mail): Promise<void> {

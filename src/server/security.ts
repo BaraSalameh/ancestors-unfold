@@ -72,6 +72,8 @@ export const schemas = {
       password: z.string().min(12).max(256),
       fullNameEn: z.string().trim().min(1).max(200),
       fullNameAr: z.string().trim().min(1).max(200),
+      gender: z.enum(["male", "female"]),
+      invitationToken: z.string().min(32).max(512).optional(),
     })
     .strict(),
   login: z
@@ -112,6 +114,93 @@ export const schemas = {
     })
     .strict()
     .refine((v) => !v.canWriteContacts || v.canReadContacts),
+  invitation: z
+    .object({
+      email: z.string().trim().email().max(320),
+      branchId: z.string().uuid(),
+      existingFamilyMemberId: z.string().uuid(),
+    })
+    .strict(),
+  branch: z
+    .object({
+      name_en: z.string().trim().min(1).max(200),
+      name_ar: z.string().trim().max(200).optional(),
+      rootFamilyMemberId: z.string().uuid().nullable().optional(),
+      parentBranchId: z.string().uuid().nullable().optional(),
+      positionLabel: z.string().trim().max(500).optional(),
+      status: z.enum(["active", "inactive"]).default("active"),
+    })
+    .strict(),
+  branchUpdate: z
+    .object({
+      name_en: z.string().trim().min(1).max(200).optional(),
+      name_ar: z.string().trim().max(200).nullable().optional(),
+      positionLabel: z.string().trim().max(500).nullable().optional(),
+      status: z.enum(["active", "inactive"]).optional(),
+    })
+    .strict()
+    .refine((value) => Object.keys(value).length > 0),
+  transferRequest: z
+    .object({
+      proposedOwnerUserId: z.string().uuid(),
+      previousOwnerBranchId: z.string().uuid().nullable().optional(),
+      keepPreviousOwnerReadOnly: z.boolean().default(false),
+      reason: z.string().trim().max(1000).optional(),
+    })
+    .strict()
+    .refine((v) => Boolean(v.previousOwnerBranchId) !== v.keepPreviousOwnerReadOnly),
+  transferCode: z.object({ code: z.string().regex(/^\d{6}$/) }).strict(),
+  complaint: z
+    .object({
+      category: z.enum([
+        "fake_tree",
+        "impersonation",
+        "incorrect_relationship",
+        "privacy",
+        "abusive_content",
+        "spam",
+        "other",
+      ]),
+      description: z.string().trim().min(10).max(5000),
+    })
+    .strict(),
+  complaintReview: z
+    .object({
+      status: z.enum(["resolved", "dismissed"]),
+      resolutionNote: z.string().trim().min(1).max(5000),
+      serious: z.boolean().optional(),
+    })
+    .strict(),
+  changeRequest: z
+    .object({
+      branchId: z.string().uuid(),
+      memberId: z.string().uuid(),
+      proposedChanges: z.record(z.string(), z.unknown()),
+    })
+    .strict(),
+  scopedMember: z
+    .object({
+      memberId: z.string().uuid(),
+      name_en: z.string().trim().max(200).optional(),
+      name_ar: z.string().trim().max(200).optional(),
+      notes: z.string().max(10_000).optional(),
+      birth_date: z.string().date().nullable().optional(),
+      death_date: z.string().date().nullable().optional(),
+    })
+    .strict(),
+  authenticityConfig: z
+    .object({
+      growingContributors: z.number().int().nonnegative(),
+      growingBranches: z.number().int().nonnegative(),
+      backedContributors: z.number().int().nonnegative(),
+      backedBranches: z.number().int().nonnegative(),
+      establishedContributors: z.number().int().nonnegative(),
+      establishedBranches: z.number().int().nonnegative(),
+      establishedMinDays: z.number().int().nonnegative(),
+      recentActivityDays: z.number().int().positive(),
+      seriousComplaintDowngrade: z.boolean(),
+    })
+    .strict(),
   contact: z
     .object({
       contactType: z.enum(["email", "phone", "address", "other"]),
@@ -133,7 +222,7 @@ export const schemas = {
               id: z.string().min(1).max(200),
               name_en: z.string().trim().max(200),
               name_ar: z.string().trim().max(200),
-              gender: z.enum(["male", "female"]),
+              gender: z.enum(["male", "female", "unspecified"]),
               birth_date: z.string().max(50).optional(),
               death_date: z.string().max(50).optional(),
               citizen_status: z.enum(["resident", "non_resident"]).optional(),

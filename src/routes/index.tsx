@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DashboardPage } from "@/features/trees/pages/dashboard-page";
+import { CollaborationDashboard } from "@/features/trees/pages/collaboration-dashboard";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -8,5 +8,5 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Manage and explore your family trees." },
     ],
   }),
-  component: DashboardPage,
+  component: CollaborationDashboard,
 });

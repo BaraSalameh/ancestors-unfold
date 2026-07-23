@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Invitation registration shares the existing verification state machine. */
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -13,6 +14,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const schema = z.object({
@@ -21,10 +29,17 @@ const schema = z.object({
   confirmPassword: z.string().optional(),
   fullNameEn: z.string().optional(),
   fullNameAr: z.string().optional(),
+  gender: z.enum(["male", "female"]).optional(),
 });
 type Values = z.infer<typeof schema>;
 type View = "auth" | "verify" | "forgot" | "forgot-sent";
 type TranslationKey = Parameters<ReturnType<typeof useI18n>["t"]>[0];
+type InvitationPrefill = {
+  invited_email: string;
+  invited_name_en: string;
+  invited_name_ar: string;
+  member_gender: "male" | "female" | "unspecified";
+};
 
 function errorText(error: unknown, t: (key: TranslationKey) => string) {
   if (!(error instanceof AuthError)) return t("auth_error");
@@ -37,6 +52,8 @@ function errorText(error: unknown, t: (key: TranslationKey) => string) {
     INVALID_OR_EXPIRED_CODE: "invalid_or_expired_code",
     RESEND_TOO_SOON: "resend_too_soon",
     DELIVERY_FAILED: "delivery_failed",
+    INVALID_INVITATION: "invalid_invitation",
+    INVITEE_ALREADY_REGISTERED: "existing_user_invitation_error",
     SERVICE_UNAVAILABLE: "auth_service_unavailable",
   };
   return t((map[error.code] ?? "auth_error") as TranslationKey);
@@ -44,20 +61,32 @@ function errorText(error: unknown, t: (key: TranslationKey) => string) {
 
 // Authentication views intentionally share form state while transitions remain contract-compatible.
 // eslint-disable-next-line max-lines-per-function, complexity
-export function AuthPage({ search }: { search: { redirect: string; oauthError?: string } }) {
+export function AuthPage({
+  search,
+}: {
+  search: { redirect: string; oauthError?: string; invitationToken?: string };
+}) {
   const { t } = useI18n(),
     auth = useAuth(),
     navigate = useNavigate(),
-    { redirect, oauthError } = search;
-  const [mode, setMode] = useState<"login" | "register">("login"),
+    { redirect, oauthError, invitationToken } = search;
+  const [mode, setMode] = useState<"login" | "register">(invitationToken ? "register" : "login"),
     [view, setView] = useState<View>("auth"),
     [pendingEmail, setPendingEmail] = useState(""),
     [code, setCode] = useState(""),
     [error, setError] = useState<string | null>(null),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [invitationLoading, setInvitationLoading] = useState(Boolean(invitationToken));
   const form = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "", password: "", confirmPassword: "", fullNameEn: "", fullNameAr: "" },
+    defaultValues: {
+      email: "",
+      password: "",
+      confirmPassword: "",
+      fullNameEn: "",
+      fullNameAr: "",
+      gender: undefined,
+    },
   });
   useEffect(() => {
     if (auth.isAuthenticated) window.location.assign(redirect);
@@ -65,6 +94,35 @@ export function AuthPage({ search }: { search: { redirect: string; oauthError?: 
   useEffect(() => {
     if (oauthError) setError(t("auth_error"));
   }, [oauthError, t]);
+  useEffect(() => {
+    if (!invitationToken) return;
+    let active = true;
+    void fetch(`/api/invitations/${encodeURIComponent(invitationToken)}`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error("INVALID_INVITATION");
+        return response.json() as Promise<InvitationPrefill>;
+      })
+      .then((invitation) => {
+        if (!active) return;
+        form.reset({
+          email: invitation.invited_email,
+          fullNameEn: invitation.invited_name_en,
+          fullNameAr: invitation.invited_name_ar,
+          gender: invitation.member_gender === "unspecified" ? undefined : invitation.member_gender,
+          password: "",
+          confirmPassword: "",
+        });
+      })
+      .catch(() => {
+        if (active) setError(t("invalid_invitation"));
+      })
+      .finally(() => {
+        if (active) setInvitationLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [form, invitationToken, t]);
   const submit = form.handleSubmit(async (v) => {
     setError(null);
     if (!v.password) {
@@ -78,6 +136,10 @@ export function AuthPage({ search }: { search: { redirect: string; oauthError?: 
       }
       if (!v.fullNameAr?.trim()) {
         form.setError("fullNameAr", { message: "full_name_ar_required" });
+        return;
+      }
+      if (!v.gender) {
+        form.setError("gender", { message: "gender_required" });
         return;
       }
       if (v.password.length < 12) {
@@ -96,6 +158,8 @@ export function AuthPage({ search }: { search: { redirect: string; oauthError?: 
           password: v.password,
           fullNameEn: v.fullNameEn!,
           fullNameAr: v.fullNameAr!,
+          gender: v.gender!,
+          invitationToken,
         });
         setPendingEmail(result.email);
         setView("verify");
@@ -258,42 +322,80 @@ export function AuthPage({ search }: { search: { redirect: string; oauthError?: 
                 form.clearErrors();
               }}
             >
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login">{t("login")}</TabsTrigger>
+              <TabsList
+                className={`grid w-full ${invitationToken ? "grid-cols-1" : "grid-cols-2"}`}
+              >
+                {!invitationToken && <TabsTrigger value="login">{t("login")}</TabsTrigger>}
                 <TabsTrigger value="register">{t("register")}</TabsTrigger>
               </TabsList>
               <TabsContent value={mode} className="mt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mb-4 w-full"
-                  onClick={() =>
-                    window.location.assign(
-                      `/api/auth/google?redirect=${encodeURIComponent(redirect)}`,
-                    )
-                  }
-                >
-                  <GoogleMark />
-                  {t("continue_with_google")}
-                </Button>
-                <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="h-px flex-1 bg-border" />
-                  {t("or_continue_with")}
-                  <span className="h-px flex-1 bg-border" />
-                </div>
+                {!invitationToken && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mb-4 w-full"
+                    onClick={() =>
+                      window.location.assign(
+                        `/api/auth/google?redirect=${encodeURIComponent(redirect)}`,
+                      )
+                    }
+                  >
+                    <GoogleMark />
+                    {t("continue_with_google")}
+                  </Button>
+                )}
+                {!invitationToken && (
+                  <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="h-px flex-1 bg-border" />
+                    {t("or_continue_with")}
+                    <span className="h-px flex-1 bg-border" />
+                  </div>
+                )}
                 <form onSubmit={submit} className="space-y-4" noValidate>
                   {mode === "register" && (
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field label={t("full_name_en")} icon={<UserRound />}>
-                        <Input dir="ltr" {...form.register("fullNameEn")} />
-                      </Field>
-                      <Field label={t("full_name_ar")} icon={<UserRound />}>
-                        <Input dir="rtl" {...form.register("fullNameAr")} />
-                      </Field>
-                    </div>
+                    <>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field label={t("full_name_en")} icon={<UserRound />}>
+                          <Input dir="ltr" {...form.register("fullNameEn")} />
+                        </Field>
+                        <Field label={t("full_name_ar")} icon={<UserRound />}>
+                          <Input dir="rtl" {...form.register("fullNameAr")} />
+                        </Field>
+                      </div>
+                      <div>
+                        <Label>{t("gender")}</Label>
+                        <Select
+                          value={form.watch("gender")}
+                          onValueChange={(value) =>
+                            form.setValue("gender", value as "male" | "female", {
+                              shouldValidate: true,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="mt-2">
+                            <SelectValue placeholder={t("gender_required")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="male">{t("male")}</SelectItem>
+                            <SelectItem value="female">{t("female")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {form.formState.errors.gender && (
+                          <p className="mt-2 text-sm text-destructive">
+                            {msg(form.formState.errors.gender.message)}
+                          </p>
+                        )}
+                      </div>
+                    </>
                   )}
                   <Field label={t("email")} icon={<Mail />}>
-                    <Input type="email" autoComplete="email" {...form.register("email")} />
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      readOnly={Boolean(invitationToken)}
+                      aria-readonly={Boolean(invitationToken)}
+                      {...form.register("email")}
+                    />
                   </Field>
                   {form.formState.errors.email && (
                     <p className="text-sm text-destructive">
@@ -346,7 +448,10 @@ export function AuthPage({ search }: { search: { redirect: string; oauthError?: 
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
-                  <Button className="w-full" disabled={form.formState.isSubmitting}>
+                  <Button
+                    className="w-full"
+                    disabled={form.formState.isSubmitting || invitationLoading}
+                  >
                     {form.formState.isSubmitting && (
                       <LoaderCircle className="me-2 h-4 w-4 animate-spin" />
                     )}

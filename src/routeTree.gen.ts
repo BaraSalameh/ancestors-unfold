@@ -18,6 +18,7 @@ import { Route as AddRouteImport } from './routes/add'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TreeIdRouteImport } from './routes/tree.$id'
 import { Route as MemberIdRouteImport } from './routes/member.$id'
+import { Route as InvitationTokenRouteImport } from './routes/invitation.$token'
 import { Route as EditIdRouteImport } from './routes/edit.$id'
 import { Route as TreeIdAddRouteImport } from './routes/tree.$id_.add'
 
@@ -66,6 +67,11 @@ const MemberIdRoute = MemberIdRouteImport.update({
   path: '/member/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvitationTokenRoute = InvitationTokenRouteImport.update({
+  id: '/invitation/$token',
+  path: '/invitation/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EditIdRoute = EditIdRouteImport.update({
   id: '/edit/$id',
   path: '/edit/$id',
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
+  '/invitation/$token': typeof InvitationTokenRoute
   '/member/$id': typeof MemberIdRoute
   '/tree/$id': typeof TreeIdRoute
   '/tree/$id/add': typeof TreeIdAddRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
+  '/invitation/$token': typeof InvitationTokenRoute
   '/member/$id': typeof MemberIdRoute
   '/tree/$id': typeof TreeIdRoute
   '/tree/$id/add': typeof TreeIdAddRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
+  '/invitation/$token': typeof InvitationTokenRoute
   '/member/$id': typeof MemberIdRoute
   '/tree/$id': typeof TreeIdRoute
   '/tree/$id_/add': typeof TreeIdAddRoute
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subfamilies'
     | '/edit/$id'
+    | '/invitation/$token'
     | '/member/$id'
     | '/tree/$id'
     | '/tree/$id/add'
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subfamilies'
     | '/edit/$id'
+    | '/invitation/$token'
     | '/member/$id'
     | '/tree/$id'
     | '/tree/$id/add'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subfamilies'
     | '/edit/$id'
+    | '/invitation/$token'
     | '/member/$id'
     | '/tree/$id'
     | '/tree/$id_/add'
@@ -168,6 +180,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SubfamiliesRoute: typeof SubfamiliesRoute
   EditIdRoute: typeof EditIdRoute
+  InvitationTokenRoute: typeof InvitationTokenRoute
   MemberIdRoute: typeof MemberIdRoute
   TreeIdRoute: typeof TreeIdRoute
   TreeIdAddRoute: typeof TreeIdAddRoute
@@ -238,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MemberIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invitation/$token': {
+      id: '/invitation/$token'
+      path: '/invitation/$token'
+      fullPath: '/invitation/$token'
+      preLoaderRoute: typeof InvitationTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/edit/$id': {
       id: '/edit/$id'
       path: '/edit/$id'
@@ -264,6 +284,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SubfamiliesRoute: SubfamiliesRoute,
   EditIdRoute: EditIdRoute,
+  InvitationTokenRoute: InvitationTokenRoute,
   MemberIdRoute: MemberIdRoute,
   TreeIdRoute: TreeIdRoute,
   TreeIdAddRoute: TreeIdAddRoute,

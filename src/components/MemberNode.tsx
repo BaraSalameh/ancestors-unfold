@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { displayName, ordinal, useI18n } from "@/lib/i18n";
-import type { FamilyMember } from "@/lib/family-types";
+import type { FamilyMember, Gender } from "@/lib/family-types";
 import { wifeColorFor } from "@/lib/wife-colors";
 import { familyStore } from "@/lib/family-store";
 
@@ -27,7 +27,7 @@ export interface MemberNodeData {
   onToggleCollapsed?: (id: string) => void;
 }
 
-const genderTheme = (g: "male" | "female") =>
+const genderTheme = (g: Gender) =>
   g === "male"
     ? {
         ring: "ring-sky-400/60",
@@ -37,14 +37,23 @@ const genderTheme = (g: "male" | "female") =>
         handle: "!bg-sky-500",
         border: "border-sky-200/70 dark:border-sky-500/30",
       }
-    : {
-        ring: "ring-pink-400/60",
-        strip: "from-pink-500 via-rose-400 to-fuchsia-400",
-        chip: "bg-pink-500/10 text-pink-600 dark:text-pink-300",
-        avatarBg: "bg-gradient-to-br from-pink-500 to-fuchsia-400",
-        handle: "!bg-pink-500",
-        border: "border-pink-200/70 dark:border-pink-500/30",
-      };
+    : g === "female"
+      ? {
+          ring: "ring-pink-400/60",
+          strip: "from-pink-500 via-rose-400 to-fuchsia-400",
+          chip: "bg-pink-500/10 text-pink-600 dark:text-pink-300",
+          avatarBg: "bg-gradient-to-br from-pink-500 to-fuchsia-400",
+          handle: "!bg-pink-500",
+          border: "border-pink-200/70 dark:border-pink-500/30",
+        }
+      : {
+          ring: "ring-slate-400/60",
+          strip: "from-slate-500 via-slate-400 to-zinc-400",
+          chip: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
+          avatarBg: "bg-gradient-to-br from-slate-500 to-zinc-400",
+          handle: "!bg-slate-500",
+          border: "border-slate-200/70 dark:border-slate-500/30",
+        };
 
 function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
   const { member, highlighted, onOpen, wives, hasDescendants, collapsed, onToggleCollapsed } = data;

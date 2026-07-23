@@ -14,7 +14,7 @@ import {
 } from "@/features/members/domain/relationships";
 
 let activeTreeId = "al-rashid";
-export type TreeAccessMode = "edit" | "preview";
+export type TreeAccessMode = "edit" | "view" | "preview";
 let activeAccessMode: TreeAccessMode = "edit";
 
 const SAMPLE: FamilyMember[] = (() => {

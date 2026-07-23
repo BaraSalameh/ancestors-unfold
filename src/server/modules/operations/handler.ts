@@ -11,7 +11,7 @@ export async function handleOperationsRequest(request: Request): Promise<Respons
   const result = await query<{ count: string }>(
     "SELECT count(*)::text count FROM public.schema_migrations",
   );
-  const required = Number(process.env.REQUIRED_MIGRATIONS ?? 3);
+  const required = Number(process.env.REQUIRED_MIGRATIONS ?? 12);
   const applied = Number(result.rows[0]?.count ?? 0);
   return applied >= required
     ? jsonResponse({ status: "ready", migrations: applied })
