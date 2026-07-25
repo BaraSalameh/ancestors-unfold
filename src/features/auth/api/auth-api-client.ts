@@ -11,6 +11,8 @@ async function call<T>(path: string, method = "GET", body?: unknown): Promise<T>
   const known = [
     "EMAIL_EXISTS",
     "INVALID_CREDENTIALS",
+    "INCORRECT_PASSWORD",
+    "CONTRIBUTOR_EMAIL_CHANGE_FORBIDDEN",
     "INVALID_INPUT",
     "RATE_LIMITED",
     "EMAIL_NOT_VERIFIED",
@@ -54,6 +56,12 @@ export const apiAuthService: AuthService = {
   },
   confirmEmailChange(code) {
     return call<AuthSession>("/api/profile/email-change/confirm", "POST", { code });
+  },
+  updateProfile(fullNameEn, fullNameAr, gender) {
+    return call<AuthSession>("/api/profile", "PATCH", { fullNameEn, fullNameAr, gender });
+  },
+  deleteContributorAccount(confirmation) {
+    return call<void>("/api/profile", "DELETE", { confirmation });
   },
   login(email: string, password: string) {
     return call<AuthSession>("/api/auth/login", "POST", { email, password });

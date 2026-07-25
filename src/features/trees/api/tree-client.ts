@@ -1,13 +1,14 @@
-import type { FamilyMember, SubFamily } from "@/features/members/domain/types";
+import type { FamilyMember, SubFamily } from "@/features/members/domain";
 import { ApiClientError, apiRequest } from "@/shared/api/client";
 
 export interface TreeSnapshot {
   version: number;
+  access_scope: "tree" | "branch" | "preview";
   members: FamilyMember[];
   subfamilies: SubFamily[];
 }
 
-export interface SaveTreeSnapshot extends Omit<TreeSnapshot, "version"> {
+export interface SaveTreeSnapshot extends Omit<TreeSnapshot, "version" | "access_scope"> {
   batchId: string;
   expectedVersion: number;
 }

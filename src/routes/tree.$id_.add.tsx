@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AddMemberPage, addMemberSearchSchema } from "@/routes/add";
-import { familyStore } from "@/lib/family-store";
+import { AddMemberPage, addMemberSearchSchema } from "@/features/members";
+import { familyStore } from "@/features/trees";
 
 export const Route = createFileRoute("/tree/$id_/add")({
   validateSearch: addMemberSearchSchema,

@@ -86,3 +86,19 @@ export function isDescendant(
   }
   return false;
 }
+
+export function descendantIds(members: FamilyMember[], rootId: string): string[] {
+  const descendants: string[] = [];
+  const visited = new Set<string>();
+  const queue = [rootId];
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    descendants.push(id);
+    for (const member of members) {
+      if (member.father_id === id || member.mother_id === id) queue.push(member.id);
+    }
+  }
+  return descendants;
+}

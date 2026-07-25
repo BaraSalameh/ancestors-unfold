@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CollaborationDashboard } from "@/features/trees/pages/collaboration-dashboard";
+import { CollaborationDashboard } from "@/features/trees";
 
 export const Route = createFileRoute("/")({
   head: () => ({

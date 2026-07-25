@@ -1,43 +1,50 @@
-/* eslint-disable max-lines, max-lines-per-function -- Role-aware dashboard keeps coordinated remote state in one controller. */
-import { Link } from "@tanstack/react-router";
+/* eslint-disable max-lines, max-lines-per-function, complexity -- Role-aware dashboard keeps coordinated remote state in one controller. */
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
-  CalendarDays,
   GitBranch,
   MailPlus,
+  Pencil,
   RotateCw,
+  Share2,
   ShieldCheck,
+  Trash2,
   UserRoundCog,
   Users,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/shared/ui/badge";
+import { Button } from "@/shared/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useI18n } from "@/lib/i18n";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/shared/ui/alert-dialog";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
+import { activityLabel } from "../domain/activity-label";
+import { copyTreePreviewUrl } from "./dashboard-share";
+import { useAuth } from "@/features/auth";
+import { useI18n } from "@/shared/i18n";
+import { canUseOwnerTreeControls } from "./dashboard-owner-controls";
 
 type CurrentTree = {
   id: string;
   name_en: string | null;
   name_ar: string | null;
   created_at: string;
-  role: string;
+  role: "owner" | "contributor";
   affiliation_status: "active" | "read_only" | "removed";
   assigned_branch_id: string | null;
-  is_owner: boolean;
-  can_manage_tree: boolean;
-  can_edit_branch: boolean;
 };
 type Statistics = {
   total_members: number;
@@ -71,6 +78,15 @@ type Invitation = {
   branch_name_ar: string | null;
 };
 type ActivityRow = { action_type: string; target_type: string; created_at: string };
+type DashboardData = {
+  tree: CurrentTree;
+  stats: Statistics;
+  branches: Branch[];
+  invitations: Invitation[];
+  activity: ActivityRow[];
+};
+
+let dashboardCache: DashboardData | undefined;
 
 const getJson = async <T,>(url: string): Promise<T> => {
   const response = await fetch(url, { credentials: "include" });
@@ -80,28 +96,54 @@ const getJson = async <T,>(url: string): Promise<T> => {
 
 export function CollaborationDashboard() {
   const { t, lang } = useI18n();
+  const { deleteContributorAccount } = useAuth();
+  const navigate = useNavigate();
   const [tree, setTree] = useState<CurrentTree>();
   const [stats, setStats] = useState<Statistics>();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [activity, setActivity] = useState<ActivityRow[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [nameEn, setNameEn] = useState("");
+  const [nameAr, setNameAr] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [invitationAction, setInvitationAction] = useState<string>();
   const local = (en?: string | null, ar?: string | null) =>
     lang === "ar" ? ar || en || "" : en || ar || "";
-  const load = async () => {
+  const applyDashboard = (data: DashboardData) => {
+    setTree(data.tree);
+    setStats(data.stats);
+    setBranches(data.branches);
+    setInvitations(data.invitations);
+    setActivity(data.activity);
+  };
+  const load = async (force = false) => {
+    if (!force && dashboardCache) {
+      applyDashboard(dashboardCache);
+      return;
+    }
     const current = await getJson<CurrentTree>("/api/tree/current");
-    setTree(current);
     const [nextStats, nextBranches, nextActivity] = await Promise.all([
       getJson<Statistics>(`/api/trees/${current.id}/statistics`),
       getJson<Branch[]>(`/api/trees/${current.id}/branches`),
-      getJson<ActivityRow[]>(`/api/trees/${current.id}/activity`),
+      getJson<ActivityRow[]>(`/api/trees/${current.id}/activity?limit=1`),
     ]);
-    setStats(nextStats);
-    setBranches(nextBranches);
-    setActivity(nextActivity);
-    if (current.is_owner)
-      setInvitations(await getJson<Invitation[]>(`/api/trees/${current.id}/invitations`));
+    const nextInvitations =
+      current.role === "owner"
+        ? await getJson<Invitation[]>(`/api/trees/${current.id}/invitations`)
+        : [];
+    dashboardCache = {
+      tree: current,
+      stats: nextStats,
+      branches: nextBranches,
+      activity: nextActivity,
+      invitations: nextInvitations,
+    };
+    applyDashboard(dashboardCache);
   };
   useEffect(() => {
     void load().catch(() => setTree(undefined));
@@ -120,9 +162,55 @@ export function CollaborationDashboard() {
         return;
       }
       toast.success(t(action === "cancel" ? "invitation_cancelled" : "invitation_resent"));
-      await load();
+      await load(true);
     } finally {
       setInvitationAction(undefined);
+    }
+  };
+  const openRename = () => {
+    if (!tree || !canUseOwnerTreeControls(tree.role)) return;
+    setNameEn(tree.name_en ?? "");
+    setNameAr(tree.name_ar ?? "");
+    setRenameOpen(true);
+  };
+  const renameTree = async () => {
+    if (!tree || !canUseOwnerTreeControls(tree.role) || !nameEn.trim()) return;
+    setRenaming(true);
+    try {
+      const response = await fetch(`/api/trees/${tree.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name_en: nameEn.trim(), name_ar: nameAr.trim() }),
+      });
+      if (!response.ok) throw new Error("TREE_RENAME_FAILED");
+      setTree({ ...tree, name_en: nameEn.trim(), name_ar: nameAr.trim() || null });
+      setRenameOpen(false);
+      toast.success(t("updated"));
+    } catch {
+      toast.error(t("tree_update_failed"));
+    } finally {
+      setRenaming(false);
+    }
+  };
+  const copyPreview = async () => {
+    if (!tree || !canUseOwnerTreeControls(tree.role)) return;
+    try {
+      await copyTreePreviewUrl(tree.id, window.location.origin, navigator.clipboard);
+      toast.success(t("preview_link_copied"));
+    } catch {
+      toast.error(t("preview_link_copy_failed"));
+    }
+  };
+  const deleteAccount = async () => {
+    if (deleteConfirmation !== "DELETE") return;
+    setDeletingAccount(true);
+    try {
+      await deleteContributorAccount("DELETE");
+      await navigate({ to: "/auth", search: { redirect: "/", oauthError: undefined } });
+    } catch {
+      toast.error(t("account_delete_failed"));
+      setDeletingAccount(false);
     }
   };
   const authenticityLabel = useMemo(() => {
@@ -145,26 +233,45 @@ export function CollaborationDashboard() {
             <div>
               <p className="text-sm font-medium text-primary">{t("family_dashboard")}</p>
               <h1 className="mt-2 text-3xl font-bold">{local(tree.name_en, tree.name_ar)}</h1>
-              {!tree.is_owner && (
+              {tree.role === "contributor" && (
                 <p className="mt-2 text-muted-foreground">{t("contributor_dashboard_intro")}</p>
               )}
             </div>
-            <div className="flex gap-2">
-              {tree.is_owner && (
-                <Button variant="outline" onClick={() => setInviteOpen(true)}>
-                  <MailPlus className="me-2 h-4 w-4" />
-                  {t("invite_contributor")}
-                </Button>
+            <div className="flex flex-wrap justify-end gap-2">
+              {canUseOwnerTreeControls(tree.role) && (
+                <>
+                  <Button variant="outline" onClick={openRename}>
+                    <Pencil className="me-2 h-4 w-4" />
+                    {t("rename")}
+                  </Button>
+                  <Button variant="outline" onClick={() => void copyPreview()}>
+                    <Share2 className="me-2 h-4 w-4" />
+                    {t("copy_preview_link")}
+                  </Button>
+                  <Button variant="outline" onClick={() => setInviteOpen(true)}>
+                    <MailPlus className="me-2 h-4 w-4" />
+                    {t("invite_contributor")}
+                  </Button>
+                </>
               )}
               <Button asChild>
-                <Link
-                  to="/tree/$id"
-                  params={{ id: tree.id }}
-                  search={{ mode: tree.is_owner ? "edit" : "view" }}
-                >
+                <Link to="/tree/$id" params={{ id: tree.id }} search={{ mode: "edit" }}>
                   {t("edit")}
                 </Link>
               </Button>
+              {tree.role === "contributor" && (
+                <>
+                  <Button asChild variant="outline">
+                    <Link to="/tree/$id" params={{ id: tree.id }} search={{ mode: "preview" }}>
+                      {t("preview")}
+                    </Link>
+                  </Button>
+                  <Button variant="destructive" onClick={() => setDeleteAccountOpen(true)}>
+                    <Trash2 className="me-2 h-4 w-4" />
+                    {t("cancel_contribution")}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
           <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -187,10 +294,10 @@ export function CollaborationDashboard() {
         <div className="space-y-5 lg:col-span-2">
           <Card>
             <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>{tree.is_owner ? t("branches") : t("assigned_branch")}</CardTitle>
+              <CardTitle>{tree.role === "owner" ? t("branches") : t("assigned_branch")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {(tree.is_owner ? branches : assigned ? [assigned] : []).map((branch) => (
+              {(tree.role === "owner" ? branches : assigned ? [assigned] : []).map((branch) => (
                 <div
                   key={branch.id}
                   className="flex items-center justify-between rounded-lg border p-4"
@@ -198,9 +305,11 @@ export function CollaborationDashboard() {
                   <div>
                     <p className="font-medium">{local(branch.name_en, branch.name_ar)}</p>
                     <p className="text-sm text-muted-foreground">
-                      {branch.contributor_name_en
-                        ? local(branch.contributor_name_en, branch.contributor_name_ar)
-                        : t("tree_owner")}
+                      {t("branch_responsible", {
+                        name: branch.contributor_name_en
+                          ? local(branch.contributor_name_en, branch.contributor_name_ar)
+                          : local(stats.owner_name_en, stats.owner_name_ar),
+                      })}
                     </p>
                   </div>
                   <Badge variant={branch.status === "active" ? "default" : "secondary"}>
@@ -210,7 +319,7 @@ export function CollaborationDashboard() {
               ))}
             </CardContent>
           </Card>
-          {tree.is_owner && (
+          {tree.role === "owner" && (
             <Card>
               <CardHeader>
                 <CardTitle>{t("pending_invitations")}</CardTitle>
@@ -260,11 +369,19 @@ export function CollaborationDashboard() {
             </Card>
           )}
           <Card>
-            <CardHeader>
-              <CardTitle>{t("activity_history")}</CardTitle>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>{t("latest_activity")}</CardTitle>
+              <Button asChild size="icon" variant="ghost" aria-label={t("view_activity_history")}>
+                <Link to="/activity">
+                  <Activity className="h-4 w-4" />
+                </Link>
+              </Button>
             </CardHeader>
             <CardContent className="space-y-3">
-              {activity.slice(0, 12).map((row, index) => (
+              {activity.length === 0 && (
+                <p className="text-sm text-muted-foreground">{t("no_activity")}</p>
+              )}
+              {activity.slice(0, 1).map((row, index) => (
                 <div
                   key={`${row.created_at}-${index}`}
                   className="flex items-center gap-3 border-b pb-3 last:border-0"
@@ -272,7 +389,7 @@ export function CollaborationDashboard() {
                   <Activity className="h-4 w-4 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
-                      {row.action_type.replaceAll("_", " ")}
+                      {activityLabel(row.action_type, t)}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(row.created_at).toLocaleString()}
@@ -292,7 +409,12 @@ export function CollaborationDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Badge className="mb-4">{authenticityLabel}</Badge>
+              <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {t("current_authenticity_level")}
+                </p>
+                <Badge className="mt-2">{authenticityLabel}</Badge>
+              </div>
               <p className="text-sm text-muted-foreground">{t("family_backed_explanation")}</p>
               <dl className="mt-5 space-y-3 text-sm">
                 <Fact
@@ -307,7 +429,7 @@ export function CollaborationDashboard() {
               </dl>
             </CardContent>
           </Card>
-          {tree.is_owner && (
+          {tree.role === "owner" && (
             <Card>
               <CardHeader>
                 <CardTitle>{t("owner_controls")}</CardTitle>
@@ -328,9 +450,85 @@ export function CollaborationDashboard() {
         onSent={async () => {
           toast.success(t("invitation_sent"));
           setInviteOpen(false);
-          await load();
+          await load(true);
         }}
       />
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("update_family_tree")}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="tree-name-en">{t("family_name_en")}</Label>
+              <Input
+                id="tree-name-en"
+                autoFocus
+                dir="ltr"
+                value={nameEn}
+                onChange={(event) => setNameEn(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tree-name-ar">
+                {t("family_name_ar")}{" "}
+                <span className="font-normal text-muted-foreground">{t("optional")}</span>
+              </Label>
+              <Input
+                id="tree-name-ar"
+                dir="rtl"
+                value={nameAr}
+                onChange={(event) => setNameAr(event.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button disabled={renaming || !nameEn.trim()} onClick={() => void renameTree()}>
+              {t("save_changes")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog
+        open={deleteAccountOpen}
+        onOpenChange={(open) => {
+          setDeleteAccountOpen(open);
+          if (!open) setDeleteConfirmation("");
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("delete_contributor_account")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("delete_contributor_account_desc")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="delete-account-confirmation">{t("type_delete_to_confirm")}</Label>
+            <Input
+              id="delete-account-confirmation"
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              autoComplete="off"
+              dir="ltr"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletingAccount || deleteConfirmation !== "DELETE"}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteAccount();
+              }}
+            >
+              {t("delete_account")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

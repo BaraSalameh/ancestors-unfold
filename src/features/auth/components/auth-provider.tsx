@@ -15,6 +15,12 @@ type AuthContextValue = {
   confirmPasswordReset: (token: string, password: string) => Promise<void>;
   requestEmailChange: (email: string, currentPassword: string) => Promise<void>;
   confirmEmailChange: (code: string) => Promise<void>;
+  updateProfile: (
+    fullNameEn: string,
+    fullNameAr: string,
+    gender: AuthSession["user"]["gender"],
+  ) => Promise<void>;
+  deleteContributorAccount: (confirmation: "DELETE") => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -56,6 +62,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       confirmEmailChange: async (code) => {
         const next = await apiAuthService.confirmEmailChange(code);
         setSession(next);
+      },
+      updateProfile: async (fullNameEn, fullNameAr, gender) => {
+        const next = await apiAuthService.updateProfile(fullNameEn, fullNameAr, gender);
+        setSession(next);
+      },
+      deleteContributorAccount: async (confirmation) => {
+        await apiAuthService.deleteContributorAccount(confirmation);
+        setSession(null);
       },
       logout: async () => {
         await apiAuthService.logout();

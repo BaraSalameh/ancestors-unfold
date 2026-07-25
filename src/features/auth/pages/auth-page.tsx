@@ -1,27 +1,20 @@
 /* eslint-disable max-lines -- Invitation registration shares the existing verification state machine. */
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { LoaderCircle, LockKeyhole, Mail, TreePine, UserRound } from "lucide-react";
 import { z } from "zod";
-import { useAuth } from "@/lib/auth";
-import { AuthError } from "@/lib/auth-service";
-import { useI18n } from "@/lib/i18n";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AuthError } from "../domain/auth-service";
+import { useAuth } from "../components/auth-provider";
+import { useI18n } from "@/shared/i18n";
+import { Alert, AlertDescription } from "@/shared/ui/alert";
+import { Button } from "@/shared/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
+import { Input } from "@/shared/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/shared/ui/input-otp";
+import { Label } from "@/shared/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 
 const schema = z.object({
   email: z.string().trim().min(1, "email_required").email("email_invalid"),
@@ -68,7 +61,6 @@ export function AuthPage({
 }) {
   const { t } = useI18n(),
     auth = useAuth(),
-    navigate = useNavigate(),
     { redirect, oauthError, invitationToken } = search;
   const [mode, setMode] = useState<"login" | "register">(invitationToken ? "register" : "login"),
     [view, setView] = useState<View>("auth"),

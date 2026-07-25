@@ -102,3 +102,37 @@ describe("contributor invitation input", () => {
     ).toThrow();
   });
 });
+
+describe("profile mutation input", () => {
+  it("accepts supported account genders and rejects unknown values", () => {
+    expect(
+      schemas.profileNames.parse({
+        fullNameEn: "Anas",
+        fullNameAr: "Anas",
+        gender: "male",
+      }).gender,
+    ).toBe("male");
+    expect(() =>
+      schemas.profileNames.parse({
+        fullNameEn: "Anas",
+        fullNameAr: "Anas",
+        gender: "invalid",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts bilingual profile names and rejects blank names", () => {
+    expect(schemas.profileNames.parse({ fullNameEn: "Anas", fullNameAr: "أنس" })).toEqual({
+      fullNameEn: "Anas",
+      fullNameAr: "أنس",
+    });
+    expect(() => schemas.profileNames.parse({ fullNameEn: "", fullNameAr: "أنس" })).toThrow();
+  });
+
+  it("requires the exact destructive account confirmation", () => {
+    expect(schemas.deleteContributorAccount.parse({ confirmation: "DELETE" })).toEqual({
+      confirmation: "DELETE",
+    });
+    expect(() => schemas.deleteContributorAccount.parse({ confirmation: "delete" })).toThrow();
+  });
+});

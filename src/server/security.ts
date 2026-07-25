@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z, type ZodType } from "zod";
-import { query } from "./infrastructure/database";
-import { serverConfig } from "./infrastructure/config";
+import { query } from "@/shared/server/database";
+import { serverConfig } from "@/shared/server/config";
 
 export class ApiError extends Error {
   constructor(
@@ -90,6 +90,14 @@ export const schemas = {
     })
     .strict(),
   emailChangeConfirm: z.object({ code: z.string().regex(/^\d{6}$/) }).strict(),
+  profileNames: z
+    .object({
+      fullNameEn: z.string().trim().min(1).max(200),
+      fullNameAr: z.string().trim().min(1).max(200),
+      gender: z.enum(["male", "female", "unspecified"]).optional(),
+    })
+    .strict(),
+  deleteContributorAccount: z.object({ confirmation: z.literal("DELETE") }).strict(),
   resetRequest: z.object({ email: z.string().trim().email().max(320) }).strict(),
   resetConfirm: z
     .object({ token: z.string().min(32).max(512), password: z.string().min(12).max(256) })

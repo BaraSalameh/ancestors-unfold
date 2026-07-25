@@ -47,7 +47,9 @@ BEGIN
   VALUES (owner_id,'owner@example.test','Owner','المالك','active'),
          (editor_id,'editor@example.test','Editor','المحرر','active');
   INSERT INTO app.family_trees(id,owner_user_id,name_en) VALUES(v_tree_id,owner_id,'Test tree');
-  INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES(v_tree_id,owner_id,'owner');
+  INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES
+    (v_tree_id,owner_id,'owner'),
+    (v_tree_id,editor_id,'viewer');
   INSERT INTO app.family_members(id,tree_id,name_en,name_ar,gender) VALUES
     (father_id,v_tree_id,'Father','الأب','male'),(mother_id,v_tree_id,'Mother','الأم','female'),
     (child_id,v_tree_id,'Child','الطفل','male');
@@ -175,6 +177,10 @@ BEGIN
   END IF;
 END $$;
 
+-- Flush prior deferred events and model an already-committed contributor before cancellation.
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+
 -- Collaboration invariants: one affiliation, one linked account card, and one contributor per branch.
 DO $$
 DECLARE
@@ -218,6 +224,84 @@ BEGIN
     RAISE EXCEPTION 'one active contributor per branch constraint was not enforced';
   EXCEPTION WHEN unique_violation THEN NULL;
   END;
+
+END $$;
+
+SET CONSTRAINTS ALL IMMEDIATE;
+
+DO $$
+DECLARE
+  contributor_id uuid;
+BEGIN
+  SELECT id INTO STRICT contributor_id
+  FROM app.users WHERE email='collab-contributor@example.test';
+  UPDATE app.family_members SET linked_user_id=NULL WHERE linked_user_id=contributor_id;
+  UPDATE app.branch_grants
+    SET revoked_at=now(),revoked_by=contributor_id
+    WHERE user_id=contributor_id AND revoked_at IS NULL;
+  UPDATE app.tree_memberships
+    SET family_member_id=NULL,affiliation_status='removed',
+        revoked_at=now(),revoked_by=contributor_id
+    WHERE user_id=contributor_id AND role<>'owner' AND revoked_at IS NULL;
+  IF EXISTS (
+    SELECT 1 FROM app.branch_grants
+    WHERE user_id=contributor_id AND revoked_at IS NULL
+  ) OR EXISTS (
+    SELECT 1 FROM app.tree_memberships
+    WHERE user_id=contributor_id AND revoked_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'contributor cancellation did not revoke active access';
+  END IF;
+END $$;
+
+SET CONSTRAINTS ALL DEFERRED;
+
+-- Contributor member permissions: full-tree viewing, branch edits, and creator-owned drafts.
+DO $$
+DECLARE
+  owner_id uuid := gen_random_uuid();
+  contributor_id uuid := gen_random_uuid();
+  other_contributor_id uuid := gen_random_uuid();
+  tree_id uuid := gen_random_uuid();
+  branch_id uuid := gen_random_uuid();
+  branch_member_id uuid := gen_random_uuid();
+  outside_member_id uuid := gen_random_uuid();
+  own_draft_id uuid := gen_random_uuid();
+  other_draft_id uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO app.users(id,email,full_name_en,full_name_ar,status) VALUES
+    (owner_id,'permission-owner@example.test','Owner','Owner','active'),
+    (contributor_id,'permission-contributor@example.test','Contributor','Contributor','active'),
+    (other_contributor_id,'permission-other@example.test','Other contributor','Other contributor','active');
+  INSERT INTO app.family_trees(id,owner_user_id,name_en)
+    VALUES(tree_id,owner_id,'Permission tree');
+  INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES
+    (tree_id,owner_id,'owner'),
+    (tree_id,contributor_id,'viewer');
+  INSERT INTO app.subfamilies(id,tree_id,name_en) VALUES(branch_id,tree_id,'Assigned branch');
+  INSERT INTO app.branch_grants(user_id,tree_id,root_subfamily_id,role,granted_by)
+    VALUES(contributor_id,tree_id,branch_id,'branch_editor',owner_id);
+  INSERT INTO app.family_members(id,tree_id,name_en,gender,subfamily_id,created_by) VALUES
+    (branch_member_id,tree_id,'Branch member','unspecified',branch_id,owner_id),
+    (outside_member_id,tree_id,'Outside member','unspecified',NULL,owner_id),
+    (own_draft_id,tree_id,'Own draft','unspecified',NULL,contributor_id),
+    (other_draft_id,tree_id,'Other draft','unspecified',NULL,other_contributor_id);
+
+  PERFORM app.set_request_context(contributor_id,NULL,gen_random_uuid());
+  IF NOT app.can_view_tree(tree_id) THEN
+    RAISE EXCEPTION 'contributor could not view the assigned tree';
+  END IF;
+  IF NOT app.can_edit_member(tree_id,branch_member_id) THEN
+    RAISE EXCEPTION 'contributor could not edit an assigned branch member';
+  END IF;
+  IF NOT app.can_edit_member(tree_id,own_draft_id) THEN
+    RAISE EXCEPTION 'contributor could not edit their own unattached draft';
+  END IF;
+  IF app.can_edit_member(tree_id,outside_member_id)
+     OR app.can_edit_member(tree_id,other_draft_id) THEN
+    RAISE EXCEPTION 'contributor could edit a protected member';
+  END IF;
+  PERFORM app.set_request_context(NULL,NULL,gen_random_uuid());
 END $$;
 
 ROLLBACK;

@@ -1,16 +1,8 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useMemo, useState } from "react";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -18,7 +10,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
+} from "@/shared/ui/command";
 import {
   Search,
   Plus,
@@ -32,16 +24,10 @@ import {
   ChevronsUpDown,
   Check,
 } from "lucide-react";
-import { useI18n, displayName, ordinal, type Lang } from "@/lib/i18n";
-import { familyStore } from "@/lib/family-store";
-import type {
-  CitizenStatus,
-  ExternalChild,
-  FamilyMember,
-  Gender,
-  MemberInput,
-} from "@/lib/family-types";
-import { wifeColorFor } from "@/lib/wife-colors";
+import { useI18n, displayName, ordinal, type Lang } from "@/shared/i18n";
+import { familyStore } from "@/features/trees/client";
+import { wifeColorFor } from "@/features/trees/domain";
+import type { ExternalChild, FamilyMember } from "../domain/types";
 
 export function RelationSearch({
   label,

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AuthPage } from "@/features/auth/pages/auth-page";
+import { AuthPage } from "@/features/auth";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (s: Record<string, unknown>) => {
