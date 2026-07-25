@@ -1033,55 +1033,57 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
             </div>
           )}
         </div>
-        <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
-          <button
-            type="button"
-            onClick={() => toggleWidget("generation")}
-            className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.generation ? "" : "mb-2"}`}
-          >
-            <span className="flex items-center gap-2">
-              <CalendarRange className="h-4 w-4 text-primary" />
-              {t("generation")}
-            </span>
-            <ChevronDown
-              className={`h-4 w-4 transition-transform ${collapsedWidgets.generation ? "-rotate-90" : ""}`}
-            />
-          </button>
-          {!collapsedWidgets.generation && (
-            <>
-              <div className="flex gap-1">
-                <Input
-                  value={generationYear}
-                  onChange={(event) =>
-                    setGenerationYear(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))
-                  }
-                  onKeyDown={(event) => event.key === "Enter" && scrollToGeneration()}
-                  inputMode="numeric"
-                  placeholder="1975"
-                  className="h-8 text-xs"
-                  disabled={generations.length === 0}
-                />
-                <Button
-                  size="sm"
-                  onClick={scrollToGeneration}
-                  disabled={generations.length === 0 || generationYear.length !== 4}
-                >
-                  {t("go")}
-                </Button>
-              </div>
-              {activeGeneration && (
-                <div className="mt-2 text-[10px] text-muted-foreground">
-                  {activeGeneration.start}
-                  {"\u2013"}
-                  {activeGeneration.end}
+        {previewType === "chronological" && (
+          <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
+            <button
+              type="button"
+              onClick={() => toggleWidget("generation")}
+              className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.generation ? "" : "mb-2"}`}
+            >
+              <span className="flex items-center gap-2">
+                <CalendarRange className="h-4 w-4 text-primary" />
+                {t("generation")}
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${collapsedWidgets.generation ? "-rotate-90" : ""}`}
+              />
+            </button>
+            {!collapsedWidgets.generation && (
+              <>
+                <div className="flex gap-1">
+                  <Input
+                    value={generationYear}
+                    onChange={(event) =>
+                      setGenerationYear(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))
+                    }
+                    onKeyDown={(event) => event.key === "Enter" && scrollToGeneration()}
+                    inputMode="numeric"
+                    placeholder="1975"
+                    className="h-8 text-xs"
+                    disabled={generations.length === 0}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={scrollToGeneration}
+                    disabled={generations.length === 0 || generationYear.length !== 4}
+                  >
+                    {t("go")}
+                  </Button>
                 </div>
-              )}
-              {generations.length === 0 && (
-                <p className="mt-2 text-muted-foreground">{t("no_generation_data")}</p>
-              )}
-            </>
-          )}
-        </div>
+                {activeGeneration && (
+                  <div className="mt-2 text-[10px] text-muted-foreground">
+                    {activeGeneration.start}
+                    {"\u2013"}
+                    {activeGeneration.end}
+                  </div>
+                )}
+                {generations.length === 0 && (
+                  <p className="mt-2 text-muted-foreground">{t("no_generation_data")}</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
         {canManageSubfamilies && (
           <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
             <button

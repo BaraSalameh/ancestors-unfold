@@ -235,6 +235,15 @@ DECLARE
 BEGIN
   SELECT id INTO STRICT contributor_id
   FROM app.users WHERE email='collab-contributor@example.test';
+  INSERT INTO app.tree_activity(
+    tree_id,branch_id,actor_user_id,action_type,target_type,target_id
+  )
+  SELECT m.tree_id,g.root_subfamily_id,contributor_id,
+    'contributor_account_deleted','user',contributor_id
+  FROM app.tree_memberships m
+  LEFT JOIN app.branch_grants g
+    ON g.tree_id=m.tree_id AND g.user_id=m.user_id AND g.revoked_at IS NULL
+  WHERE m.user_id=contributor_id AND m.role<>'owner' AND m.revoked_at IS NULL;
   UPDATE app.family_members SET linked_user_id=NULL WHERE linked_user_id=contributor_id;
   UPDATE app.branch_grants
     SET revoked_at=now(),revoked_by=contributor_id
@@ -251,6 +260,13 @@ BEGIN
     WHERE user_id=contributor_id AND revoked_at IS NULL
   ) THEN
     RAISE EXCEPTION 'contributor cancellation did not revoke active access';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM app.tree_activity
+    WHERE actor_user_id=contributor_id
+      AND action_type='contributor_account_deleted'
+  ) THEN
+    RAISE EXCEPTION 'contributor cancellation activity was not recorded';
   END IF;
 END $$;
 

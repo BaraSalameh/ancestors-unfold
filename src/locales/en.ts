@@ -291,6 +291,7 @@ export const en = {
   activity_invitation_resent: "Contributor invitation resent",
   activity_invitation_cancelled: "Contributor invitation cancelled",
   activity_invitation_accepted: "Contributor invitation accepted",
+  activity_contributor_account_deleted: "Contributor cancelled their contribution",
   current_authenticity_level: "Current authenticity level",
   assigned_branch: "Assigned branch",
   assigned_subfamily_desc: "View and filter your assigned family branch.",

@@ -9,6 +9,7 @@ const activityLabels: Record<string, TranslationKey> = {
   invitation_resent: "activity_invitation_resent",
   invitation_cancelled: "activity_invitation_cancelled",
   invitation_accepted: "activity_invitation_accepted",
+  contributor_account_deleted: "activity_contributor_account_deleted",
 };
 
 export function activityLabel(actionType: string, t: Translate): string {

@@ -289,6 +289,7 @@ export const ar = {
   activity_invitation_resent: "تمت إعادة إرسال دعوة المساهم",
   activity_invitation_cancelled: "تم إلغاء دعوة المساهم",
   activity_invitation_accepted: "تم قبول دعوة المساهم",
+  activity_contributor_account_deleted: "ألغى المساهم مساهمته",
   current_authenticity_level: "مستوى الموثوقية الحالي",
   assigned_branch: "الفرع المعيّن",
   assigned_subfamily_desc: "اعرض فرع العائلة المعيّن لك وقم بتصفيته.",

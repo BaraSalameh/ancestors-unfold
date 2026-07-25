@@ -597,6 +597,19 @@ export async function handleApi(request: Request): Promise<Response | null> {
         if (!canDeleteContributorAccount(membership.rows.map(({ role }) => role)))
           throw new ApiError("OWNER_ACCOUNT_DELETE_FORBIDDEN", 403);
         await client.query(
+          `INSERT INTO app.tree_activity(
+             tree_id,branch_id,actor_user_id,action_type,target_type,target_id
+           )
+           SELECT m.tree_id,g.root_subfamily_id,$1,
+             'contributor_account_deleted','user',$1
+           FROM app.tree_memberships m
+           LEFT JOIN app.branch_grants g
+             ON g.tree_id=m.tree_id AND g.user_id=m.user_id
+             AND g.revoked_at IS NULL
+           WHERE m.user_id=$1 AND m.role<>'owner' AND m.revoked_at IS NULL`,
+          [session.user_id],
+        );
+        await client.query(
           "UPDATE app.family_members SET linked_user_id=NULL WHERE linked_user_id=$1",
           [session.user_id],
         );

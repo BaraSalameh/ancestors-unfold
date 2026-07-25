@@ -148,6 +148,7 @@ export function SubfamilyPanel({
 
   const toggleSelection = (subfamilyId: string) => {
     if (selectedSubfamilyId === subfamilyId) {
+      if (allowedSubfamilyId) return;
       onSelectSubfamily(null);
       onToggleFilter(false);
       return;
@@ -188,10 +189,12 @@ export function SubfamilyPanel({
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <button onClick={() => onSelectSubfamily(null)} className="text-xs hover:underline">
-            <ArrowLeft className="me-1 inline h-3 w-3 rtl:rotate-180" />
-            {t("back")}
-          </button>
+          {!allowedSubfamilyId && (
+            <button onClick={() => onSelectSubfamily(null)} className="text-xs hover:underline">
+              <ArrowLeft className="me-1 inline h-3 w-3 rtl:rotate-180" />
+              {t("back")}
+            </button>
+          )}
           {!readOnly && (
             <div className="flex items-center gap-1">
               <button
