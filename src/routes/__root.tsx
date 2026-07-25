@@ -10,12 +10,12 @@ import {
 import type { ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { I18nProvider } from "@/lib/i18n";
-import { ThemeProvider } from "@/lib/theme";
-import { Header } from "@/components/Header";
-import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider } from "@/lib/auth";
-import { AuthGuard } from "@/components/AuthGuard";
+import { I18nProvider } from "@/shared/i18n";
+import { ThemeProvider } from "@/app/providers/theme-provider";
+import { Header } from "@/app/components/header";
+import { Toaster } from "@/shared/ui/sonner";
+import { AuthProvider } from "@/features/auth";
+import { AuthGuard } from "@/app/components/auth-guard";
 
 function NotFoundComponent() {
   return (

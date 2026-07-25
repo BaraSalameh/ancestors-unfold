@@ -7,7 +7,7 @@ import {
   type TranslationValues,
 } from "@/locales";
 
-export type { Lang, TranslationKey, TranslationValues } from "@/locales";
+export type { Lang } from "@/locales";
 
 export function ordinal(n: number, lang: Lang): string {
   if (lang === "ar") {

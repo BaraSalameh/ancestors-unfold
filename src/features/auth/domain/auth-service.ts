@@ -1,22 +1,31 @@
-export type AuthUser = { id: string; email: string; fullNameEn: string; fullNameAr: string };
+export type AuthUser = {
+  id: string;
+  email: string;
+  fullNameEn: string;
+  fullNameAr: string;
+  gender: "male" | "female" | "unspecified";
+};
 
 export type RegistrationInput = {
   email: string;
   password: string;
   fullNameEn: string;
   fullNameAr: string;
+  gender: "male" | "female";
+  invitationToken?: string;
 };
 
 export type AuthSession = {
   user: AuthUser;
   createdAt: string;
-  showGoogleWelcome?: boolean;
 };
 export type RegistrationResult = { verificationRequired: true; email: string };
 
-export type AuthErrorCode =
+type AuthErrorCode =
   | "EMAIL_EXISTS"
   | "INVALID_CREDENTIALS"
+  | "INCORRECT_PASSWORD"
+  | "CONTRIBUTOR_EMAIL_CHANGE_FORBIDDEN"
   | "INVALID_INPUT"
   | "RATE_LIMITED"
   | "EMAIL_NOT_VERIFIED"
@@ -25,6 +34,8 @@ export type AuthErrorCode =
   | "RESEND_TOO_SOON"
   | "DELIVERY_FAILED"
   | "SERVICE_UNAVAILABLE"
+  | "INVALID_INVITATION"
+  | "INVITEE_ALREADY_REGISTERED"
   | "STORAGE_ERROR";
 
 export class AuthError extends Error {
@@ -42,6 +53,12 @@ export interface AuthService {
   confirmPasswordReset(token: string, password: string): Promise<void>;
   requestEmailChange(email: string, currentPassword: string): Promise<void>;
   confirmEmailChange(code: string): Promise<AuthSession>;
+  updateProfile(
+    fullNameEn: string,
+    fullNameAr: string,
+    gender: AuthUser["gender"],
+  ): Promise<AuthSession>;
+  deleteContributorAccount(confirmation: "DELETE"): Promise<void>;
   login(email: string, password: string): Promise<AuthSession>;
   logout(): Promise<void>;
   getSession(): Promise<AuthSession | null>;

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isDescendant, linkSpouses, removeMember, toggleDivorce } from "./relationships";
+import {
+  descendantIds,
+  isDescendant,
+  linkSpouses,
+  removeMember,
+  toggleDivorce,
+} from "./relationships";
 import type { FamilyMember } from "./types";
 
 const member = (id: string, gender: "male" | "female", patch: Partial<FamilyMember> = {}) => ({
@@ -66,5 +72,15 @@ describe("family relationships", () => {
     ];
     expect(isDescendant(members, "a", "c")).toBe(true);
     expect(isDescendant(members, "a", "missing")).toBe(false);
+  });
+
+  it("collects a detached member and the complete descendant subtree once", () => {
+    const members = [
+      member("root", "male"),
+      member("child", "female", { father_id: "root" }),
+      member("grandchild", "male", { mother_id: "child" }),
+      member("unrelated", "female"),
+    ];
+    expect(descendantIds(members, "root")).toEqual(["root", "child", "grandchild"]);
   });
 });

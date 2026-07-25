@@ -1,5 +1,5 @@
 import type { Edge, Node } from "reactflow";
-import type { MemberNodeData } from "@/components/MemberNode";
+import type { MemberNodeData } from "../ui/member-node";
 
 const NODE_W = 260;
 const NODE_H = 130;

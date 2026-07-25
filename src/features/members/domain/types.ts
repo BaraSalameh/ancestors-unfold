@@ -1,4 +1,4 @@
-export type Gender = "male" | "female";
+export type Gender = "male" | "female" | "unspecified";
 export type CitizenStatus = "resident" | "non_resident";
 
 export interface ExternalChild {

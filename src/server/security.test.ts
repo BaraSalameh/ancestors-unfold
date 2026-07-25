@@ -78,3 +78,61 @@ describe("HTTP security checks", () => {
     expect(() => assertSameOrigin(request)).toThrowError("CSRF_REJECTED");
   });
 });
+
+describe("contributor invitation input", () => {
+  const invitation = {
+    email: "new.contributor@example.test",
+    branchId: "ca1ba620-7aa9-4e50-9e30-bd34975fcca4",
+    existingFamilyMemberId: "f4c7ec45-249f-45ef-a0fd-4fc0e4e9cc4c",
+  };
+
+  it("accepts only email, branch, and an existing member card", () => {
+    expect(schemas.invitation.parse(invitation)).toEqual(invitation);
+  });
+
+  it.each(["email", "branchId", "existingFamilyMemberId"] as const)("requires %s", (field) => {
+    const input: Partial<typeof invitation> = { ...invitation };
+    delete input[field];
+    expect(() => schemas.invitation.parse(input)).toThrow();
+  });
+
+  it("rejects obsolete invitee and position fields", () => {
+    expect(() =>
+      schemas.invitation.parse({ ...invitation, positionLabel: "Son of branch root" }),
+    ).toThrow();
+  });
+});
+
+describe("profile mutation input", () => {
+  it("accepts supported account genders and rejects unknown values", () => {
+    expect(
+      schemas.profileNames.parse({
+        fullNameEn: "Anas",
+        fullNameAr: "Anas",
+        gender: "male",
+      }).gender,
+    ).toBe("male");
+    expect(() =>
+      schemas.profileNames.parse({
+        fullNameEn: "Anas",
+        fullNameAr: "Anas",
+        gender: "invalid",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts bilingual profile names and rejects blank names", () => {
+    expect(schemas.profileNames.parse({ fullNameEn: "Anas", fullNameAr: "أنس" })).toEqual({
+      fullNameEn: "Anas",
+      fullNameAr: "أنس",
+    });
+    expect(() => schemas.profileNames.parse({ fullNameEn: "", fullNameAr: "أنس" })).toThrow();
+  });
+
+  it("requires the exact destructive account confirmation", () => {
+    expect(schemas.deleteContributorAccount.parse({ confirmation: "DELETE" })).toEqual({
+      confirmation: "DELETE",
+    });
+    expect(() => schemas.deleteContributorAccount.parse({ confirmation: "delete" })).toThrow();
+  });
+});

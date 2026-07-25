@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { ArrowLeft, Pencil, Trash2, X } from "lucide-react";
-import { familyStore, useFamily } from "@/lib/family-store";
-import { displayName, useI18n } from "@/lib/i18n";
-import type { SubFamily } from "@/lib/family-types";
+import { familyStore, useFamily } from "@/features/trees";
+import type { SubFamily } from "@/features/members";
+import { displayName, useI18n } from "@/shared/i18n";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,7 +12,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@/shared/ui/alert-dialog";
 
 // This controller preserves the intertwined home/manage modes while its data operations are extracted.
 /* eslint-disable max-lines */
@@ -20,10 +20,12 @@ import {
 export function SubfamilyPanel({
   selectedSubfamilyId,
   onSelectSubfamily,
-  filterEnabled,
+  filterEnabled: _filterEnabled,
   onToggleFilter,
   mode = "manage",
   hideHeading = false,
+  readOnly = false,
+  allowedSubfamilyId,
 }: {
   selectedSubfamilyId: string | null;
   onSelectSubfamily: (id: string | null) => void;
@@ -31,6 +33,8 @@ export function SubfamilyPanel({
   onToggleFilter: (enabled: boolean) => void;
   mode?: "home" | "manage";
   hideHeading?: boolean;
+  readOnly?: boolean;
+  allowedSubfamilyId?: string;
 }) {
   const { t, lang } = useI18n();
   const members = useFamily();
@@ -44,7 +48,9 @@ export function SubfamilyPanel({
   const [attachmentType, setAttachmentType] = useState("Document");
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const subfamilies = familyStore.getSubfamilies();
+  const subfamilies = familyStore
+    .getSubfamilies()
+    .filter((subfamily) => !allowedSubfamilyId || subfamily.id === allowedSubfamilyId);
   const maleMembers = members.filter((member) => member.gender === "male");
 
   const selected = selectedSubfamilyId
@@ -142,6 +148,7 @@ export function SubfamilyPanel({
 
   const toggleSelection = (subfamilyId: string) => {
     if (selectedSubfamilyId === subfamilyId) {
+      if (allowedSubfamilyId) return;
       onSelectSubfamily(null);
       onToggleFilter(false);
       return;
@@ -182,28 +189,32 @@ export function SubfamilyPanel({
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <button onClick={() => onSelectSubfamily(null)} className="text-xs hover:underline">
-            <ArrowLeft className="me-1 inline h-3 w-3 rtl:rotate-180" />
-            {t("back")}
-          </button>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => startEdit(selected)}
-              className="rounded border p-1 text-muted-foreground hover:bg-accent"
-              title={t("edit")}
-            >
-              <Pencil className="h-3 w-3" />
+          {!allowedSubfamilyId && (
+            <button onClick={() => onSelectSubfamily(null)} className="text-xs hover:underline">
+              <ArrowLeft className="me-1 inline h-3 w-3 rtl:rotate-180" />
+              {t("back")}
             </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDeleteOpen(true)}
-              className="rounded border p-1 text-muted-foreground hover:bg-accent"
-              title={t("delete")}
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
+          )}
+          {!readOnly && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => startEdit(selected)}
+                className="rounded border p-1 text-muted-foreground hover:bg-accent"
+                title={t("edit")}
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteOpen(true)}
+                className="rounded border p-1 text-muted-foreground hover:bg-accent"
+                title={t("delete")}
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          )}
         </div>
 
         {editingId === selected.id ? (
@@ -290,71 +301,73 @@ export function SubfamilyPanel({
               ))}
             </div>
 
-            <div className="space-y-2 rounded border bg-background/50 p-2">
-              <div className="text-[10px] font-semibold text-card-foreground">
-                {t("add_attachment")}
-              </div>
-              <div className="flex flex-col gap-1">
-                <input
-                  type="text"
-                  value={attachmentName}
-                  onChange={(event) => setAttachmentName(event.target.value)}
-                  placeholder={t("attachment_name")}
-                  className="w-full rounded border bg-background px-2 py-1 text-[10px]"
-                />
-                <input
-                  type="text"
-                  value={attachmentType}
-                  onChange={(event) => setAttachmentType(event.target.value)}
-                  placeholder={t("attachment_type")}
-                  className="w-full rounded border bg-background px-2 py-1 text-[10px]"
-                />
-                <input
-                  type="text"
-                  value={attachmentUrl}
-                  onChange={(event) => setAttachmentUrl(event.target.value)}
-                  placeholder={t("attachment_url")}
-                  className="w-full rounded border bg-background px-2 py-1 text-[10px]"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddAttachment}
-                  disabled={!attachmentName.trim() || !attachmentUrl.trim()}
-                  className="rounded bg-primary px-2 py-1 text-[10px] text-primary-foreground disabled:opacity-50"
-                >
+            {!readOnly && (
+              <div className="space-y-2 rounded border bg-background/50 p-2">
+                <div className="text-[10px] font-semibold text-card-foreground">
                   {t("add_attachment")}
-                </button>
-              </div>
-              {(selected.attachments?.length ?? 0) === 0 ? (
-                <p className="text-[10px] text-muted-foreground">{t("no_attachments")}</p>
-              ) : (
-                <div className="flex flex-col gap-1">
-                  {(selected.attachments ?? []).map((attachment) => (
-                    <div
-                      key={attachment.id}
-                      className="flex items-center justify-between gap-2 rounded border bg-background px-2 py-1"
-                    >
-                      <a
-                        href={attachment.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[10px] text-primary underline-offset-2 hover:underline"
-                      >
-                        {attachment.name} ({attachment.type})
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAttachment(attachment.id)}
-                        className="text-[10px] text-muted-foreground hover:text-destructive"
-                        title={t("delete")}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
                 </div>
-              )}
-            </div>
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="text"
+                    value={attachmentName}
+                    onChange={(event) => setAttachmentName(event.target.value)}
+                    placeholder={t("attachment_name")}
+                    className="w-full rounded border bg-background px-2 py-1 text-[10px]"
+                  />
+                  <input
+                    type="text"
+                    value={attachmentType}
+                    onChange={(event) => setAttachmentType(event.target.value)}
+                    placeholder={t("attachment_type")}
+                    className="w-full rounded border bg-background px-2 py-1 text-[10px]"
+                  />
+                  <input
+                    type="text"
+                    value={attachmentUrl}
+                    onChange={(event) => setAttachmentUrl(event.target.value)}
+                    placeholder={t("attachment_url")}
+                    className="w-full rounded border bg-background px-2 py-1 text-[10px]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddAttachment}
+                    disabled={!attachmentName.trim() || !attachmentUrl.trim()}
+                    className="rounded bg-primary px-2 py-1 text-[10px] text-primary-foreground disabled:opacity-50"
+                  >
+                    {t("add_attachment")}
+                  </button>
+                </div>
+                {(selected.attachments?.length ?? 0) === 0 ? (
+                  <p className="text-[10px] text-muted-foreground">{t("no_attachments")}</p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {(selected.attachments ?? []).map((attachment) => (
+                      <div
+                        key={attachment.id}
+                        className="flex items-center justify-between gap-2 rounded border bg-background px-2 py-1"
+                      >
+                        <a
+                          href={attachment.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] text-primary underline-offset-2 hover:underline"
+                        >
+                          {attachment.name} ({attachment.type})
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAttachment(attachment.id)}
+                          className="text-[10px] text-muted-foreground hover:text-destructive"
+                          title={t("delete")}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
         <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
@@ -399,7 +412,7 @@ export function SubfamilyPanel({
           })}
         </div>
       )}
-      {!isHomeMode ? (
+      {!isHomeMode && !readOnly ? (
         <div className="flex flex-col gap-1">
           <div className="flex gap-1">
             <input

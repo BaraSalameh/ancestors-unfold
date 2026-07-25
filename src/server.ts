@@ -1,7 +1,7 @@
-import "./lib/error-capture";
+import "./shared/http/error-capture";
 
-import { consumeLastCapturedError } from "./lib/error-capture";
-import { renderErrorPage } from "./lib/error-page";
+import { consumeLastCapturedError } from "./shared/http/error-capture";
+import { renderErrorPage } from "./shared/http/error-page";
 import { handleApi } from "./server/api";
 
 type ServerEntry = {

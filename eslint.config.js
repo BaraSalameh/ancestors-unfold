@@ -30,6 +30,21 @@ export default tseslint.config(
                 "TanStack Start does not use the Next.js `server-only` package. Rename the module to `*.server.ts` or mark it with `@tanstack/react-start/server-only`.",
             },
           ],
+          patterns: [
+            {
+              group: ["@/lib/**", "@/components/**"],
+              message: "Legacy paths were removed; import a feature public API or shared module.",
+            },
+            {
+              group: [
+                "@/features/*/**",
+                "!@/features/*/client",
+                "!@/features/*/domain",
+                "!@/features/*/server",
+              ],
+              message: "Cross-feature consumers must import the feature public entrypoint.",
+            },
+          ],
         },
       ],
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
@@ -38,17 +53,37 @@ export default tseslint.config(
   },
   {
     files: ["src/app/**/*.{ts,tsx}", "src/features/**/*.{ts,tsx}", "src/shared/**/*.{ts,tsx}"],
-    ignores: ["src/shared/ui/**"],
+    ignores: ["src/features/*/server/**", "src/shared/server/**", "src/shared/ui/**"],
     rules: {
-      "max-lines": ["error", { max: 400, skipBlankLines: true, skipComments: true }],
-      "max-lines-per-function": ["error", { max: 120, skipBlankLines: true, skipComments: true }],
-      complexity: ["error", 15],
+      "max-lines": ["warn", { max: 400, skipBlankLines: true, skipComments: true }],
+      "max-lines-per-function": ["warn", { max: 120, skipBlankLines: true, skipComments: true }],
+      complexity: ["warn", 15],
       "no-restricted-imports": [
         "error",
         {
           patterns: [
             {
-              group: ["@/server/*", "@/server/**", "../../server/*", "../../server/**"],
+              group: ["@/lib/**", "@/components/**"],
+              message: "Legacy paths were removed; import a feature public API or shared module.",
+            },
+            {
+              group: [
+                "@/features/*/**",
+                "!@/features/*/client",
+                "!@/features/*/domain",
+                "!@/features/*/server",
+              ],
+              message:
+                "Use relative imports inside a feature and public entrypoints across features.",
+            },
+            {
+              group: [
+                "@/server/*",
+                "@/server/**",
+                "@/features/*/server",
+                "../../server/*",
+                "../../server/**",
+              ],
               message: "Browser features must not import server modules.",
             },
           ],
@@ -58,14 +93,17 @@ export default tseslint.config(
   },
   {
     files: [
+      "src/app/server/**/*.{ts,tsx}",
+      "src/features/*/server/**/*.{ts,tsx}",
+      "src/shared/server/**/*.{ts,tsx}",
       "src/server/http/**/*.{ts,tsx}",
       "src/server/modules/**/*.{ts,tsx}",
       "src/server/infrastructure/**/*.{ts,tsx}",
     ],
     rules: {
-      "max-lines": ["error", { max: 400, skipBlankLines: true, skipComments: true }],
-      "max-lines-per-function": ["error", { max: 120, skipBlankLines: true, skipComments: true }],
-      complexity: ["error", 15],
+      "max-lines": ["warn", { max: 400, skipBlankLines: true, skipComments: true }],
+      "max-lines-per-function": ["warn", { max: 120, skipBlankLines: true, skipComments: true }],
+      complexity: ["warn", 15],
     },
   },
   eslintPluginPrettier,

@@ -15,9 +15,11 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AddRouteImport } from './routes/add'
+import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TreeIdRouteImport } from './routes/tree.$id'
 import { Route as MemberIdRouteImport } from './routes/member.$id'
+import { Route as InvitationTokenRouteImport } from './routes/invitation.$token'
 import { Route as EditIdRouteImport } from './routes/edit.$id'
 import { Route as TreeIdAddRouteImport } from './routes/tree.$id_.add'
 
@@ -51,6 +53,11 @@ const AddRoute = AddRouteImport.update({
   path: '/add',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ActivityRoute = ActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -66,6 +73,11 @@ const MemberIdRoute = MemberIdRouteImport.update({
   path: '/member/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvitationTokenRoute = InvitationTokenRouteImport.update({
+  id: '/invitation/$token',
+  path: '/invitation/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EditIdRoute = EditIdRouteImport.update({
   id: '/edit/$id',
   path: '/edit/$id',
@@ -79,6 +91,7 @@ const TreeIdAddRoute = TreeIdAddRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/add': typeof AddRoute
   '/auth': typeof AuthRoute
   '/profile': typeof ProfileRoute
@@ -86,12 +99,14 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
+  '/invitation/$token': typeof InvitationTokenRoute
   '/member/$id': typeof MemberIdRoute
   '/tree/$id': typeof TreeIdRoute
   '/tree/$id/add': typeof TreeIdAddRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/add': typeof AddRoute
   '/auth': typeof AuthRoute
   '/profile': typeof ProfileRoute
@@ -99,6 +114,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
+  '/invitation/$token': typeof InvitationTokenRoute
   '/member/$id': typeof MemberIdRoute
   '/tree/$id': typeof TreeIdRoute
   '/tree/$id/add': typeof TreeIdAddRoute
@@ -106,6 +122,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/add': typeof AddRoute
   '/auth': typeof AuthRoute
   '/profile': typeof ProfileRoute
@@ -113,6 +130,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/subfamilies': typeof SubfamiliesRoute
   '/edit/$id': typeof EditIdRoute
+  '/invitation/$token': typeof InvitationTokenRoute
   '/member/$id': typeof MemberIdRoute
   '/tree/$id': typeof TreeIdRoute
   '/tree/$id_/add': typeof TreeIdAddRoute
@@ -121,6 +139,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/activity'
     | '/add'
     | '/auth'
     | '/profile'
@@ -128,12 +147,14 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subfamilies'
     | '/edit/$id'
+    | '/invitation/$token'
     | '/member/$id'
     | '/tree/$id'
     | '/tree/$id/add'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/activity'
     | '/add'
     | '/auth'
     | '/profile'
@@ -141,12 +162,14 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subfamilies'
     | '/edit/$id'
+    | '/invitation/$token'
     | '/member/$id'
     | '/tree/$id'
     | '/tree/$id/add'
   id:
     | '__root__'
     | '/'
+    | '/activity'
     | '/add'
     | '/auth'
     | '/profile'
@@ -154,6 +177,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subfamilies'
     | '/edit/$id'
+    | '/invitation/$token'
     | '/member/$id'
     | '/tree/$id'
     | '/tree/$id_/add'
@@ -161,6 +185,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ActivityRoute: typeof ActivityRoute
   AddRoute: typeof AddRoute
   AuthRoute: typeof AuthRoute
   ProfileRoute: typeof ProfileRoute
@@ -168,6 +193,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SubfamiliesRoute: typeof SubfamiliesRoute
   EditIdRoute: typeof EditIdRoute
+  InvitationTokenRoute: typeof InvitationTokenRoute
   MemberIdRoute: typeof MemberIdRoute
   TreeIdRoute: typeof TreeIdRoute
   TreeIdAddRoute: typeof TreeIdAddRoute
@@ -217,6 +243,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AddRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/activity': {
+      id: '/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof ActivityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -238,6 +271,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MemberIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invitation/$token': {
+      id: '/invitation/$token'
+      path: '/invitation/$token'
+      fullPath: '/invitation/$token'
+      preLoaderRoute: typeof InvitationTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/edit/$id': {
       id: '/edit/$id'
       path: '/edit/$id'
@@ -257,6 +297,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ActivityRoute: ActivityRoute,
   AddRoute: AddRoute,
   AuthRoute: AuthRoute,
   ProfileRoute: ProfileRoute,
@@ -264,6 +305,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SubfamiliesRoute: SubfamiliesRoute,
   EditIdRoute: EditIdRoute,
+  InvitationTokenRoute: InvitationTokenRoute,
   MemberIdRoute: MemberIdRoute,
   TreeIdRoute: TreeIdRoute,
   TreeIdAddRoute: TreeIdAddRoute,

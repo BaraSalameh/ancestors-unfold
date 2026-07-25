@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes, randomInt, randomUUID } from "node
 import argon2 from "argon2";
 import { CodeChallengeMethod, OAuth2Client } from "google-auth-library";
 import type { PoolClient } from "pg";
-import { databaseConfigured, query, transaction } from "./infrastructure/database";
+import { databaseConfigured, query, transaction } from "@/shared/server/database";
 import {
   ApiError,
   assertSameOrigin,
@@ -10,17 +10,25 @@ import {
   parseBody,
   requestIp,
   schemas,
-  type SnapshotInput,
 } from "./security";
-import { passwordResetMail, sendMail, verificationMail } from "./infrastructure/email";
-import { logError } from "./infrastructure/logger";
-import { jsonResponse as json } from "./http/response";
-import { handleOperationsRequest } from "./modules/operations/handler";
+import { passwordResetMail, sendMail, verificationMail } from "@/shared/server/email";
+import { logError } from "@/shared/server/logger";
+import { jsonResponse as json } from "@/shared/http/response";
+import { handleOperationsRequest } from "@/app/server/operations-handler";
+import {
+  acceptRegistrationInvitation,
+  handleCollaborationRequest,
+  provisionOwnedTree,
+  validatePublicInvitation,
+  canDeleteContributorAccount,
+} from "@/features/collaboration/server";
 import {
   importSnapshot,
   readPublicSnapshot,
   readSnapshot,
-} from "./modules/trees/snapshot-repository";
+  canUpdateTreeMetadata,
+  descriptionPatchValue,
+} from "@/features/trees/server";
 
 const COOKIE = "ancestors_session";
 const OAUTH_COOKIE = "ancestors_google_oauth";
@@ -64,13 +72,15 @@ type Session = {
   email: string;
   full_name_en: string;
   full_name_ar: string;
+  profile_gender: "male" | "female" | "unspecified";
   show_google_welcome: boolean;
 };
 async function authenticate(request: Request): Promise<Session | null> {
   const token = cookieValue(request);
   if (!token || !databaseConfigured) return null;
   const result = await query<Session>(
-    `SELECT s.id,s.user_id,u.email,u.full_name_en,u.full_name_ar,s.show_google_welcome FROM app.sessions s
+    `SELECT s.id,s.user_id,u.email,u.full_name_en,u.full_name_ar,u.profile_gender,
+      s.show_google_welcome FROM app.sessions s
     JOIN app.users u ON u.id=s.user_id LEFT JOIN app.password_credentials p ON p.user_id=u.id
     WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.idle_expires_at>now() AND s.absolute_expires_at>now()
       AND u.status='active' AND (p.user_id IS NULL OR p.credential_version=s.credential_version)`,
@@ -80,7 +90,13 @@ async function authenticate(request: Request): Promise<Session | null> {
 }
 
 function userDto(s: Session) {
-  return { id: s.user_id, email: s.email, fullNameEn: s.full_name_en, fullNameAr: s.full_name_ar };
+  return {
+    id: s.user_id,
+    email: s.email,
+    fullNameEn: s.full_name_en,
+    fullNameAr: s.full_name_ar,
+    gender: s.profile_gender,
+  };
 }
 async function createSession(
   client: PoolClient,
@@ -151,6 +167,8 @@ export async function handleApi(request: Request): Promise<Response | null> {
     assertSameOrigin(request);
     const operationsResponse = await handleOperationsRequest(request);
     if (operationsResponse) return operationsResponse;
+    const publicInvitationResponse = await validatePublicInvitation(request);
+    if (publicInvitationResponse) return publicInvitationResponse;
     if (url.pathname === "/api/auth/google" && request.method === "GET") {
       const { client } = googleConfig(request);
       const state = randomBytes(32).toString("base64url"),
@@ -255,6 +273,20 @@ export async function handleApi(request: Request): Promise<Response | null> {
             [profile.sub, email, JSON.stringify(profile)],
           );
         }
+        const account = (
+          await c.query<{
+            id: string;
+            email: string;
+            full_name_en: string;
+            full_name_ar: string;
+            profile_gender: "male" | "female" | "unspecified";
+          }>(
+            "SELECT id,email,full_name_en,full_name_ar,profile_gender FROM app.users WHERE id=$1",
+            [userId],
+          )
+        ).rows[0];
+        await c.query("SELECT app.set_request_context($1,NULL,$2)", [userId, requestId]);
+        await provisionOwnedTree(c, account);
         await c.query("UPDATE app.users SET last_login_at=now() WHERE id=$1", [userId]);
         const credential = await c.query<{ credential_version: number }>(
           "SELECT credential_version FROM app.password_credentials WHERE user_id=$1",
@@ -283,10 +315,22 @@ export async function handleApi(request: Request): Promise<Response | null> {
       const user = await transaction(null, null, requestId, async (c) => {
         const exists = await c.query("SELECT 1 FROM app.users WHERE email=$1", [email]);
         if (exists.rowCount) throw new Error("EMAIL_EXISTS");
+        let invitationId: string | null = null;
+        if (b.invitationToken) {
+          const invitation = await c.query<{ id: string }>(
+            `SELECT app.registration_invitation_id($1,$2) id`,
+            [sha256(b.invitationToken), email],
+          );
+          if (!invitation.rows[0]?.id) throw new ApiError("INVALID_INVITATION", 409);
+          invitationId = invitation.rows[0].id;
+        }
         const u = await c.query<{ user_id: string }>(
-          `INSERT INTO app.users(email,email_verified_at,full_name_en,full_name_ar,status) VALUES($1,NULL,$2,$3,'pending')
+          `INSERT INTO app.users(
+            email,email_verified_at,full_name_en,full_name_ar,profile_gender,status,
+            registration_invitation_id
+          ) VALUES($1,NULL,$2,$3,$4,'pending',$5)
           RETURNING id AS user_id,email,full_name_en,full_name_ar`,
-          [email, b.fullNameEn.trim(), b.fullNameAr.trim()],
+          [email, b.fullNameEn.trim(), b.fullNameAr.trim(), b.gender, invitationId],
         );
         await c.query("INSERT INTO app.password_credentials(user_id,password_hash) VALUES($1,$2)", [
           u.rows[0].user_id,
@@ -330,10 +374,33 @@ export async function handleApi(request: Request): Promise<Response | null> {
           "UPDATE app.email_verification_tokens SET invalidated_at=now() WHERE user_id=$1 AND id<>$2 AND consumed_at IS NULL AND invalidated_at IS NULL",
           [token.rows[0].user_id, token.rows[0].id],
         );
-        const u = await c.query<Session & { credential_version: number }>(
-          `UPDATE app.users SET email_verified_at=now(),status='active' WHERE id=$1 RETURNING id AS user_id,email,full_name_en,full_name_ar`,
+        const u = await c.query<
+          Session & {
+            credential_version: number;
+            registration_invitation_id: string | null;
+            profile_gender: "male" | "female" | "unspecified";
+          }
+        >(
+          `UPDATE app.users SET email_verified_at=now(),status='active'
+           WHERE id=$1
+           RETURNING id AS user_id,email,full_name_en,full_name_ar,profile_gender,
+             registration_invitation_id`,
           [token.rows[0].user_id],
         );
+        const account = {
+          id: u.rows[0].user_id,
+          email: u.rows[0].email,
+          full_name_en: u.rows[0].full_name_en,
+          full_name_ar: u.rows[0].full_name_ar,
+          profile_gender: u.rows[0].profile_gender,
+        };
+        await c.query("SELECT app.set_request_context($1,NULL,$2)", [
+          token.rows[0].user_id,
+          requestId,
+        ]);
+        if (u.rows[0].registration_invitation_id)
+          await acceptRegistrationInvitation(c, account, u.rows[0].registration_invitation_id);
+        else await provisionOwnedTree(c, account);
         const credential = await c.query<{ credential_version: number }>(
           "SELECT credential_version FROM app.password_credentials WHERE user_id=$1",
           [token.rows[0].user_id],
@@ -462,15 +529,14 @@ export async function handleApi(request: Request): Promise<Response | null> {
     const session = await authenticate(request);
     if (url.pathname === "/api/auth/session" && request.method === "GET") {
       if (!session) return json(null);
-      if (session.show_google_welcome)
-        await query("UPDATE app.sessions SET show_google_welcome=false WHERE id=$1", [session.id]);
       return json({
         user: userDto(session),
         createdAt: new Date().toISOString(),
-        showGoogleWelcome: session.show_google_welcome,
       });
     }
     if (!session) return json({ code: "UNAUTHENTICATED" }, 401);
+    const collaborationResponse = await handleCollaborationRequest(request, session, requestId);
+    if (collaborationResponse) return collaborationResponse;
     if (url.pathname === "/api/auth/logout" && request.method === "POST") {
       await query(
         "UPDATE app.sessions SET revoked_at=now(),revocation_reason='logout' WHERE id=$1",
@@ -481,6 +547,12 @@ export async function handleApi(request: Request): Promise<Response | null> {
     if (url.pathname === "/api/profile/email-change/request" && request.method === "POST") {
       const b = await parseBody(request, schemas.emailChangeRequest),
         email = normalizeEmail(b.email);
+      const owner = await query(
+        `SELECT 1 FROM app.tree_memberships
+         WHERE user_id=$1 AND role='owner' AND revoked_at IS NULL`,
+        [session.user_id],
+      );
+      if (!owner.rowCount) return json({ code: "CONTRIBUTOR_EMAIL_CHANGE_FORBIDDEN" }, 403);
       const rate = await enforceRateLimit(
         request,
         "email_verification",
@@ -499,9 +571,95 @@ export async function handleApi(request: Request): Promise<Response | null> {
         !credential.rowCount ||
         !(await argon2.verify(credential.rows[0].password_hash, b.currentPassword))
       )
-        return json({ code: "INVALID_CREDENTIALS" }, 401);
+        return json({ code: "INCORRECT_PASSWORD" }, 401);
       await issueVerificationCode(session.user_id, email, "email_change", email, rate.ip);
       return json({ ok: true, email });
+    }
+    if (url.pathname === "/api/profile" && request.method === "PATCH") {
+      const body = await parseBody(request, schemas.profileNames);
+      const updated = await query<Session>(
+        `UPDATE app.users SET full_name_en=$2,full_name_ar=$3,
+           profile_gender=COALESCE($4::app.gender,profile_gender),updated_at=now()
+         WHERE id=$1 AND status='active'
+         RETURNING id AS user_id,email,full_name_en,full_name_ar,profile_gender`,
+        [session.user_id, body.fullNameEn, body.fullNameAr, body.gender ?? null],
+      );
+      return json({ user: userDto(updated.rows[0]), createdAt: new Date().toISOString() });
+    }
+    if (url.pathname === "/api/profile" && request.method === "DELETE") {
+      await parseBody(request, schemas.deleteContributorAccount);
+      await transaction(session.user_id, session.id, requestId, async (client) => {
+        const membership = await client.query<{ role: string }>(
+          `SELECT role FROM app.tree_memberships
+           WHERE user_id=$1 AND revoked_at IS NULL FOR UPDATE`,
+          [session.user_id],
+        );
+        if (!canDeleteContributorAccount(membership.rows.map(({ role }) => role)))
+          throw new ApiError("OWNER_ACCOUNT_DELETE_FORBIDDEN", 403);
+        await client.query(
+          `INSERT INTO app.tree_activity(
+             tree_id,branch_id,actor_user_id,action_type,target_type,target_id
+           )
+           SELECT m.tree_id,g.root_subfamily_id,$1,
+             'contributor_account_deleted','user',$1
+           FROM app.tree_memberships m
+           LEFT JOIN app.branch_grants g
+             ON g.tree_id=m.tree_id AND g.user_id=m.user_id
+             AND g.revoked_at IS NULL
+           WHERE m.user_id=$1 AND m.role<>'owner' AND m.revoked_at IS NULL`,
+          [session.user_id],
+        );
+        await client.query(
+          "UPDATE app.family_members SET linked_user_id=NULL WHERE linked_user_id=$1",
+          [session.user_id],
+        );
+        await client.query(
+          `UPDATE app.branch_grants SET revoked_at=now(),revoked_by=$1
+           WHERE user_id=$1 AND revoked_at IS NULL`,
+          [session.user_id],
+        );
+        await client.query(
+          `UPDATE app.tree_memberships SET family_member_id=NULL,
+             affiliation_status='removed',revoked_at=now(),revoked_by=$1
+           WHERE user_id=$1 AND role<>'owner' AND revoked_at IS NULL`,
+          [session.user_id],
+        );
+        await client.query(
+          `UPDATE app.ownership_transfers SET status='cancelled',updated_at=now()
+           WHERE proposed_owner_user_id=$1 AND status='pending'`,
+          [session.user_id],
+        );
+        await client.query(
+          `UPDATE app.sessions SET revoked_at=now(),revocation_reason='account_deleted'
+           WHERE user_id=$1 AND revoked_at IS NULL`,
+          [session.user_id],
+        );
+        await client.query(
+          `UPDATE app.email_verification_tokens SET invalidated_at=now()
+           WHERE user_id=$1 AND consumed_at IS NULL AND invalidated_at IS NULL`,
+          [session.user_id],
+        );
+        await client.query(
+          `UPDATE app.password_reset_tokens SET invalidated_at=now()
+           WHERE user_id=$1 AND consumed_at IS NULL AND invalidated_at IS NULL`,
+          [session.user_id],
+        );
+        await client.query("DELETE FROM app.password_credentials WHERE user_id=$1", [
+          session.user_id,
+        ]);
+        await client.query("DELETE FROM app.oauth_accounts WHERE user_id=$1", [session.user_id]);
+        await client.query("DELETE FROM app.totp_credentials WHERE user_id=$1", [session.user_id]);
+        await client.query(
+          `UPDATE app.users SET
+             email='deleted+'||id::text||'@invalid.local',
+             full_name_en='Deleted User',
+             full_name_ar='مستخدم محذوف',
+             status='deleted',deleted_at=now(),updated_at=now()
+           WHERE id=$1`,
+          [session.user_id],
+        );
+      });
+      return json({ ok: true }, 200, { "set-cookie": sessionCookie("", 0) });
     }
     if (url.pathname === "/api/profile/email-change/confirm" && request.method === "POST") {
       const b = await parseBody(request, schemas.emailChangeConfirm);
@@ -526,7 +684,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
         );
         return (
           await c.query<Session>(
-            "UPDATE app.users SET email=$2,email_verified_at=now() WHERE id=$1 RETURNING id AS user_id,email,full_name_en,full_name_ar",
+            "UPDATE app.users SET email=$2,email_verified_at=now() WHERE id=$1 RETURNING id AS user_id,email,full_name_en,full_name_ar,profile_gender",
             [session.user_id, token.rows[0].pending_email],
           )
         ).rows[0];
@@ -579,8 +737,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
             coalesce((SELECT max(l.depth) FROM lineage l WHERE l.tree_id=m.tree_id),0)::integer AS generations
           FROM visible_members m GROUP BY m.tree_id
         )
-        SELECT t.id,t.name_en,t.name_ar,coalesce(t.description_en,'') description_en,
-          coalesce(t.description_ar,'') description_ar,t.color,t.updated_at,
+        SELECT t.id,t.name_en,t.name_ar,t.updated_at,
           coalesce(s.members,0)::integer AS members,coalesce(s.generations,0)::integer AS generations
         FROM visible_trees visible
         JOIN app.family_trees t ON t.id=visible.id
@@ -590,26 +747,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
       return json(r.rows);
     }
     if (url.pathname === "/api/trees" && request.method === "POST") {
-      const b = await parseBody(request, schemas.tree);
-      const r = await transaction(session.user_id, session.id, requestId, async (c) => {
-        const t = await c.query(
-          `INSERT INTO app.family_trees(owner_user_id,name_en,name_ar,description_en,description_ar,color) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-          [
-            session.user_id,
-            b.name_en,
-            b.name_ar || null,
-            b.description_en || null,
-            b.description_ar || null,
-            b.color || null,
-          ],
-        );
-        await c.query(
-          "INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES($1,$2,'owner')",
-          [t.rows[0].id, session.user_id],
-        );
-        return t.rows[0];
-      });
-      return json(r, 201);
+      return json({ code: "SINGLE_TREE_ACCOUNT" }, 405);
     }
     const snapshotMatch = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/snapshot$/);
     if (snapshotMatch && request.method === "GET")
@@ -712,20 +850,27 @@ export async function handleApi(request: Request): Promise<Response | null> {
     if (treeMatch && request.method === "PATCH") {
       const b = await parseBody(request, schemas.tree);
       const r = await transaction(session.user_id, session.id, requestId, async (c) => {
-        const allowed = await c.query(
-          "SELECT 1 FROM app.tree_memberships WHERE tree_id=$1 AND user_id=$2 AND role IN ('owner','administrator') AND revoked_at IS NULL",
+        const membership = await c.query<{ role: string }>(
+          "SELECT role FROM app.tree_memberships WHERE tree_id=$1 AND user_id=$2 AND revoked_at IS NULL",
           [treeMatch[1], session.user_id],
         );
-        if (!allowed.rowCount) throw new Error("FORBIDDEN");
+        if (!canUpdateTreeMetadata(membership.rows[0]?.role)) throw new Error("FORBIDDEN");
+        const descriptionEn = descriptionPatchValue(b.description_en);
+        const descriptionAr = descriptionPatchValue(b.description_ar);
         return (
           await c.query(
-            `UPDATE app.family_trees SET name_en=$2,name_ar=$3,description_en=$4,description_ar=$5 WHERE id=$1 RETURNING *`,
+            `UPDATE app.family_trees SET name_en=$2,name_ar=$3,
+             description_en=CASE WHEN $6 THEN $4 ELSE description_en END,
+             description_ar=CASE WHEN $7 THEN $5 ELSE description_ar END
+             WHERE id=$1 RETURNING *`,
             [
               treeMatch[1],
               b.name_en,
               b.name_ar || null,
-              b.description_en || null,
-              b.description_ar || null,
+              descriptionEn.value,
+              descriptionAr.value,
+              descriptionEn.supplied,
+              descriptionAr.supplied,
             ],
           )
         ).rows[0];
@@ -739,6 +884,12 @@ export async function handleApi(request: Request): Promise<Response | null> {
           [treeMatch[1], session.user_id],
         );
         if (!allowed.rowCount) throw new Error("FORBIDDEN");
+        const contributors = await c.query(
+          `SELECT 1 FROM app.branch_grants WHERE tree_id=$1 AND role='branch_editor'
+           AND revoked_at IS NULL LIMIT 1`,
+          [treeMatch[1]],
+        );
+        if (contributors.rowCount) throw new ApiError("TREE_HAS_CONTRIBUTORS", 409);
         await c.query("UPDATE app.family_trees SET deleted_at=now() WHERE id=$1", [treeMatch[1]]);
       });
       return json({ ok: true });
@@ -777,6 +928,16 @@ export async function handleApi(request: Request): Promise<Response | null> {
       (databaseError?.code === "23505" && databaseError.constraint === "users_email_uq")
     )
       return json({ code: "EMAIL_EXISTS" }, 409);
+    if (
+      databaseError?.code === "23505" &&
+      databaseError.constraint === "branch_grants_one_active_editor_per_branch_uq"
+    )
+      return json({ code: "BRANCH_ALREADY_ASSIGNED" }, 409);
+    if (
+      databaseError?.code === "23505" &&
+      databaseError.constraint === "tree_memberships_one_tree_per_user_uq"
+    )
+      return json({ code: "ONE_TREE_ACCOUNT" }, 409);
     if (message === "MAIL_NOT_CONFIGURED" || message === "MAIL_DELIVERY_FAILED")
       return json({ code: "DELIVERY_FAILED" }, 503);
     if (message === "DATABASE_NOT_CONFIGURED") return json({ code: message }, 503);

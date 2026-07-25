@@ -4,6 +4,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@layer base {
+  :where(a[href], button:not(:disabled), select:not(:disabled), summary, [role="button"]):not(
+    [aria-disabled="true"]
+  ) {
+    cursor: pointer;
+  }
+}
+
 /*
  * Design system definition.
  *
