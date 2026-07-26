@@ -227,74 +227,68 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
           </div>
         </div>
 
-        {member.gender === "male" && (
+        {member.gender === "male" && wives && wives.length > 0 && (
           <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
             <div className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               <Heart className="h-2.5 w-2.5" />
               <span>{t("spouses")}</span>
             </div>
-            {!wives || wives.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border/80 bg-background/60 px-2 py-1.5 text-[10px] italic text-muted-foreground">
-                {t("no_spouses_recorded")}
-              </div>
-            ) : (
-              <div className="flex max-h-24 flex-col gap-1 overflow-y-auto pr-1">
-                {wives.map((w, i) => {
-                  const c = wifeColorFor(i);
-                  const divorced = (member.divorced_from ?? []).includes(w.id);
-                  const wBirth = w.birth_date?.slice(0, 4);
-                  const wDeath = w.death_date?.slice(0, 4);
-                  const years = wBirth ? `${wBirth}${wDeath ? `–${wDeath}` : ""}` : "";
-                  return (
-                    <div
-                      key={w.id}
-                      className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] font-medium ring-1"
-                      style={
-                        (divorced
-                          ? {
-                              backgroundColor: "hsl(var(--muted))",
-                              color: "hsl(var(--muted-foreground))",
-                              ["--tw-ring-color" as never]: "hsl(var(--border))",
-                            }
-                          : {
-                              backgroundColor: `${c.stroke}1a`,
-                              color: c.stroke,
-                              ["--tw-ring-color" as never]: `${c.stroke}55`,
-                            }) as React.CSSProperties
-                      }
+            <div className="flex max-h-24 flex-col gap-1 overflow-y-auto pr-1">
+              {wives.map((w, i) => {
+                const c = wifeColorFor(i);
+                const divorced = (member.divorced_from ?? []).includes(w.id);
+                const wBirth = w.birth_date?.slice(0, 4);
+                const wDeath = w.death_date?.slice(0, 4);
+                const years = wBirth ? `${wBirth}${wDeath ? `–${wDeath}` : ""}` : "";
+                return (
+                  <div
+                    key={w.id}
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] font-medium ring-1"
+                    style={
+                      (divorced
+                        ? {
+                            backgroundColor: "hsl(var(--muted))",
+                            color: "hsl(var(--muted-foreground))",
+                            ["--tw-ring-color" as never]: "hsl(var(--border))",
+                          }
+                        : {
+                            backgroundColor: `${c.stroke}1a`,
+                            color: c.stroke,
+                            ["--tw-ring-color" as never]: `${c.stroke}55`,
+                          }) as React.CSSProperties
+                    }
 
-                      title={`${ordinal(i + 1, lang)} — ${displayName(w, lang)}${years ? ` (${years})` : ""}${
-                        divorced ? ` · ${t("divorced")}` : ""
-                      }`}
-                    >
-                      <span
-                        className="h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: divorced ? "#94a3b8" : c.stroke }}
-                      />
-                      <span className="shrink-0 opacity-70">{ordinal(i + 1, lang)}</span>
-                      <span className={`truncate ${divorced ? "line-through" : ""}`}>
-                        {w.is_unknown ? (
-                          <span className="italic opacity-80">{t("unknown_wife")}</span>
-                        ) : (
-                          displayName(w, lang)
-                        )}
-                      </span>
-                      {w.is_unknown && <HelpCircle className="h-2.5 w-2.5 shrink-0 opacity-60" />}
-                      {(w.external_children?.length ?? 0) > 0 && (
-                        <span
-                          className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-1 text-[9px] text-amber-700 dark:text-amber-300"
-                          title={t("has_external_children")}
-                        >
-                          <UserPlus className="h-2 w-2" />
-                          {w.external_children!.length}
-                        </span>
+                    title={`${ordinal(i + 1, lang)} — ${displayName(w, lang)}${years ? ` (${years})` : ""}${
+                      divorced ? ` · ${t("divorced")}` : ""
+                    }`}
+                  >
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: divorced ? "#94a3b8" : c.stroke }}
+                    />
+                    <span className="shrink-0 opacity-70">{ordinal(i + 1, lang)}</span>
+                    <span className={`truncate ${divorced ? "line-through" : ""}`}>
+                      {w.is_unknown ? (
+                        <span className="italic opacity-80">{t("unknown_wife")}</span>
+                      ) : (
+                        displayName(w, lang)
                       )}
-                      {years && <span className="shrink-0 opacity-70 tabular-nums">{years}</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    </span>
+                    {w.is_unknown && <HelpCircle className="h-2.5 w-2.5 shrink-0 opacity-60" />}
+                    {(w.external_children?.length ?? 0) > 0 && (
+                      <span
+                        className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-1 text-[9px] text-amber-700 dark:text-amber-300"
+                        title={t("has_external_children")}
+                      >
+                        <UserPlus className="h-2 w-2" />
+                        {w.external_children!.length}
+                      </span>
+                    )}
+                    {years && <span className="shrink-0 opacity-70 tabular-nums">{years}</span>}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </button>
