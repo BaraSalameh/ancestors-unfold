@@ -14,6 +14,7 @@ function runner() {
             name_en: "Father",
             name_ar: "",
             gender: "male",
+            image_url: "https://example.com/profile.jpg",
             notes: "private member note",
             created_at: now,
             updated_at: now,
@@ -86,6 +87,7 @@ describe("tree snapshot projection", () => {
   it("retains private fields for authenticated snapshots", async () => {
     const snapshot = await loadRenderableSnapshot(runner(), "tree", 7, true);
 
+    expect(snapshot.members[0].image_url).toBe("https://example.com/profile.jpg");
     expect(snapshot.members[0].notes).toBe("private member note");
     expect(snapshot.members[1].external_children).toEqual([
       expect.objectContaining({ id: "external", notes: "private external note" }),
