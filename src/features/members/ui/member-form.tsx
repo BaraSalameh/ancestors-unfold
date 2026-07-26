@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Textarea } from "@/shared/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
 import { useI18n } from "@/shared/i18n";
+import { computeWivesByHusband } from "@/features/trees/domain";
 import type {
   CitizenStatus,
   ExternalChild,
@@ -12,6 +13,12 @@ import type {
   Gender,
   MemberInput,
 } from "../domain/types";
+import { descendantIds } from "../domain/relationships";
+import {
+  eligibleParentCandidates,
+  invalidFatherIdsForFemale,
+  reconcileMotherForFather,
+} from "../domain/parent-selection";
 
 import {
   ExternalChildrenEditor,
@@ -47,8 +54,8 @@ export function MemberForm({
   const [death_date, setDeath] = useState(initial?.death_date ?? "");
   const [image_url, setImage] = useState(initial?.image_url ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  const father_id = initial?.father_id ?? "";
-  const mother_id = initial?.mother_id ?? "";
+  const [father_id, setFather] = useState(initial?.father_id ?? "");
+  const [mother_id, setMother] = useState(initial?.mother_id ?? "");
   const [spouse_id, setSpouse] = useState(initial?.spouse_id ?? "");
   const [external_children, setExternalChildren] = useState<ExternalChild[]>(
     initial?.external_children ?? [],
@@ -57,6 +64,49 @@ export function MemberForm({
 
   const males = members.filter((m) => m.gender === "male" && !m.is_unknown);
   const females = members.filter((m) => m.gender === "female" && !m.is_unknown);
+  const excludedParentIds = useMemo(() => {
+    const excluded = new Set(memberId ? descendantIds(members, memberId) : []);
+    if (memberId && gender === "female") {
+      for (const id of invalidFatherIdsForFemale(members, memberId)) excluded.add(id);
+    }
+    return excluded;
+  }, [gender, memberId, members]);
+  const eligibleFathers = useMemo(
+    () =>
+      eligibleParentCandidates({
+        members,
+        memberId,
+        birthDate: birth_date || undefined,
+        gender: "male",
+        excludedIds: excludedParentIds,
+      }),
+    [birth_date, excludedParentIds, memberId, members],
+  );
+  const eligibleMothers = useMemo(
+    () =>
+      eligibleParentCandidates({
+        members,
+        memberId,
+        birthDate: birth_date || undefined,
+        gender: "female",
+        excludedIds: excludedParentIds,
+      }),
+    [birth_date, excludedParentIds, memberId, members],
+  );
+  const wivesByHusband = useMemo(() => computeWivesByHusband(members), [members]);
+  const fatherWives = father_id ? (wivesByHusband.get(father_id) ?? []) : [];
+  const selectedFather = members.find((member) => member.id === father_id);
+  const selectedMother = members.find((member) => member.id === mother_id);
+
+  const changeFather = (nextFatherId: string) => {
+    const spouseIds = new Set(
+      nextFatherId ? (wivesByHusband.get(nextFatherId) ?? []).map(({ id }) => id) : [],
+    );
+    setFather(nextFatherId);
+    setMother((currentMotherId) =>
+      reconcileMotherForFather(currentMotherId, nextFatherId, spouseIds),
+    );
+  };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -171,6 +221,33 @@ export function MemberForm({
           onChange={(e) => setImage(e.target.value)}
           placeholder="https://…"
         />
+      </div>
+
+      <div>
+        {memberId && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <RelationSearch
+              label={t("father")}
+              value={father_id}
+              onChange={changeFather}
+              options={eligibleFathers}
+              selectedOption={selectedFather}
+              lang={lang}
+              searchFirst
+              showBirthYear
+            />
+            <RelationSearch
+              label={t("mother")}
+              value={mother_id}
+              onChange={setMother}
+              options={father_id ? fatherWives : eligibleMothers}
+              selectedOption={selectedMother}
+              lang={lang}
+              searchFirst={!father_id}
+              showBirthYear
+            />
+          </div>
+        )}
       </div>
 
       <div>

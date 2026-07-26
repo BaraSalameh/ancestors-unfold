@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  detachParentRelationship,
   descendantIds,
   ensureParentsAreSpouses,
   isDescendant,
@@ -21,6 +22,44 @@ const member = (id: string, gender: "male" | "female", patch: Partial<FamilyMemb
 });
 
 describe("family relationships", () => {
+  it.each([
+    ["father_id", { mother_id: "mother" }],
+    ["mother_id", { father_id: "anas" }],
+  ] as const)(
+    "detaches only the selected parent while preserving a wife",
+    (role, remainingParent) => {
+      const members = [
+        member("mohammad", "male", {
+          spouse_id: "randa",
+          spouse_ids: ["randa"],
+          divorced_from: ["other-wife"],
+        }),
+        member("anas", "male"),
+        member("mother", "female"),
+        member("father", "male"),
+        member("randa", "female", {
+          father_id: "anas",
+          mother_id: "mother",
+          spouse_id: "mohammad",
+        }),
+        member("child", "male", { father_id: "mohammad", mother_id: "randa" }),
+      ];
+
+      const result = detachParentRelationship(members, "randa", role, "now");
+
+      expect(result.find(({ id }) => id === "randa")).toMatchObject({
+        id: "randa",
+        ...remainingParent,
+        spouse_id: "mohammad",
+        updated_at: "now",
+      });
+      expect(result.find(({ id }) => id === "randa")?.[role]).toBeUndefined();
+      expect(result.find(({ id }) => id === "mohammad")).toEqual(members[0]);
+      expect(result.find(({ id }) => id === "child")).toEqual(members[5]);
+      expect(result).toHaveLength(members.length);
+    },
+  );
+
   it("persists a union for a child's recorded parents", () => {
     const result = ensureParentsAreSpouses(
       [

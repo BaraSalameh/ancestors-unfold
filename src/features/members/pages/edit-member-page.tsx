@@ -63,7 +63,7 @@ export function EditPage() {
         <MemberForm
           initial={member}
           memberId={id}
-          members={members.filter((m) => m.id !== id)}
+          members={members}
           submitLabel={t("save")}
           onCancel={() =>
             navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } })

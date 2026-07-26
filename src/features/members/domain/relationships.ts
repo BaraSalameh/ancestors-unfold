@@ -78,6 +78,21 @@ export function removeMember(members: FamilyMember[], id: string): FamilyMember[
     }));
 }
 
+export type ParentRole = "father_id" | "mother_id";
+
+export function detachParentRelationship(
+  members: FamilyMember[],
+  memberId: string,
+  role: ParentRole,
+  updatedAt: string,
+): FamilyMember[] {
+  return members.map((member) =>
+    member.id === memberId && member[role]
+      ? { ...member, [role]: undefined, updated_at: updatedAt }
+      : member,
+  );
+}
+
 export function removeSpouseAttachment(
   members: FamilyMember[],
   husbandId: string,

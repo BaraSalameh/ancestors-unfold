@@ -3,6 +3,7 @@ import type { FamilyMember, MemberInput, SubFamily } from "@/features/members/do
 import { ApiClientError } from "@/shared/api/client";
 import { treeClient } from "../api/tree-client";
 import {
+  detachParentRelationship,
   getChildren as queryChildren,
   getGeneration as queryGeneration,
   getSubfamilyMembers as querySubfamilyMembers,
@@ -455,6 +456,12 @@ export const familyStore = {
         });
       }
       state = ensureParentsAreSpouses(state, id, now);
+    });
+  },
+  detachParent(id: string, role: "father_id" | "mother_id"): void {
+    const now = new Date().toISOString();
+    commit(() => {
+      state = detachParentRelationship(state, id, role, now);
     });
   },
   toggleDivorce(aId: string, bId: string): void {
