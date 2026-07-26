@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { useState } from "react";
-import { LoaderCircle, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { MemberForm } from "@/features/members";
 import { familyStore, useFamily } from "@/features/trees";
@@ -24,9 +24,11 @@ export function EditPage() {
   const members = useFamily();
   const { t } = useI18n();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const member = members.find((m) => m.id === id);
   const treeId = familyStore.getActiveTreeId();
+  const checkpoint = useRef<ReturnType<typeof familyStore.createDraftCheckpoint> | null>(null);
+  if (member && familyStore.canEditActiveTree() && !checkpoint.current)
+    checkpoint.current = familyStore.createDraftCheckpoint();
 
   if (!member || !familyStore.canEditActiveTree()) {
     return <div className="p-8 text-center text-muted-foreground">{t("not_found")}</div>;
@@ -35,19 +37,10 @@ export function EditPage() {
     [candidate.father_id, candidate.mother_id].includes(member.id),
   );
 
-  const handleDelete = async () => {
-    setIsDeleting(true);
+  const handleDelete = () => {
     familyStore.remove(member.id);
-    try {
-      await familyStore.flushPendingSave();
-      toast.success(t("deleted"));
-      navigate(memberDeleteDestination(treeId));
-    } catch {
-      familyStore.reloadAfterConflict();
-      toast.error(t("save_failed"));
-    } finally {
-      setIsDeleting(false);
-    }
+    toast.success(t("deleted"));
+    navigate(memberDeleteDestination(treeId));
   };
 
   return (
@@ -65,9 +58,10 @@ export function EditPage() {
           memberId={id}
           members={members}
           submitLabel={t("save")}
-          onCancel={() =>
-            navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } })
-          }
+          onCancel={() => {
+            if (checkpoint.current) familyStore.restoreDraftCheckpoint(checkpoint.current);
+            navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } });
+          }}
           onSubmit={(data) => {
             familyStore.update(id, data);
             toast.success(t("updated"));
@@ -78,7 +72,7 @@ export function EditPage() {
       <AlertDialog
         open={confirmOpen}
         onOpenChange={(open) => {
-          if (!isDeleting) setConfirmOpen(open);
+          setConfirmOpen(open);
         }}
       >
         <AlertDialogContent>
@@ -92,17 +86,15 @@ export function EditPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
-              disabled={isDeleting}
               onClick={(event) => {
                 event.preventDefault();
-                void handleDelete();
+                handleDelete();
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isDeleting && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}
-              {isDeleting ? t("loading") : t("delete")}
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

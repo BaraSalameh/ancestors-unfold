@@ -96,20 +96,15 @@ export function AddMemberPage({
             if (spouseTo) navigate({ to: "/edit/$id", params: { id: spouseTo.id } });
             else navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } });
           }}
-          onSubmit={async (data) => {
+          onSubmit={(data) => {
             const m =
               child && parentRole === "mother"
                 ? familyStore.addMotherForChild(data, child.id)
                 : familyStore.add(data);
             if (child && parentRole === "father") familyStore.update(child.id, { father_id: m.id });
-            try {
-              await familyStore.flushPendingSave();
-              toast.success(t("created"));
-              if (spouseTo) navigate({ to: "/edit/$id", params: { id: spouseTo.id } });
-              else navigate({ to: "/member/$id", params: { id: m.id } });
-            } catch {
-              toast.error(t("save_failed"));
-            }
+            toast.success(t("created"));
+            if (spouseTo) navigate({ to: "/edit/$id", params: { id: spouseTo.id } });
+            else navigate({ to: "/member/$id", params: { id: m.id } });
           }}
         />
       </div>

@@ -98,19 +98,24 @@ let accessScope: TreeAccessScope = "preview";
 const listeners = new Set<() => void>();
 let past: FamilyMember[][] = [];
 let future: FamilyMember[][] = [];
-let remoteSaveTimer: ReturnType<typeof setTimeout> | undefined;
+let baselineMembers: FamilyMember[] = [];
+let baselineSubfamilies: SubFamily[] = [];
 let remoteVersion = 1;
 let persistenceError: string | null = null;
 let saveInFlight = false;
-const saveWaiters = new Set<() => void>();
-let savePending = false;
 let saveGeneration = 0;
+let pendingBatchId: string | null = null;
 
 type PersistenceState = {
   dirty: boolean;
   saving: boolean;
   error: string | null;
   conflicted: boolean;
+};
+
+type DraftCheckpoint = {
+  members: FamilyMember[];
+  subfamilies: SubFamily[];
 };
 
 let cachedPersistenceState: PersistenceState = {
@@ -137,11 +142,13 @@ async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
       return;
     remoteVersion = snapshot.version;
     accessScope = snapshot.access_scope;
-    state = snapshot.members;
-    subfamilies = snapshot.subfamilies;
+    state = cloneMembers(snapshot.members);
+    subfamilies = cloneSubfamilies(snapshot.subfamilies);
+    baselineMembers = cloneMembers(state);
+    baselineSubfamilies = cloneSubfamilies(subfamilies);
     past = [];
     future = [];
-    savePending = false;
+    pendingBatchId = null;
     persistenceError = null;
     loadState = "ready";
     emit();
@@ -154,54 +161,45 @@ async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
   }
 }
 
-async function flushRemoteSave() {
-  if (saveInFlight || !savePending || persistenceError === "VERSION_CONFLICT") return;
+async function updateRemoteSnapshot() {
+  if (saveInFlight || !isDirty() || persistenceError === "VERSION_CONFLICT") return;
   const treeId = activeTreeId;
-  const generation = saveGeneration;
   const members = cloneMembers(state);
-  const currentSubfamilies = subfamilies.map((subfamily) => ({ ...subfamily }));
-  savePending = false;
+  const currentSubfamilies = cloneSubfamilies(subfamilies);
+  const batchId = pendingBatchId ?? crypto.randomUUID();
+  pendingBatchId = batchId;
   saveInFlight = true;
-  let reloadForbidden = false;
   emit();
   try {
     const result = await treeClient.saveSnapshot(treeId, {
-      batchId: crypto.randomUUID(),
+      batchId,
       expectedVersion: remoteVersion,
       members,
       subfamilies: currentSubfamilies,
     });
-    if (activeTreeId === treeId) remoteVersion = result.version;
-    persistenceError = null;
-    if (saveGeneration !== generation) savePending = true;
+    if (activeTreeId === treeId) {
+      remoteVersion = result.version;
+      baselineMembers = members;
+      baselineSubfamilies = currentSubfamilies;
+      past = [];
+      future = [];
+      pendingBatchId = null;
+      persistenceError = null;
+    }
   } catch (error) {
     persistenceError = error instanceof ApiClientError ? error.code : "NETWORK_ERROR";
-    reloadForbidden = persistenceError === "FORBIDDEN";
-    savePending = !reloadForbidden;
   } finally {
     saveInFlight = false;
-    for (const resolve of saveWaiters) resolve();
-    saveWaiters.clear();
     emit();
-    if (reloadForbidden) {
-      loadState = "loading";
-      void hydrateFromServer(activeTreeId, activeAccessMode);
-      emit();
-    }
-    if (savePending && !persistenceError) void flushRemoteSave();
   }
 }
 
-function scheduleRemoteSave() {
+function markDraftChanged() {
   if (typeof window === "undefined" || activeAccessMode === "preview") return;
   saveGeneration += 1;
-  savePending = true;
   persistenceError = persistenceError === "VERSION_CONFLICT" ? persistenceError : null;
+  if (!pendingBatchId) pendingBatchId = crypto.randomUUID();
   emit();
-  clearTimeout(remoteSaveTimer);
-  remoteSaveTimer = setTimeout(() => {
-    void flushRemoteSave();
-  }, 250);
 }
 
 function load() {
@@ -214,13 +212,16 @@ function load() {
   void hydrateFromServer(activeTreeId, activeAccessMode);
 }
 
-function save() {
-  scheduleRemoteSave();
+function isDirty() {
+  return (
+    JSON.stringify(baselineMembers) !== JSON.stringify(state) ||
+    JSON.stringify(baselineSubfamilies) !== JSON.stringify(subfamilies)
+  );
 }
 
 function emit() {
   cachedPersistenceState = {
-    dirty: savePending || saveInFlight,
+    dirty: isDirty(),
     saving: saveInFlight,
     error: persistenceError,
     conflicted: persistenceError === "VERSION_CONFLICT",
@@ -236,16 +237,19 @@ function cloneMembers(members: FamilyMember[]): FamilyMember[] {
   }));
 }
 
+function cloneSubfamilies(items: SubFamily[]): SubFamily[] {
+  return items.map((item) => ({
+    ...item,
+    attachments: item.attachments?.map((attachment) => ({ ...attachment })) ?? [],
+  }));
+}
+
 function loadSubfamilies() {
   if (typeof window === "undefined") {
     subfamilies = [];
     return;
   }
   subfamilies = [];
-}
-
-function saveSubfamilies() {
-  scheduleRemoteSave();
 }
 
 function snapshot(): FamilyMember[] {
@@ -259,14 +263,14 @@ function commit(mutator: () => void) {
   if (JSON.stringify(before) === JSON.stringify(state)) return;
   past = [...past, before];
   future = [];
-  save();
+  markDraftChanged();
   emit();
 }
 
 function applySnapshot(next: FamilyMember[]) {
   if (!canEditActiveTree()) return;
   state = cloneMembers(next);
-  save();
+  markDraftChanged();
   emit();
 }
 
@@ -285,7 +289,7 @@ export const familyStore = {
   },
   reloadAfterConflict(): void {
     persistenceError = null;
-    savePending = false;
+    pendingBatchId = null;
     loadState = "loading";
     void hydrateFromServer(activeTreeId, activeAccessMode);
     emit();
@@ -299,7 +303,7 @@ export const familyStore = {
     future = [];
     remoteVersion = 1;
     persistenceError = null;
-    savePending = false;
+    pendingBatchId = null;
     load();
     loadSubfamilies();
     emit();
@@ -307,13 +311,36 @@ export const familyStore = {
   initializeTree(treeId: string, accessMode: TreeAccessMode = "edit"): void {
     familyStore.activateTree(treeId, accessMode);
   },
-  async flushPendingSave(): Promise<void> {
-    clearTimeout(remoteSaveTimer);
-    if (saveInFlight) {
-      await new Promise<void>((resolve) => saveWaiters.add(resolve));
-    }
-    if (savePending && !persistenceError) await flushRemoteSave();
+  async updateSnapshot(): Promise<void> {
+    if (saveInFlight) return;
+    await updateRemoteSnapshot();
     if (persistenceError) throw new ApiClientError(persistenceError, 0);
+  },
+  discardDraft(): void {
+    if (saveInFlight) return;
+    state = cloneMembers(baselineMembers);
+    subfamilies = cloneSubfamilies(baselineSubfamilies);
+    past = [];
+    future = [];
+    pendingBatchId = null;
+    persistenceError = null;
+    saveGeneration += 1;
+    emit();
+  },
+  createDraftCheckpoint(): DraftCheckpoint {
+    return {
+      members: cloneMembers(state),
+      subfamilies: cloneSubfamilies(subfamilies),
+    };
+  },
+  restoreDraftCheckpoint(checkpoint: DraftCheckpoint): void {
+    if (saveInFlight || !canEditActiveTree()) return;
+    state = cloneMembers(checkpoint.members);
+    subfamilies = cloneSubfamilies(checkpoint.subfamilies);
+    past = [];
+    future = [];
+    markDraftChanged();
+    emit();
   },
   deleteTreeData(treeId: string): void {
     void treeClient.deleteTree(treeId);
@@ -602,7 +629,7 @@ export const familyStore = {
       updated_at: now,
     };
     subfamilies = [...subfamilies, sf];
-    saveSubfamilies();
+    markDraftChanged();
     emit();
     return sf;
   },
@@ -619,7 +646,7 @@ export const familyStore = {
     subfamilies = subfamilies.map((sf) =>
       sf.id === id ? { ...sf, ...patch, updated_at: now } : sf,
     );
-    saveSubfamilies();
+    markDraftChanged();
     emit();
   },
 
@@ -630,8 +657,7 @@ export const familyStore = {
         sf.parent_subfamily_id === id ? { ...sf, parent_subfamily_id: undefined } : sf,
       );
     state = state.map((m) => (m.subfamily_id === id ? { ...m, subfamily_id: undefined } : m));
-    save();
-    saveSubfamilies();
+    markDraftChanged();
     emit();
   },
 

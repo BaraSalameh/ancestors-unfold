@@ -426,6 +426,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const didFit = useRef(false);
   const edgeUpdateSuccessful = useRef(true);
   const visibleNodePositions = useRef(new Map<string, { x: number; y: number }>());
+  const nodeDragStartPosition = useRef<{ id: string; x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (readOnly || !persistence.error) return;
@@ -827,12 +828,35 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
     [setEdges, onEdgesDelete],
   );
 
+  const onNodeDragStart = useCallback((_event: unknown, node: Node) => {
+    nodeDragStartPosition.current = {
+      id: node.id,
+      x: node.position.x,
+      y: node.position.y,
+    };
+  }, []);
+
   const onNodeDragStop = useCallback(
     (_e: unknown, node: Node) => {
       if (!canEdit || node.type !== "member") return;
+      const start = nodeDragStartPosition.current;
+      nodeDragStartPosition.current = null;
+      if (
+        start?.id === node.id &&
+        Math.hypot(node.position.x - start.x, node.position.y - start.y) < 4
+      ) {
+        setNodes((current) =>
+          current.map((candidate) =>
+            candidate.id === node.id
+              ? { ...candidate, position: { x: start.x, y: start.y } }
+              : candidate,
+          ),
+        );
+        return;
+      }
       familyStore.setPosition(node.id, { x: node.position.x, y: node.position.y });
     },
-    [canEdit],
+    [canEdit, setNodes],
   );
 
   const onAutoLayout = useCallback(() => {
@@ -970,6 +994,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         onEdgeUpdate={canEdit ? onEdgeUpdate : undefined}
         onEdgeUpdateStart={canEdit ? onEdgeUpdateStart : undefined}
         onEdgeUpdateEnd={canEdit ? onEdgeUpdateEnd : undefined}
+        onNodeDragStart={canEdit ? onNodeDragStart : undefined}
         onNodeDragStop={canEdit ? onNodeDragStop : undefined}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}

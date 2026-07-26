@@ -272,6 +272,18 @@ END $$;
 
 SET CONSTRAINTS ALL DEFERRED;
 
+DO $$
+BEGIN
+  IF to_regclass('app.tree_snapshots') IS NULL THEN
+    RAISE EXCEPTION 'tree snapshot history table is missing';
+  END IF;
+  IF to_regprocedure('app.canonical_tree_snapshot(uuid)') IS NULL
+     OR to_regprocedure('app.store_tree_snapshot(uuid,bigint,bigint,uuid)') IS NULL
+     OR to_regprocedure('app.saved_snapshot_version(uuid,uuid)') IS NULL THEN
+    RAISE EXCEPTION 'tree snapshot history functions are missing';
+  END IF;
+END $$;
+
 -- Contributor member permissions: full-tree viewing, branch edits, and creator-owned drafts.
 DO $$
 DECLARE

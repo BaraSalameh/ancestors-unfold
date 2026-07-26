@@ -231,6 +231,19 @@ export async function importSnapshot(
         );
     if (!membershipAccess.rowCount && !branchAccess?.rowCount) throw new Error("FORBIDDEN");
     const isBranchEditor = !membershipAccess.rowCount;
+    const batch = b.batchId || randomUUID();
+    const priorBatch = await c.query<{ version: number }>(
+      "SELECT app.saved_snapshot_version($1::uuid,$2::uuid) version",
+      [treeId, batch],
+    );
+    if (priorBatch.rows[0]?.version)
+      return {
+        batchId: batch,
+        mapped: 0,
+        reconciled: true,
+        version: Number(priorBatch.rows[0].version),
+      };
+    await c.query("SELECT set_config('app.correlation_id',$1,true)", [batch]);
     const allowedMembers = new Set<string>();
     if (isBranchEditor) {
       const members = await c.query<{ id: string }>(
@@ -345,8 +358,7 @@ export async function importSnapshot(
         );
       }
     }
-    const batch = b.batchId || randomUUID(),
-      map = new Map<string, string>(),
+    const map = new Map<string, string>(),
       sfMap = new Map<string, string>();
     for (const member of b.members ?? []) map.set(member.id, member.id);
     for (const subfamily of b.subfamilies ?? []) sfMap.set(subfamily.id, subfamily.id);
@@ -564,6 +576,12 @@ export async function importSnapshot(
       "UPDATE app.family_trees SET version=version+1 WHERE id=$1 RETURNING version",
       [treeId],
     );
+    await c.query("SELECT app.store_tree_snapshot($1::uuid,$2::bigint,$3::bigint,$4::uuid)", [
+      treeId,
+      updated.rows[0].version,
+      expectedVersion,
+      batch,
+    ]);
     return {
       batchId: batch,
       mapped: map.size + sfMap.size,

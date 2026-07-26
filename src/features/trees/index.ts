@@ -8,6 +8,7 @@ export {
   useFamilyPersistence,
 } from "./client/family-store";
 export { activityLabel } from "./domain/activity-label";
+export { isTreeEditorDestination } from "./domain/editor-navigation";
 export { routeParentEdges } from "./domain/route-edges";
 export { computeWivesByHusband, wifeColorFor } from "./domain/wife-colors";
 export { CollaborationDashboard } from "./pages/collaboration-dashboard";

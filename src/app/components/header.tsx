@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useBlocker, useRouterState } from "@tanstack/react-router";
 import {
   Activity,
   Moon,
@@ -8,10 +8,13 @@ import {
   LogOut,
   UserRound,
   Settings,
+  LoaderCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
 import { useAuth } from "@/features/auth";
 import { accountDisplayName } from "@/features/account";
+import { familyStore, isTreeEditorDestination, useFamilyPersistence } from "@/features/trees";
 import { useTheme } from "@/app/providers/theme-provider";
 import { useI18n } from "@/shared/i18n";
 import {
@@ -28,11 +31,47 @@ export function Header() {
   const { theme, toggle } = useTheme();
   const { user, isLoading, logout } = useAuth();
   const location = useRouterState({ select: (state) => state.location });
+  const persistence = useFamilyPersistence();
   const isTreeEdit = location.pathname.startsWith("/tree/") && location.search.mode === "edit";
   const isTreePreview =
     location.pathname.startsWith("/tree/") && location.search.mode === "preview";
   const activeTreeId = location.pathname.match(/^\/tree\/([^/]+)/)?.[1];
   const isAuthPage = location.pathname === "/auth";
+  const isTreeWorkspace =
+    isTreeEdit ||
+    /^\/(edit|member|add)\//.test(location.pathname) ||
+    location.pathname === "/subfamilies";
+
+  useBlocker({
+    shouldBlockFn: ({ next }) => {
+      if (!isTreeWorkspace || !persistence.dirty) return false;
+      const nextSearch = next.search as { mode?: string };
+      const nextIsWorkspace = isTreeEditorDestination(
+        next.pathname,
+        nextSearch,
+        familyStore.getActiveTreeId(),
+      );
+      if (nextIsWorkspace) return false;
+      const discard = window.confirm(t("unsaved_changes_warning"));
+      if (discard) familyStore.discardDraft();
+      return !discard;
+    },
+    enableBeforeUnload: isTreeWorkspace && persistence.dirty,
+  });
+
+  const updateTree = async () => {
+    if (persistence.conflicted) {
+      if (window.confirm(t("reload_latest_warning"))) familyStore.reloadAfterConflict();
+      return;
+    }
+    try {
+      await familyStore.updateSnapshot();
+      toast.success(t("tree_saved"));
+    } catch {
+      const conflicted = familyStore.getPersistenceState().conflicted;
+      toast.error(conflicted ? t("tree_version_conflict") : t("tree_update_failed_draft"));
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 border-b bg-card/80 backdrop-blur">
@@ -58,6 +97,26 @@ export function Header() {
         )}
 
         <div className="ms-auto flex items-center gap-1">
+          {isTreeWorkspace && familyStore.canEditActiveTree() && (
+            <Button
+              size="sm"
+              variant={persistence.dirty ? "default" : "secondary"}
+              disabled={!persistence.dirty || persistence.saving}
+              onClick={() => void updateTree()}
+              aria-live="polite"
+            >
+              {persistence.saving && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}
+              {persistence.saving
+                ? t("updating_tree")
+                : persistence.conflicted
+                  ? t("reload_latest")
+                  : persistence.error
+                    ? t("retry_update")
+                    : persistence.dirty
+                      ? t("update")
+                      : t("saved")}
+            </Button>
+          )}
           <Button
             size="icon"
             variant="ghost"
