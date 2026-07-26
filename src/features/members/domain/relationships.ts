@@ -32,6 +32,16 @@ export function linkSpouses(
   });
 }
 
+export function ensureParentsAreSpouses(
+  members: FamilyMember[],
+  childId: string,
+  updatedAt: string,
+): FamilyMember[] {
+  const child = members.find((member) => member.id === childId);
+  if (!child?.father_id || !child.mother_id) return members;
+  return linkSpouses(members, child.father_id, child.mother_id, updatedAt);
+}
+
 export function toggleDivorce(
   members: FamilyMember[],
   firstId: string,
@@ -66,6 +76,44 @@ export function removeMember(members: FamilyMember[], id: string): FamilyMember[
       spouse_ids: member.spouse_ids?.filter((value) => value !== id),
       divorced_from: member.divorced_from?.filter((value) => value !== id),
     }));
+}
+
+export function removeSpouseAttachment(
+  members: FamilyMember[],
+  husbandId: string,
+  wifeId: string,
+  updatedAt: string,
+): FamilyMember[] {
+  const husband = members.find((member) => member.id === husbandId);
+  const wife = members.find((member) => member.id === wifeId);
+  if (husband?.gender !== "male" || wife?.gender !== "female") return members;
+
+  const isIndependentChild = Boolean(wife.father_id || wife.mother_id);
+  const detached = members.map((member) => {
+    if (member.id === husbandId) {
+      return {
+        ...member,
+        spouse_id: member.spouse_id === wifeId ? undefined : member.spouse_id,
+        spouse_ids: removeValue(member.spouse_ids, wifeId),
+        divorced_from: removeValue(member.divorced_from, wifeId),
+        updated_at: updatedAt,
+      };
+    }
+    if (member.id === wifeId) {
+      return {
+        ...member,
+        spouse_id: member.spouse_id === husbandId ? undefined : member.spouse_id,
+        divorced_from: removeValue(member.divorced_from, husbandId),
+        updated_at: updatedAt,
+      };
+    }
+    if (member.father_id === husbandId && member.mother_id === wifeId) {
+      return { ...member, mother_id: undefined, updated_at: updatedAt };
+    }
+    return member;
+  });
+
+  return isIndependentChild ? detached : removeMember(detached, wifeId);
 }
 
 export function isDescendant(

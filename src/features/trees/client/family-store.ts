@@ -13,8 +13,10 @@ import {
   type TreeAccessScope,
 } from "../domain/access-policy";
 import {
+  ensureParentsAreSpouses,
   linkSpouses,
   removeMember,
+  removeSpouseAttachment,
   toggleDivorce as toggleDivorceRelationship,
 } from "@/features/members/domain";
 
@@ -373,8 +375,31 @@ export const familyStore = {
           return m;
         });
       }
+      state = ensureParentsAreSpouses(state, created.id, now);
     });
     return member!;
+  },
+  addMotherForChild(input: MemberInput, childId: string): FamilyMember {
+    const now = new Date().toISOString();
+    let mother: FamilyMember | undefined;
+    commit(() => {
+      const child = state.find((member) => member.id === childId);
+      const created: FamilyMember = {
+        ...input,
+        gender: "female",
+        id: crypto.randomUUID(),
+        created_at: now,
+        updated_at: now,
+      };
+      mother = created;
+      state = [...state, created];
+      if (!child) return;
+      state = state.map((member) =>
+        member.id === childId ? { ...member, mother_id: created.id, updated_at: now } : member,
+      );
+      state = ensureParentsAreSpouses(state, childId, now);
+    });
+    return mother!;
   },
   setPosition(id: string, pos: { x: number; y: number } | null): void {
     commit(() => {
@@ -429,6 +454,7 @@ export const familyStore = {
           return m;
         });
       }
+      state = ensureParentsAreSpouses(state, id, now);
     });
   },
   toggleDivorce(aId: string, bId: string): void {
@@ -475,31 +501,8 @@ export const familyStore = {
   },
   removeSpouse(maleId: string, femaleId: string): void {
     const now = new Date().toISOString();
-    const female = state.find((m) => m.id === femaleId);
-    const removeUnknown = !!female?.is_unknown;
     commit(() => {
-      state = state
-        .filter((m) => !(removeUnknown && m.id === femaleId))
-        .map((m) => {
-          if (m.id === maleId) {
-            return {
-              ...m,
-              spouse_ids: (m.spouse_ids ?? []).filter((x) => x !== femaleId),
-              spouse_id: m.spouse_id === femaleId ? undefined : m.spouse_id,
-              divorced_from: (m.divorced_from ?? []).filter((x) => x !== femaleId),
-              updated_at: now,
-            };
-          }
-          if (m.id === femaleId && !removeUnknown) {
-            return {
-              ...m,
-              spouse_id: m.spouse_id === maleId ? undefined : m.spouse_id,
-              divorced_from: (m.divorced_from ?? []).filter((x) => x !== maleId),
-              updated_at: now,
-            };
-          }
-          return m;
-        });
+      state = removeSpouseAttachment(state, maleId, femaleId, now);
     });
   },
   addUnknownSpouse(maleId: string): FamilyMember | undefined {

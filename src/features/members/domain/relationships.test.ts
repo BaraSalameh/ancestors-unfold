@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   descendantIds,
+  ensureParentsAreSpouses,
   isDescendant,
   linkSpouses,
   removeMember,
+  removeSpouseAttachment,
   toggleDivorce,
 } from "./relationships";
 import type { FamilyMember } from "./types";
@@ -19,6 +21,102 @@ const member = (id: string, gender: "male" | "female", patch: Partial<FamilyMemb
 });
 
 describe("family relationships", () => {
+  it("persists a union for a child's recorded parents", () => {
+    const result = ensureParentsAreSpouses(
+      [
+        member("father", "male"),
+        member("mother", "female"),
+        member("child", "male", { father_id: "father", mother_id: "mother" }),
+      ],
+      "child",
+      "now",
+    );
+
+    expect(result.find((item) => item.id === "father")).toMatchObject({
+      spouse_id: "mother",
+      spouse_ids: ["mother"],
+    });
+    expect(result.find((item) => item.id === "mother")).toMatchObject({
+      spouse_id: "father",
+    });
+  });
+
+  it("leaves an explicit union intact when the child has no mother", () => {
+    const members = linkSpouses(
+      [
+        member("father", "male"),
+        member("mother", "female"),
+        member("child", "male", { father_id: "father" }),
+      ],
+      "father",
+      "mother",
+      "now",
+    );
+
+    expect(ensureParentsAreSpouses(members, "child", "later")).toBe(members);
+  });
+
+  it("deletes an unanchored spouse and clears all references to her", () => {
+    const result = removeSpouseAttachment(
+      [
+        member("husband", "male", {
+          spouse_id: "wife",
+          spouse_ids: ["wife"],
+          divorced_from: ["wife"],
+        }),
+        member("other-husband", "male", { spouse_id: "wife", spouse_ids: ["wife"] }),
+        member("wife", "female", {
+          spouse_id: "husband",
+          divorced_from: ["husband"],
+        }),
+        member("shared-child", "male", { father_id: "husband", mother_id: "wife" }),
+        member("other-child", "female", {
+          father_id: "other-husband",
+          mother_id: "wife",
+        }),
+      ],
+      "husband",
+      "wife",
+      "now",
+    );
+
+    expect(result.find((item) => item.id === "wife")).toBeUndefined();
+    expect(result.find((item) => item.id === "husband")).toMatchObject({
+      spouse_id: undefined,
+      spouse_ids: [],
+      divorced_from: [],
+    });
+    expect(result.find((item) => item.id === "shared-child")?.mother_id).toBeUndefined();
+    expect(result.find((item) => item.id === "other-child")?.mother_id).toBeUndefined();
+    expect(result.find((item) => item.id === "other-husband")).toMatchObject({
+      spouse_id: undefined,
+      spouse_ids: [],
+    });
+  });
+
+  it.each([{ father_id: "parent" }, { mother_id: "parent" }])(
+    "preserves an anchored spouse while detaching her family attachment",
+    (parentLink) => {
+      const result = removeSpouseAttachment(
+        [
+          member("husband", "male", { spouse_id: "wife", spouse_ids: ["wife"] }),
+          member("parent", "male"),
+          member("wife", "female", { spouse_id: "husband", ...parentLink }),
+          member("child", "male", { father_id: "husband", mother_id: "wife" }),
+        ],
+        "husband",
+        "wife",
+        "now",
+      );
+
+      expect(result.find((item) => item.id === "wife")).toMatchObject({
+        ...parentLink,
+        spouse_id: undefined,
+      });
+      expect(result.find((item) => item.id === "child")?.mother_id).toBeUndefined();
+    },
+  );
+
   it("links spouses symmetrically without duplicating the male ordering", () => {
     const result = linkSpouses(
       [member("m", "male", { spouse_ids: ["f"] }), member("f", "female")],

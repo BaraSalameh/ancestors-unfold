@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -23,6 +24,8 @@ import {
   ChevronDown,
   ChevronsUpDown,
   Check,
+  Link2,
+  Unlink,
 } from "lucide-react";
 import { useI18n, displayName, ordinal, type Lang } from "@/shared/i18n";
 import { familyStore } from "@/features/trees/client";
@@ -201,6 +204,22 @@ export function SpousesEditor({
                     {w.death_date ? `â€“${w.death_date.slice(0, 4)}` : ""}
                   </span>
                 )}
+                <button
+                  type="button"
+                  onClick={() => familyStore.toggleDivorce(maleId, w.id)}
+                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  title={
+                    (male?.divorced_from ?? []).includes(w.id)
+                      ? t("mark_married")
+                      : t("mark_divorced")
+                  }
+                >
+                  {(male?.divorced_from ?? []).includes(w.id) ? (
+                    <Link2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <Unlink className="h-3.5 w-3.5" />
+                  )}
+                </button>
                 <div className="ms-auto flex shrink-0 items-center gap-0.5">
                   <button
                     type="button"
@@ -236,6 +255,12 @@ export function SpousesEditor({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
+        <Button asChild type="button" size="sm">
+          <Link to="/add" search={{ spouseId: maleId }}>
+            <Plus className="h-3.5 w-3.5" />
+            {t("add_spouse")}
+          </Link>
+        </Button>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button type="button" size="sm" variant="outline" className="gap-1.5">

@@ -47,8 +47,8 @@ export function MemberForm({
   const [death_date, setDeath] = useState(initial?.death_date ?? "");
   const [image_url, setImage] = useState(initial?.image_url ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [father_id, setFather] = useState(initial?.father_id ?? "");
-  const [mother_id, setMother] = useState(initial?.mother_id ?? "");
+  const father_id = initial?.father_id ?? "";
+  const mother_id = initial?.mother_id ?? "";
   const [spouse_id, setSpouse] = useState(initial?.spouse_id ?? "");
   const [external_children, setExternalChildren] = useState<ExternalChild[]>(
     initial?.external_children ?? [],
@@ -173,21 +173,7 @@ export function MemberForm({
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <RelationSearch
-          label={t("father")}
-          value={father_id}
-          onChange={setFather}
-          options={males}
-          lang={lang}
-        />
-        <RelationSearch
-          label={t("mother")}
-          value={mother_id}
-          onChange={setMother}
-          options={females}
-          lang={lang}
-        />
+      <div>
         {!showSpouseEditor && (
           <RelationSearch
             label={t("spouse")}

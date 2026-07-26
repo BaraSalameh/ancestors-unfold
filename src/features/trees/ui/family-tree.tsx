@@ -83,16 +83,17 @@ function layout(
   const memberById = new Map(members.map((m) => [m.id, m]));
   const wivesByHusband = computeWivesByHusband(members);
 
-  // A wife's standalone card is hidden ONLY when she is an outsider (no
-  // father resolvable in this tree) or a placeholder unknown wife. Cousin
-  // wives (father exists in the tree) keep their own card so the family
-  // link to their father remains visible.
+  // A dependent wife is embedded in the husband's card. A wife with either
+  // recorded parent is independently anchored and keeps her own tree card.
   const asWife = new Set<string>();
   const wifeHusbandOf = new Map<string, string>(); // wifeId -> husbandId
   for (const [husbandId, list] of wivesByHusband.entries()) {
     for (const w of list) {
       wifeHusbandOf.set(w.id, husbandId);
-      const hasFamily = !!(w.father_id && memberById.has(w.father_id));
+      const hasFamily = Boolean(
+        (w.father_id && memberById.has(w.father_id)) ||
+        (w.mother_id && memberById.has(w.mother_id)),
+      );
       if (!hasFamily || w.is_unknown) asWife.add(w.id);
     }
   }
