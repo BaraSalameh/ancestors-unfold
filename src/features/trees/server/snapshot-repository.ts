@@ -412,6 +412,12 @@ export async function importSnapshot(
           values,
         );
       await c.query(
+        `UPDATE app.users u SET profile_gender=$2,updated_at=now()
+         FROM app.family_members fm
+         WHERE fm.id=$1 AND fm.linked_user_id=u.id AND u.profile_gender<>$2`,
+        [id, m.gender],
+      );
+      await c.query(
         `INSERT INTO app.import_id_map(import_batch_id,entity_type,source_id,target_id,status) VALUES($1,'member',$2,$3,'mapped') ON CONFLICT DO NOTHING`,
         [batch, m.id, id],
       );

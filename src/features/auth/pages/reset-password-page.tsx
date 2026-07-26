@@ -6,8 +6,8 @@ import { useI18n } from "@/shared/i18n";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { PasswordInput } from "@/shared/ui/password-input";
 
 export function ResetPasswordPage() {
   const { token } = useSearch({ from: "/reset-password" }),
@@ -69,10 +69,11 @@ export function ResetPasswordPage() {
                 <Label htmlFor="new-password">{t("password")}</Label>
                 <div className="relative mt-2">
                   <LockKeyhole className="absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
+                  <PasswordInput
                     id="new-password"
                     className="ps-9"
-                    type="password"
+                    showLabel={t("show_password")}
+                    hideLabel={t("hide_password")}
                     autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -81,10 +82,11 @@ export function ResetPasswordPage() {
               </div>
               <div>
                 <Label htmlFor="confirm-new-password">{t("confirm_password")}</Label>
-                <Input
+                <PasswordInput
                   id="confirm-new-password"
-                  className="mt-2"
-                  type="password"
+                  wrapperClassName="mt-2"
+                  showLabel={t("show_password")}
+                  hideLabel={t("hide_password")}
                   autoComplete="new-password"
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}

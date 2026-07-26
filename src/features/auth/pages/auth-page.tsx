@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
+import { PasswordInput } from "@/shared/ui/password-input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/shared/ui/input-otp";
 import { Label } from "@/shared/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
@@ -408,8 +409,9 @@ export function AuthPage({
                       )}
                     </div>
                     <Field icon={<LockKeyhole />}>
-                      <Input
-                        type="password"
+                      <PasswordInput
+                        showLabel={t("show_password")}
+                        hideLabel={t("hide_password")}
                         autoComplete={mode === "login" ? "current-password" : "new-password"}
                         {...form.register("password")}
                       />
@@ -423,8 +425,9 @@ export function AuthPage({
                   {mode === "register" && (
                     <>
                       <Label>{t("confirm_password")}</Label>
-                      <Input
-                        type="password"
+                      <PasswordInput
+                        showLabel={t("show_password")}
+                        hideLabel={t("hide_password")}
                         autoComplete="new-password"
                         {...form.register("confirmPassword")}
                       />
@@ -495,7 +498,7 @@ function Field({
             {icon}
           </span>
         )}
-        <div className={icon ? "[&>input]:ps-9" : ""}>{children}</div>
+        <div className={icon ? "[&_input]:ps-9" : ""}>{children}</div>
       </div>
     </div>
   );

@@ -1,8 +1,11 @@
 /* eslint-disable max-lines, max-lines-per-function, complexity -- Role-aware dashboard keeps coordinated remote state in one controller. */
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
+  AlertTriangle,
+  Check,
+  Circle,
   GitBranch,
   MailPlus,
   Pencil,
@@ -32,6 +35,13 @@ import {
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { activityLabel } from "../domain/activity-label";
+import {
+  authenticityLevels,
+  authenticityRequirementStates,
+  authenticityStepStatus,
+  type AuthenticityLevel,
+  type EarnedAuthenticityLevel,
+} from "../domain/authenticity-progress";
 import { copyTreePreviewUrl } from "./dashboard-share";
 import { useAuth } from "@/features/auth";
 import { useI18n } from "@/shared/i18n";
@@ -52,7 +62,18 @@ type Statistics = {
   managed_branches: number;
   total_branches: number;
   serious_complaints: number;
-  authenticity_level: "new" | "growing" | "family_backed" | "established" | "under_review";
+  authenticity_level: AuthenticityLevel;
+  earned_authenticity_level: EarnedAuthenticityLevel;
+  growing_contributors: number;
+  growing_branches: number;
+  backed_contributors: number;
+  backed_branches: number;
+  established_contributors: number;
+  established_branches: number;
+  established_min_days: number;
+  recent_activity_days: number;
+  tree_age_days: number;
+  recent_activity_met: boolean;
   tree_created_at: string;
   last_contribution_at: string | null;
   owner_name_en: string;
@@ -213,16 +234,6 @@ export function CollaborationDashboard() {
       setDeletingAccount(false);
     }
   };
-  const authenticityLabel = useMemo(() => {
-    const key = {
-      new: "new_family_tree",
-      growing: "growing_family_tree",
-      family_backed: "family_backed_tree",
-      established: "established_family_tree",
-      under_review: "under_review",
-    }[stats?.authenticity_level ?? "new"];
-    return t(key as Parameters<typeof t>[0]);
-  }, [stats?.authenticity_level, t]);
   if (!tree || !stats)
     return <main className="mx-auto max-w-7xl p-8 text-center">{t("loading")}</main>;
   return (
@@ -408,15 +419,29 @@ export function CollaborationDashboard() {
                 {t("authenticity")}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {t("current_authenticity_level")}
-                </p>
-                <Badge className="mt-2">{authenticityLabel}</Badge>
-              </div>
+            <CardContent className="space-y-5">
+              {stats.authenticity_level === "under_review" && (
+                <div
+                  className="flex gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm"
+                  role="status"
+                >
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                  <div>
+                    <p className="font-semibold text-destructive">{t("under_review")}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {t(
+                        stats.serious_complaints === 1
+                          ? "authenticity_under_review_description_one"
+                          : "authenticity_under_review_description_many",
+                        { count: stats.serious_complaints },
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+              <AuthenticityRoadmap stats={stats} />
               <p className="text-sm text-muted-foreground">{t("family_backed_explanation")}</p>
-              <dl className="mt-5 space-y-3 text-sm">
+              <dl className="space-y-3 text-sm">
                 <Fact
                   label={t("tree_owner")}
                   value={local(stats.owner_name_en, stats.owner_name_ar)}
@@ -546,6 +571,199 @@ function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; va
     </Card>
   );
 }
+function AuthenticityRoadmap({ stats }: { stats: Statistics }) {
+  const { t } = useI18n();
+  const requirementStates = authenticityRequirementStates({
+    activeContributors: stats.active_contributors,
+    managedBranches: stats.managed_branches,
+    treeAgeDays: stats.tree_age_days,
+    recentActivityMet: stats.recent_activity_met,
+    growingContributors: stats.growing_contributors,
+    growingBranches: stats.growing_branches,
+    backedContributors: stats.backed_contributors,
+    backedBranches: stats.backed_branches,
+    establishedContributors: stats.established_contributors,
+    establishedBranches: stats.established_branches,
+    establishedMinDays: stats.established_min_days,
+  });
+  const levelLabels = {
+    new: t("new_family_tree"),
+    growing: t("growing_family_tree"),
+    family_backed: t("family_backed_tree"),
+    established: t("established_family_tree"),
+  };
+  const requirements: Record<EarnedAuthenticityLevel, { label: string; met: boolean }[]> = {
+    new: [{ label: t("authenticity_starting_level"), met: requirementStates.new[0] }],
+    growing: [
+      {
+        label: t(
+          stats.growing_contributors === 1
+            ? "authenticity_contributor_progress"
+            : "authenticity_contributors_progress",
+          {
+            current: stats.active_contributors,
+            required: stats.growing_contributors,
+          },
+        ),
+        met: requirementStates.growing[0],
+      },
+      {
+        label: t(
+          stats.growing_branches === 1
+            ? "authenticity_branch_progress"
+            : "authenticity_branches_progress",
+          {
+            current: stats.managed_branches,
+            required: stats.growing_branches,
+          },
+        ),
+        met: requirementStates.growing[1],
+      },
+    ],
+    family_backed: [
+      {
+        label: t(
+          stats.backed_contributors === 1
+            ? "authenticity_contributor_progress"
+            : "authenticity_contributors_progress",
+          {
+            current: stats.active_contributors,
+            required: stats.backed_contributors,
+          },
+        ),
+        met: requirementStates.family_backed[0],
+      },
+      {
+        label: t(
+          stats.backed_branches === 1
+            ? "authenticity_branch_progress"
+            : "authenticity_branches_progress",
+          {
+            current: stats.managed_branches,
+            required: stats.backed_branches,
+          },
+        ),
+        met: requirementStates.family_backed[1],
+      },
+    ],
+    established: [
+      {
+        label: t(
+          stats.established_contributors === 1
+            ? "authenticity_contributor_progress"
+            : "authenticity_contributors_progress",
+          {
+            current: stats.active_contributors,
+            required: stats.established_contributors,
+          },
+        ),
+        met: requirementStates.established[0],
+      },
+      {
+        label: t(
+          stats.established_branches === 1
+            ? "authenticity_branch_progress"
+            : "authenticity_branches_progress",
+          {
+            current: stats.managed_branches,
+            required: stats.established_branches,
+          },
+        ),
+        met: requirementStates.established[1],
+      },
+      {
+        label: t(
+          stats.established_min_days === 1
+            ? "authenticity_age_progress_one"
+            : "authenticity_age_progress",
+          {
+            current: stats.tree_age_days,
+            required: stats.established_min_days,
+          },
+        ),
+        met: requirementStates.established[2],
+      },
+      {
+        label: t(
+          stats.recent_activity_days === 1
+            ? "authenticity_recent_activity_one"
+            : "authenticity_recent_activity",
+          { days: stats.recent_activity_days },
+        ),
+        met: requirementStates.established[3],
+      },
+    ],
+  };
+  return (
+    <ol className="space-y-0">
+      {authenticityLevels.map((level, index) => {
+        const status = authenticityStepStatus(level, stats.earned_authenticity_level);
+        const statusLabel = t(
+          status === "completed"
+            ? "authenticity_completed"
+            : status === "current"
+              ? "authenticity_current"
+              : "authenticity_upcoming",
+        );
+        return (
+          <li
+            key={level}
+            className={`relative pb-4 ps-8 last:pb-0 ${
+              index < authenticityLevels.length - 1 ? "border-s border-border" : ""
+            }`}
+          >
+            <span
+              className={`absolute -start-3 top-0 flex h-6 w-6 items-center justify-center rounded-full border ${
+                status === "completed"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : status === "current"
+                    ? "border-primary bg-primary/10 text-primary ring-4 ring-primary/10"
+                    : "border-muted-foreground/30 bg-background text-muted-foreground"
+              }`}
+              aria-hidden="true"
+            >
+              {status === "completed" ? (
+                <Check className="h-3.5 w-3.5" />
+              ) : (
+                <Circle className="h-2.5 w-2.5" fill="currentColor" />
+              )}
+            </span>
+            <div
+              className={`rounded-lg border p-3 ${
+                status === "current"
+                  ? "border-primary/40 bg-primary/5"
+                  : status === "upcoming"
+                    ? "border-border/70 bg-muted/20"
+                    : "border-border"
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold">{levelLabels[level]}</p>
+                <Badge variant={status === "current" ? "default" : "secondary"}>
+                  {statusLabel}
+                </Badge>
+              </div>
+              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                {requirements[level].map((requirement) => {
+                  return (
+                    <li key={requirement.label} className="flex items-start gap-1.5">
+                      {requirement.met ? (
+                        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      ) : (
+                        <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+                      )}
+                      <span>{requirement.label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3">
@@ -554,7 +772,6 @@ function Fact({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 function InviteDialog({
   open,
   onOpenChange,

@@ -131,20 +131,18 @@ export async function acceptRegistrationInvitation(
     [invitation.id, user.id],
   );
   if (memberId) {
-    const linked = await client.query(
-      `UPDATE app.family_members SET linked_user_id=$2,name_en=$4,name_ar=$5,gender=$6,
+    const linked = await client.query<{ gender: "male" | "female" | "unspecified" }>(
+      `UPDATE app.family_members SET linked_user_id=$2,
         updated_by=$2,updated_at=now(),version=version+1
-       WHERE id=$1 AND tree_id=$3 AND linked_user_id IS NULL AND deleted_at IS NULL RETURNING id`,
-      [
-        memberId,
-        user.id,
-        invitation.tree_id,
-        user.full_name_en,
-        user.full_name_ar,
-        user.profile_gender,
-      ],
+       WHERE id=$1 AND tree_id=$3 AND linked_user_id IS NULL AND deleted_at IS NULL
+       RETURNING gender`,
+      [memberId, user.id, invitation.tree_id],
     );
     if (!linked.rowCount) throw new ApiError("FAMILY_MEMBER_UNAVAILABLE", 409);
+    await client.query("UPDATE app.users SET profile_gender=$2,updated_at=now() WHERE id=$1", [
+      user.id,
+      linked.rows[0].gender,
+    ]);
   }
   await client.query(
     `UPDATE app.tree_memberships SET family_member_id=$3
@@ -203,9 +201,9 @@ const authenticitySql = `
     LEFT JOIN app.tree_complaints c ON c.tree_id=t.id
     LEFT JOIN app.tree_activity a ON a.tree_id=t.id
     WHERE t.id=$1 GROUP BY t.id
-  ) SELECT s.*,
+  ), scored AS (
+  SELECT s.*,
     CASE
-      WHEN s.serious_complaints>0 AND cfg.serious_complaint_downgrade THEN 'under_review'
       WHEN s.active_contributors>=cfg.established_contributors
        AND s.managed_branches>=cfg.established_branches
        AND ft.created_at<=now()-(cfg.established_min_days||' days')::interval
@@ -216,8 +214,24 @@ const authenticitySql = `
       WHEN s.active_contributors>=cfg.growing_contributors
        AND s.managed_branches>=cfg.growing_branches THEN 'growing'
       ELSE 'new'
+    END earned_authenticity_level,
+    cfg.growing_contributors,cfg.growing_branches,
+    cfg.backed_contributors,cfg.backed_branches,
+    cfg.established_contributors,cfg.established_branches,
+    cfg.established_min_days,cfg.recent_activity_days,
+    floor(extract(epoch FROM (now()-ft.created_at))/86400)::integer tree_age_days,
+    COALESCE(
+      s.last_contribution_at>=now()-(cfg.recent_activity_days||' days')::interval,
+      false
+    ) recent_activity_met,
+    cfg.serious_complaint_downgrade
+  FROM stats s JOIN app.family_trees ft ON ft.id=s.id CROSS JOIN cfg
+  ) SELECT scored.*,
+    CASE
+      WHEN serious_complaints>0 AND serious_complaint_downgrade THEN 'under_review'
+      ELSE earned_authenticity_level
     END authenticity_level
-  FROM stats s JOIN app.family_trees ft ON ft.id=s.id CROSS JOIN cfg`;
+  FROM scored`;
 
 export async function validatePublicInvitation(request: Request) {
   const encodedToken = new URL(request.url).pathname.match(/^\/api\/invitations\/([^/]+)$/)?.[1];

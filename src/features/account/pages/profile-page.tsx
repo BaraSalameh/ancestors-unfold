@@ -8,6 +8,7 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
+import { PasswordInput } from "@/shared/ui/password-input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/shared/ui/input-otp";
 import { Label } from "@/shared/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
@@ -237,10 +238,11 @@ export function ProfilePage() {
                   </div>
                   <div>
                     <Label htmlFor="current-password">{t("current_password")}</Label>
-                    <Input
+                    <PasswordInput
                       id="current-password"
-                      className="mt-2"
-                      type="password"
+                      wrapperClassName="mt-2"
+                      showLabel={t("show_password")}
+                      hideLabel={t("hide_password")}
                       autoComplete="current-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}

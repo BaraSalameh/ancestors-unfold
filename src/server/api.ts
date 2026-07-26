@@ -577,13 +577,23 @@ export async function handleApi(request: Request): Promise<Response | null> {
     }
     if (url.pathname === "/api/profile" && request.method === "PATCH") {
       const body = await parseBody(request, schemas.profileNames);
-      const updated = await query<Session>(
-        `UPDATE app.users SET full_name_en=$2,full_name_ar=$3,
-           profile_gender=COALESCE($4::app.gender,profile_gender),updated_at=now()
-         WHERE id=$1 AND status='active'
-         RETURNING id AS user_id,email,full_name_en,full_name_ar,profile_gender`,
-        [session.user_id, body.fullNameEn, body.fullNameAr, body.gender ?? null],
-      );
+      const updated = await transaction(session.user_id, session.id, requestId, async (client) => {
+        const profile = await client.query<Session>(
+          `UPDATE app.users SET full_name_en=$2,full_name_ar=$3,
+               profile_gender=COALESCE($4::app.gender,profile_gender),updated_at=now()
+             WHERE id=$1 AND status='active'
+             RETURNING id AS user_id,email,full_name_en,full_name_ar,profile_gender`,
+          [session.user_id, body.fullNameEn, body.fullNameAr, body.gender ?? null],
+        );
+        if (body.gender)
+          await client.query(
+            `UPDATE app.family_members SET gender=$2,updated_by=$1,updated_at=now(),
+                 version=version+1
+               WHERE linked_user_id=$1 AND deleted_at IS NULL AND gender<>$2`,
+            [session.user_id, body.gender],
+          );
+        return profile;
+      });
       return json({ user: userDto(updated.rows[0]), createdAt: new Date().toISOString() });
     }
     if (url.pathname === "/api/profile" && request.method === "DELETE") {
