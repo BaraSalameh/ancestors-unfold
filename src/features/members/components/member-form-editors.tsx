@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -23,11 +24,14 @@ import {
   ChevronDown,
   ChevronsUpDown,
   Check,
+  Link2,
+  Unlink,
 } from "lucide-react";
 import { useI18n, displayName, ordinal, type Lang } from "@/shared/i18n";
 import { familyStore } from "@/features/trees/client";
 import { wifeColorFor } from "@/features/trees/domain";
 import type { ExternalChild, FamilyMember } from "../domain/types";
+import { parentDisplayName, searchParentCandidates } from "../domain/parent-selection";
 
 export function RelationSearch({
   label,
@@ -35,24 +39,32 @@ export function RelationSearch({
   onChange,
   options,
   lang,
+  searchFirst = false,
+  showBirthYear = false,
+  selectedOption,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: FamilyMember[];
   lang: Lang;
+  searchFirst?: boolean;
+  showBirthYear?: boolean;
+  selectedOption?: FamilyMember;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const selected = options.find((m) => m.id === value);
-  const normalizedQuery = query.trim().toLowerCase();
-  const results = normalizedQuery
-    ? options.filter(
-        (m) =>
-          m.name_en.toLowerCase().includes(normalizedQuery) || m.name_ar.includes(query.trim()),
-      )
-    : options;
+  const selected = options.find((m) => m.id === value) ?? selectedOption;
+  const results = searchFirst
+    ? searchParentCandidates(options, query)
+    : query.trim()
+      ? searchParentCandidates(options, query)
+      : options;
+  const optionName = (member: FamilyMember) => {
+    const name = displayName(member, lang);
+    return showBirthYear ? parentDisplayName(member, name) : name;
+  };
 
   return (
     <div className="space-y-2">
@@ -67,7 +79,7 @@ export function RelationSearch({
             className="w-full justify-between font-normal"
           >
             <span className={selected ? "truncate" : "truncate text-muted-foreground"}>
-              {selected ? displayName(selected, lang) : t("search_placeholder")}
+              {selected ? optionName(selected) : t("search_placeholder")}
             </span>
             <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
@@ -110,7 +122,7 @@ export function RelationSearch({
                       <Check
                         className={`me-2 h-4 w-4 ${value === m.id ? "opacity-100" : "opacity-0"}`}
                       />
-                      <span className="truncate">{displayName(m, lang)}</span>
+                      <span className="truncate">{optionName(m)}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -201,6 +213,22 @@ export function SpousesEditor({
                     {w.death_date ? `â€“${w.death_date.slice(0, 4)}` : ""}
                   </span>
                 )}
+                <button
+                  type="button"
+                  onClick={() => familyStore.toggleDivorce(maleId, w.id)}
+                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  title={
+                    (male?.divorced_from ?? []).includes(w.id)
+                      ? t("mark_married")
+                      : t("mark_divorced")
+                  }
+                >
+                  {(male?.divorced_from ?? []).includes(w.id) ? (
+                    <Link2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <Unlink className="h-3.5 w-3.5" />
+                  )}
+                </button>
                 <div className="ms-auto flex shrink-0 items-center gap-0.5">
                   <button
                     type="button"
@@ -236,6 +264,12 @@ export function SpousesEditor({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
+        <Button asChild type="button" size="sm">
+          <Link to="/add" search={{ spouseId: maleId }}>
+            <Plus className="h-3.5 w-3.5" />
+            {t("add_spouse")}
+          </Link>
+        </Button>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button type="button" size="sm" variant="outline" className="gap-1.5">

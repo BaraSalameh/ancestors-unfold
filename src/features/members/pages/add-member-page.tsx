@@ -81,23 +81,32 @@ export function AddMemberPage({
           initial={initial}
           members={members}
           lockedGender={
-            parentRole === "father" ? "male" : parentRole === "mother" ? "female" : undefined
+            parentRole === "father"
+              ? "male"
+              : parentRole === "mother"
+                ? "female"
+                : spouseTo
+                  ? spouseTo.gender === "male"
+                    ? "female"
+                    : "male"
+                  : undefined
           }
           submitLabel={t("save")}
-          onCancel={() =>
-            navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } })
-          }
+          onCancel={() => {
+            if (spouseTo) navigate({ to: "/edit/$id", params: { id: spouseTo.id } });
+            else navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } });
+          }}
           onSubmit={async (data) => {
-            const m = familyStore.add(data);
-            // If creating a parent for an existing child, attach the child
-            if (child) {
-              if (parentRole === "father") familyStore.update(child.id, { father_id: m.id });
-              else if (parentRole === "mother") familyStore.update(child.id, { mother_id: m.id });
-            }
+            const m =
+              child && parentRole === "mother"
+                ? familyStore.addMotherForChild(data, child.id)
+                : familyStore.add(data);
+            if (child && parentRole === "father") familyStore.update(child.id, { father_id: m.id });
             try {
               await familyStore.flushPendingSave();
               toast.success(t("created"));
-              navigate({ to: "/member/$id", params: { id: m.id } });
+              if (spouseTo) navigate({ to: "/edit/$id", params: { id: spouseTo.id } });
+              else navigate({ to: "/member/$id", params: { id: m.id } });
             } catch {
               toast.error(t("save_failed"));
             }

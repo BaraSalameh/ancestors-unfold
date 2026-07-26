@@ -83,16 +83,17 @@ function layout(
   const memberById = new Map(members.map((m) => [m.id, m]));
   const wivesByHusband = computeWivesByHusband(members);
 
-  // A wife's standalone card is hidden ONLY when she is an outsider (no
-  // father resolvable in this tree) or a placeholder unknown wife. Cousin
-  // wives (father exists in the tree) keep their own card so the family
-  // link to their father remains visible.
+  // A dependent wife is embedded in the husband's card. A wife with either
+  // recorded parent is independently anchored and keeps her own tree card.
   const asWife = new Set<string>();
   const wifeHusbandOf = new Map<string, string>(); // wifeId -> husbandId
   for (const [husbandId, list] of wivesByHusband.entries()) {
     for (const w of list) {
       wifeHusbandOf.set(w.id, husbandId);
-      const hasFamily = !!(w.father_id && memberById.has(w.father_id));
+      const hasFamily = Boolean(
+        (w.father_id && memberById.has(w.father_id)) ||
+        (w.mother_id && memberById.has(w.mother_id)),
+      );
       if (!hasFamily || w.is_unknown) asWife.add(w.id);
     }
   }
@@ -557,7 +558,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       }
       const role = relationship.parentId === child.mother_id ? "mother_id" : "father_id";
       preserveDetachedSubtree(child.id, role);
-      familyStore.update(child.id, { [role]: undefined } as Partial<FamilyMember>);
+      familyStore.detachParent(child.id, role);
       toast.success(t("link_removed"));
     },
     [canEdit, preserveDetachedSubtree, t],
@@ -745,9 +746,15 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         const child = familyStore.get(data.childId);
         const parent = familyStore.get(data.parentId);
         if (!child || !parent) continue;
-        const key = parent.gender === "male" ? "father_id" : "mother_id";
+        const key =
+          child.father_id === parent.id
+            ? "father_id"
+            : child.mother_id === parent.id
+              ? "mother_id"
+              : undefined;
+        if (!key) continue;
         preserveDetachedSubtree(child.id, key);
-        familyStore.update(child.id, { [key]: undefined } as Partial<FamilyMember>);
+        familyStore.detachParent(child.id, key);
         cleared++;
       }
       if (cleared) toast.success(t("link_removed"));
@@ -801,7 +808,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       }
       const newRole = newParent.gender === "male" ? "father_id" : "mother_id";
 
-      familyStore.update(oldChild.id, { [oldRole]: undefined } as Partial<FamilyMember>);
+      familyStore.detachParent(oldChild.id, oldRole);
       familyStore.update(newChild.id, { [newRole]: newParent.id } as Partial<FamilyMember>);
       setEdges((es) => updateEdge(oldEdge, newConn, es));
       toast.success(t("link_updated"));
@@ -1128,7 +1135,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
                 onClick={() => {
                   if (!removeParentChoice) return;
                   preserveDetachedSubtree(removeParentChoice.childId, "father_id");
-                  familyStore.update(removeParentChoice.childId, { father_id: undefined });
+                  familyStore.detachParent(removeParentChoice.childId, "father_id");
                   setRemoveParentChoice(null);
                   toast.success(t("link_removed"));
                 }}
@@ -1140,7 +1147,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
                 onClick={() => {
                   if (!removeParentChoice) return;
                   preserveDetachedSubtree(removeParentChoice.childId, "mother_id");
-                  familyStore.update(removeParentChoice.childId, { mother_id: undefined });
+                  familyStore.detachParent(removeParentChoice.childId, "mother_id");
                   setRemoveParentChoice(null);
                   toast.success(t("link_removed"));
                 }}

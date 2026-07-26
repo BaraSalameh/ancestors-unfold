@@ -1,30 +1,14 @@
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useState } from "react";
-import { toast } from "sonner";
-import { ArrowLeft, Edit, LoaderCircle, Trash2, Plus, User } from "lucide-react";
+import { Link, useParams } from "@tanstack/react-router";
+import { ArrowLeft, Edit, User } from "lucide-react";
 import { Button } from "@/shared/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/shared/ui/alert-dialog";
 import { familyStore, getChildren, getGeneration, useFamily } from "@/features/trees";
 import type { FamilyMember } from "@/features/members";
 import { displayName, useI18n } from "@/shared/i18n";
-import { memberDeleteDestination } from "../domain/member-navigation";
 
 export function MemberPage() {
   const { id } = useParams({ from: "/member/$id" });
   const members = useFamily();
-  const navigate = useNavigate();
   const { t, lang } = useI18n();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const member = members.find((m) => m.id === id);
   const treeId = familyStore.getActiveTreeId();
@@ -80,22 +64,6 @@ export function MemberPage() {
     return out;
   })();
 
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    familyStore.remove(member.id);
-    try {
-      await familyStore.flushPendingSave();
-      toast.success(t("deleted"));
-      setConfirmOpen(false);
-      navigate(memberDeleteDestination(treeId));
-    } catch {
-      familyStore.reloadAfterConflict();
-      toast.error(t("save_failed"));
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       <div className="mb-4 flex items-center justify-between">
@@ -105,22 +73,14 @@ export function MemberPage() {
             {t("back")}
           </Link>
         </Button>
-        <div className="flex gap-2">
-          {canEdit && (
-            <Button asChild size="sm" variant="outline">
-              <Link to="/edit/$id" params={{ id: member.id }}>
-                <Edit className="ltr:mr-2 rtl:ml-2 h-4 w-4" />
-                {t("edit")}
-              </Link>
-            </Button>
-          )}
-          {canEdit && (
-            <Button size="sm" variant="destructive" onClick={() => setConfirmOpen(true)}>
-              <Trash2 className="ltr:mr-2 rtl:ml-2 h-4 w-4" />
-              {t("delete")}
-            </Button>
-          )}
-        </div>
+        {canEdit && (
+          <Button asChild size="sm" variant="outline">
+            <Link to="/edit/$id" params={{ id: member.id }}>
+              <Edit className="ltr:mr-2 rtl:ml-2 h-4 w-4" />
+              {t("edit")}
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="rounded-2xl border bg-card p-6 shadow-sm">
@@ -176,19 +136,7 @@ export function MemberPage() {
           </div>
         </Section>
 
-        <Section
-          title={t("spouses") ?? t("spouse")}
-          action={
-            canEdit ? (
-              <Button asChild size="sm" variant="outline">
-                <Link to="/edit/$id" params={{ id: member.id }}>
-                  <Plus className="h-4 w-4 ltr:mr-1 rtl:ml-1" />
-                  {t("add_spouse")}
-                </Link>
-              </Button>
-            ) : undefined
-          }
-        >
+        <Section title={t("spouses") ?? t("spouse")}>
           {spouses.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("none")}</p>
           ) : (
@@ -267,39 +215,6 @@ export function MemberPage() {
           )}
         </Section>
       </div>
-
-      <AlertDialog
-        open={confirmOpen}
-        onOpenChange={(open) => {
-          if (!isDeleting) setConfirmOpen(open);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("confirm_delete")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("confirm_delete_desc")}
-              {children.length > 0 && (
-                <span className="mt-2 block text-destructive">{t("delete_warning_children")}</span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isDeleting}
-              onClick={(event) => {
-                event.preventDefault();
-                void handleDelete();
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}
-              {isDeleting ? t("loading") : t("delete")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
@@ -312,22 +227,13 @@ function Badge({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Section({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mt-6 border-t pt-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
         </h2>
-        {action}
       </div>
       {children}
     </div>

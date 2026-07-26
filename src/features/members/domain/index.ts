@@ -8,4 +8,13 @@ export type {
   SubFamilyAttachment,
 } from "./types";
 export { getChildren, getGeneration, getSubfamilyMembers } from "./queries";
-export { descendantIds, linkSpouses, removeMember, toggleDivorce } from "./relationships";
+export {
+  detachParentRelationship,
+  descendantIds,
+  ensureParentsAreSpouses,
+  linkSpouses,
+  removeMember,
+  removeSpouseAttachment,
+  toggleDivorce,
+} from "./relationships";
+export type { ParentRole } from "./relationships";

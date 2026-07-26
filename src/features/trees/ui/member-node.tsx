@@ -1,16 +1,6 @@
 import { memo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
-import {
-  User,
-  Cake,
-  Heart,
-  Unlink,
-  Link2,
-  UserPlus,
-  HelpCircle,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+import { User, Cake, Heart, UserPlus, HelpCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 import type { FamilyMember, Gender } from "@/features/members";
 import { displayName, ordinal, useI18n } from "@/shared/i18n";
@@ -306,28 +296,6 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
                         </span>
                       )}
                       {years && <span className="shrink-0 opacity-70 tabular-nums">{years}</span>}
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          familyStore.toggleDivorce(member.id, w.id);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.stopPropagation();
-                            familyStore.toggleDivorce(member.id, w.id);
-                          }
-                        }}
-                        title={divorced ? t("mark_married") : t("mark_divorced")}
-                        className="ms-auto inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full opacity-70 transition hover:opacity-100 hover:scale-110"
-                      >
-                        {divorced ? (
-                          <Link2 className="h-2.5 w-2.5" />
-                        ) : (
-                          <Unlink className="h-2.5 w-2.5" />
-                        )}
-                      </span>
                     </div>
                   );
                 })}
