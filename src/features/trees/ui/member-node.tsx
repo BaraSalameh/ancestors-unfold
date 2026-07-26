@@ -158,12 +158,6 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
             <div className="truncate text-sm font-bold text-card-foreground">
               {displayName(member, lang)}
             </div>
-            <div
-              className="truncate text-[11px] text-muted-foreground"
-              dir={lang === "ar" ? "ltr" : "rtl"}
-            >
-              {lang === "ar" ? member.name_en : member.name_ar}
-            </div>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:text-emerald-300">
                 {member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}
