@@ -135,4 +135,18 @@ describe("profile mutation input", () => {
     });
     expect(() => schemas.deleteContributorAccount.parse({ confirmation: "delete" })).toThrow();
   });
+
+  it("accepts only the successor identity and optional reason for an ownership transfer", () => {
+    const proposedOwnerUserId = "00000000-0000-4000-8000-000000000001";
+    expect(schemas.transferRequest.parse({ proposedOwnerUserId })).toEqual({
+      proposedOwnerUserId,
+    });
+    expect(() =>
+      schemas.transferRequest.parse({
+        proposedOwnerUserId,
+        previousOwnerBranchId: "00000000-0000-4000-8000-000000000002",
+      }),
+    ).toThrow();
+    expect(() => schemas.transferRequest.parse({ proposedOwnerUserId: "not-a-user" })).toThrow();
+  });
 });

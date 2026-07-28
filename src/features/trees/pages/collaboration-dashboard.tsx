@@ -102,12 +102,33 @@ type Invitation = {
   branch_name_en: string;
   branch_name_ar: string | null;
 };
+type OwnershipTransfer = {
+  id: string;
+  tree_id: string;
+  tree_name_en: string | null;
+  tree_name_ar: string | null;
+  current_owner_user_id: string;
+  proposed_owner_user_id: string;
+  current_owner_name_en: string;
+  current_owner_name_ar: string;
+  proposed_owner_name_en: string;
+  proposed_owner_name_ar: string;
+  branch_id: string;
+  branch_name_en: string;
+  branch_name_ar: string | null;
+  verified: boolean;
+  status: "pending";
+  verification_expires_at: string | null;
+  expires_at: string;
+  created_at: string;
+};
 type DashboardData = {
   tree: CurrentTree;
   stats: Statistics;
   branches: Branch[];
   invitations: Invitation[];
   activity: ActivityItem[];
+  ownershipTransfer: OwnershipTransfer | null;
 };
 
 let dashboardCache: DashboardData | undefined;
@@ -127,6 +148,7 @@ export function CollaborationDashboard() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [ownershipTransfer, setOwnershipTransfer] = useState<OwnershipTransfer | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [nameEn, setNameEn] = useState("");
@@ -136,6 +158,10 @@ export function CollaborationDashboard() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [invitationAction, setInvitationAction] = useState<string>();
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferUserId, setTransferUserId] = useState("");
+  const [transferCode, setTransferCode] = useState("");
+  const [transferAction, setTransferAction] = useState(false);
   const local = (en?: string | null, ar?: string | null) =>
     lang === "ar" ? ar || en || "" : en || ar || "";
   const applyDashboard = (data: DashboardData) => {
@@ -144,18 +170,20 @@ export function CollaborationDashboard() {
     setBranches(data.branches);
     setInvitations(data.invitations);
     setActivity(data.activity);
+    setOwnershipTransfer(data.ownershipTransfer);
   };
   const load = async (force = false) => {
     if (!force && dashboardCache) {
       applyDashboard(dashboardCache);
     }
     const current = await getJson<CurrentTree>("/api/tree/current");
-    const [nextStats, nextBranches, nextActivity] = await Promise.all([
+    const [nextStats, nextBranches, nextActivity, nextTransfer] = await Promise.all([
       getJson<Statistics>(`/api/trees/${current.id}/statistics`),
       getJson<Branch[]>(`/api/trees/${current.id}/branches`),
       getJson<ActivityPageResponse>(
         `/api/trees/${current.id}/activity?limit=5&locale=${lang}`,
       ).then((page) => page.items),
+      getJson<OwnershipTransfer | null>(`/api/trees/${current.id}/ownership-transfers`),
     ]);
     const nextInvitations =
       current.role === "owner"
@@ -167,6 +195,7 @@ export function CollaborationDashboard() {
       branches: nextBranches,
       activity: nextActivity,
       invitations: nextInvitations,
+      ownershipTransfer: nextTransfer,
     };
     applyDashboard(dashboardCache);
   };
@@ -239,6 +268,71 @@ export function CollaborationDashboard() {
       toast.error(t("preview_link_copy_failed"));
     }
   };
+  const requestTransfer = async () => {
+    if (!tree || !transferUserId) return;
+    setTransferAction(true);
+    try {
+      const response = await fetch(`/api/trees/${tree.id}/ownership-transfers`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proposedOwnerUserId: transferUserId }),
+      });
+      if (!response.ok) throw new Error(((await response.json()) as { code?: string }).code);
+      setTransferOpen(false);
+      setTransferUserId("");
+      toast.success(t("ownership_transfer_code_sent"));
+      await load(true);
+    } catch {
+      toast.error(t("ownership_transfer_failed"));
+    } finally {
+      setTransferAction(false);
+    }
+  };
+  const verifyTransfer = async () => {
+    if (!ownershipTransfer || !/^\d{6}$/.test(transferCode)) return;
+    setTransferAction(true);
+    try {
+      const response = await fetch(`/api/ownership-transfers/${ownershipTransfer.id}/verify`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code: transferCode }),
+      });
+      if (!response.ok) throw new Error("VERIFY_FAILED");
+      setTransferCode("");
+      toast.success(t("ownership_transfer_verified"));
+      await load(true);
+    } catch {
+      toast.error(t("ownership_transfer_invalid_code"));
+    } finally {
+      setTransferAction(false);
+    }
+  };
+  const actOnTransfer = async (action: "accept" | "reject" | "cancel") => {
+    if (!ownershipTransfer) return;
+    setTransferAction(true);
+    try {
+      const response = await fetch(`/api/ownership-transfers/${ownershipTransfer.id}/${action}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("TRANSFER_ACTION_FAILED");
+      dashboardCache = undefined;
+      const successKey =
+        action === "accept"
+          ? "ownership_transfer_accepted"
+          : action === "reject"
+            ? "ownership_transfer_rejected"
+            : "ownership_transfer_canceled";
+      toast.success(t(successKey));
+      await load(true);
+    } catch {
+      toast.error(t("ownership_transfer_failed"));
+    } finally {
+      setTransferAction(false);
+    }
+  };
   const deleteAccount = async () => {
     if (deleteConfirmation !== "DELETE") return;
     setDeletingAccount(true);
@@ -274,10 +368,6 @@ export function CollaborationDashboard() {
                   <Button variant="outline" onClick={() => void copyPreview()}>
                     <Share2 className="me-2 h-4 w-4" />
                     {t("copy_preview_link")}
-                  </Button>
-                  <Button variant="outline" onClick={() => setInviteOpen(true)}>
-                    <MailPlus className="me-2 h-4 w-4" />
-                    {t("invite_contributor")}
                   </Button>
                 </>
               )}
@@ -319,6 +409,16 @@ export function CollaborationDashboard() {
       </section>
       <section className="mx-auto grid max-w-7xl gap-5 px-4 py-8 sm:px-6 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          {tree.role === "contributor" &&
+            ownershipTransfer?.proposed_owner_user_id &&
+            ownershipTransfer.verified && (
+              <OwnershipTransferPrompt
+                transfer={ownershipTransfer}
+                local={local}
+                busy={transferAction}
+                onAction={actOnTransfer}
+              />
+            )}
           <Card>
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>{tree.role === "owner" ? t("branches") : t("assigned_branch")}</CardTitle>
@@ -472,10 +572,72 @@ export function CollaborationDashboard() {
               <CardHeader>
                 <CardTitle>{t("owner_controls")}</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <p>{t("invite_contributor")}</p>
-                <p>{t("pending_invitations")}</p>
-                <p>{t("authenticity")}</p>
+              <CardContent className="space-y-3">
+                <Button
+                  className="w-full justify-start"
+                  variant="outline"
+                  onClick={() => setInviteOpen(true)}
+                >
+                  <MailPlus className="me-2 h-4 w-4" />
+                  {t("invite_contributor")}
+                </Button>
+                <Button
+                  className="w-full justify-start"
+                  variant="outline"
+                  disabled={Boolean(ownershipTransfer)}
+                  onClick={() => setTransferOpen(true)}
+                >
+                  <ShieldCheck className="me-2 h-4 w-4" />
+                  {t("transfer_ownership")}
+                </Button>
+                {ownershipTransfer && (
+                  <div className="mt-4 space-y-3 rounded-lg border p-4 text-foreground">
+                    <p className="font-medium">{t("ownership_transfer_pending")}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t("ownership_transfer_to", {
+                        name: local(
+                          ownershipTransfer.proposed_owner_name_en,
+                          ownershipTransfer.proposed_owner_name_ar,
+                        ),
+                        branch: local(
+                          ownershipTransfer.branch_name_en,
+                          ownershipTransfer.branch_name_ar,
+                        ),
+                      })}
+                    </p>
+                    {!ownershipTransfer.verified ? (
+                      <div className="flex flex-wrap gap-2">
+                        <Input
+                          className="max-w-40"
+                          aria-label={t("verification_code")}
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          dir="ltr"
+                          maxLength={6}
+                          value={transferCode}
+                          onChange={(event) =>
+                            setTransferCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                          }
+                        />
+                        <Button
+                          disabled={transferAction || transferCode.length !== 6}
+                          onClick={() => void verifyTransfer()}
+                        >
+                          {t("verify_transfer")}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Badge>{t("awaiting_contributor_acceptance")}</Badge>
+                    )}
+                    <Button
+                      variant="outline"
+                      disabled={transferAction}
+                      onClick={() => void actOnTransfer("cancel")}
+                    >
+                      {t("cancel_transfer")}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -491,6 +653,53 @@ export function CollaborationDashboard() {
           await load(true);
         }}
       />
+      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("transfer_ownership")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("transfer_ownership_desc")}</p>
+          <div className="space-y-2">
+            {branches
+              .filter((branch) => branch.status === "active" && branch.contributor_user_id)
+              .map((branch) => (
+                <button
+                  type="button"
+                  key={branch.id}
+                  className={`w-full rounded-lg border p-4 text-start ${
+                    transferUserId === branch.contributor_user_id
+                      ? "border-primary bg-primary/5"
+                      : ""
+                  }`}
+                  onClick={() => setTransferUserId(branch.contributor_user_id ?? "")}
+                >
+                  <span className="block font-medium">
+                    {local(branch.contributor_name_en, branch.contributor_name_ar)}
+                  </span>
+                  <span className="block text-sm text-muted-foreground">
+                    {t("former_owner_receives_branch", {
+                      branch: local(branch.name_en, branch.name_ar),
+                    })}
+                  </span>
+                </button>
+              ))}
+            {!branches.some(
+              (branch) => branch.status === "active" && branch.contributor_user_id,
+            ) && <p className="text-sm text-muted-foreground">{t("no_eligible_contributors")}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTransferOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              disabled={!transferUserId || transferAction}
+              onClick={() => void requestTransfer()}
+            >
+              {t("send_verification_code")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent>
           <DialogHeader>
@@ -568,6 +777,48 @@ export function CollaborationDashboard() {
         </AlertDialogContent>
       </AlertDialog>
     </main>
+  );
+}
+
+function OwnershipTransferPrompt({
+  transfer,
+  local,
+  busy,
+  onAction,
+}: {
+  transfer: OwnershipTransfer;
+  local: (en?: string | null, ar?: string | null) => string;
+  busy: boolean;
+  onAction: (action: "accept" | "reject") => Promise<void>;
+}) {
+  const { t } = useI18n();
+  return (
+    <Card className="border-primary">
+      <CardHeader>
+        <CardTitle>{t("ownership_transfer_request")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          {t("ownership_transfer_request_desc", {
+            owner: local(transfer.current_owner_name_en, transfer.current_owner_name_ar),
+            tree: local(transfer.tree_name_en, transfer.tree_name_ar),
+          })}
+        </p>
+        <div className="rounded-lg bg-muted p-3 text-sm">
+          {t("ownership_transfer_branch_swap", {
+            branch: local(transfer.branch_name_en, transfer.branch_name_ar),
+          })}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={busy} onClick={() => void onAction("accept")}>
+            {t("accept_ownership")}
+          </Button>
+          <Button variant="outline" disabled={busy} onClick={() => void onAction("reject")}>
+            {t("reject")}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -382,4 +382,28 @@ BEGIN
   PERFORM app.set_request_context(NULL,NULL,gen_random_uuid());
 END $$;
 
+-- Ownership transfer verification and acceptance use independent expiry windows.
+DO $$
+DECLARE
+  has_verification_expiry boolean;
+  has_expiry_check boolean;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema='app' AND table_name='ownership_transfers'
+      AND column_name='verification_expires_at'
+      AND data_type='timestamp with time zone'
+  ) INTO has_verification_expiry;
+  SELECT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid='app.ownership_transfers'::regclass
+      AND conname='ownership_transfers_verification_expiry_check'
+  ) INTO has_expiry_check;
+  IF NOT has_verification_expiry OR NOT has_expiry_check THEN
+    RAISE EXCEPTION 'ownership transfer verification expiry schema is incomplete';
+  END IF;
+END $$;
+
 ROLLBACK;

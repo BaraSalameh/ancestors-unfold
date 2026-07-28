@@ -5,6 +5,7 @@ import { transaction } from "@/shared/server/database";
 import {
   contributorInvitationMail,
   ownershipTransferCodeMail,
+  ownershipTransferRequestedMail,
   sendMail,
 } from "@/shared/server/email";
 import { jsonResponse as json } from "@/shared/http/response";
@@ -843,50 +844,86 @@ export async function handleCollaborationRequest(
     return json({ ok: true });
   }
   const transfers = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/ownership-transfers$/);
+  if (transfers && request.method === "GET") {
+    const pending = await transaction(session.user_id, session.id, requestId, async (client) => {
+      await client.query(
+        `UPDATE app.ownership_transfers SET status='expired',updated_at=now()
+           WHERE tree_id=$1 AND status='pending' AND expires_at<=now()`,
+        [transfers[1]],
+      );
+      return client.query(
+        `SELECT x.id,x.tree_id,t.name_en tree_name_en,t.name_ar tree_name_ar,
+             x.current_owner_user_id,x.proposed_owner_user_id,
+             owner.full_name_en current_owner_name_en,
+             owner.full_name_ar current_owner_name_ar,
+             proposed.full_name_en proposed_owner_name_en,
+             proposed.full_name_ar proposed_owner_name_ar,
+             x.previous_owner_branch_id branch_id,
+             b.name_en branch_name_en,b.name_ar branch_name_ar,
+             (x.verified_at IS NOT NULL) verified,x.status,
+             x.verification_expires_at,x.expires_at,x.created_at
+           FROM app.ownership_transfers x
+           JOIN app.family_trees t ON t.id=x.tree_id AND t.deleted_at IS NULL
+           JOIN app.users owner ON owner.id=x.current_owner_user_id
+           JOIN app.users proposed ON proposed.id=x.proposed_owner_user_id
+           JOIN app.subfamilies b
+             ON b.tree_id=x.tree_id AND b.id=x.previous_owner_branch_id
+           WHERE x.tree_id=$1 AND x.status='pending'
+             AND $2 IN (x.current_owner_user_id,x.proposed_owner_user_id)`,
+        [transfers[1], session.user_id],
+      );
+    });
+    return json(pending.rows[0] ?? null);
+  }
   if (transfers && request.method === "POST") {
     const body = await parseBody(request, schemas.transferRequest);
     const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
     const transfer = await transaction(session.user_id, session.id, requestId, async (client) => {
       await requireOwner(client, transfers[1], session.user_id);
-      const eligible = await client.query(
-        `SELECT 1 FROM app.tree_memberships m JOIN app.users u ON u.id=m.user_id
+      const existing = await client.query(
+        `SELECT 1 FROM app.ownership_transfers
+         WHERE tree_id=$1 AND status='pending' AND expires_at>now() FOR UPDATE`,
+        [transfers[1]],
+      );
+      if (existing.rowCount) throw new ApiError("TRANSFER_ALREADY_PENDING", 409);
+      await client.query(
+        `UPDATE app.ownership_transfers SET status='expired',updated_at=now()
+         WHERE tree_id=$1 AND status='pending' AND expires_at<=now()`,
+        [transfers[1]],
+      );
+      const eligible = await client.query<{
+        branch_id: string;
+        full_name_en: string;
+        full_name_ar: string;
+      }>(
+        `SELECT g.root_subfamily_id branch_id,u.full_name_en,u.full_name_ar
+         FROM app.tree_memberships m JOIN app.users u ON u.id=m.user_id
          JOIN app.branch_grants g ON g.user_id=m.user_id AND g.tree_id=m.tree_id
+         JOIN app.subfamilies b ON b.tree_id=g.tree_id AND b.id=g.root_subfamily_id
          WHERE m.tree_id=$1 AND m.user_id=$2 AND m.affiliation_status='active'
-           AND g.role='branch_editor' AND g.revoked_at IS NULL AND u.status='active'`,
+           AND m.role<>'owner' AND m.revoked_at IS NULL
+           AND g.role='branch_editor' AND g.revoked_at IS NULL
+           AND (g.expires_at IS NULL OR g.expires_at>now())
+           AND b.status='active' AND b.deleted_at IS NULL AND u.status='active'
+         FOR UPDATE OF m,g`,
         [transfers[1], body.proposedOwnerUserId],
       );
-      if (!eligible.rowCount) throw new ApiError("TRANSFER_TARGET_INELIGIBLE", 409);
-      if (body.previousOwnerBranchId) {
-        const available = await client.query(
-          `SELECT 1 FROM app.subfamilies b WHERE b.id=$1 AND b.tree_id=$2
-           AND b.status='active' AND b.deleted_at IS NULL AND NOT EXISTS (
-             SELECT 1 FROM app.branch_grants g WHERE g.tree_id=b.tree_id
-               AND g.root_subfamily_id=b.id AND g.role='branch_editor'
-               AND g.revoked_at IS NULL AND g.user_id<>$3
-           )`,
-          [body.previousOwnerBranchId, transfers[1], body.proposedOwnerUserId],
-        );
-        if (!available.rowCount) throw new ApiError("BRANCH_ALREADY_ASSIGNED", 409);
-      }
-      const subject = (
-        await client.query<{ full_name_en: string; full_name_ar: string }>(
-          "SELECT full_name_en,full_name_ar FROM app.users WHERE id=$1",
-          [body.proposedOwnerUserId],
-        )
-      ).rows[0];
+      if (eligible.rowCount !== 1) throw new ApiError("TRANSFER_TARGET_INELIGIBLE", 409);
+      const subject = eligible.rows[0];
       const created = (
         await client.query<{ id: string; status: string; expires_at: string }>(
           `INSERT INTO app.ownership_transfers(
             tree_id,current_owner_user_id,proposed_owner_user_id,previous_owner_branch_id,
-            keep_previous_owner_read_only,verification_code_hash,expires_at,reason
-          ) VALUES($1,$2,$3,$4,$5,$6,now()+interval '24 hours',$7)
+            keep_previous_owner_read_only,verification_code_hash,verification_expires_at,
+            expires_at,reason
+          ) VALUES($1,$2,$3,$4,false,$5,now()+interval '15 minutes',
+            now()+interval '24 hours',$6)
           RETURNING id,status,expires_at`,
           [
             transfers[1],
             session.user_id,
             body.proposedOwnerUserId,
-            body.previousOwnerBranchId || null,
-            body.keepPreviousOwnerReadOnly,
+            subject.branch_id,
             transferCodeHash(code),
             body.reason || null,
           ],
@@ -915,10 +952,36 @@ export async function handleCollaborationRequest(
   if (verifyTransfer && request.method === "POST") {
     const body = await parseBody(request, schemas.transferCode);
     const result = await transaction(session.user_id, session.id, requestId, async (client) => {
-      const updated = await client.query<{ id: string; tree_id: string }>(
+      const candidate = await client.query<{
+        verification_expires_at: string | null;
+        expires_at: string;
+      }>(
+        `SELECT verification_expires_at,expires_at
+         FROM app.ownership_transfers
+         WHERE id=$1 AND current_owner_user_id=$2 AND status='pending'`,
+        [verifyTransfer[1], session.user_id],
+      );
+      if (
+        candidate.rowCount &&
+        (!candidate.rows[0].verification_expires_at ||
+          new Date(candidate.rows[0].verification_expires_at).getTime() <= Date.now() ||
+          new Date(candidate.rows[0].expires_at).getTime() <= Date.now())
+      )
+        throw new ApiError("TRANSFER_VERIFICATION_EXPIRED", 409);
+      const updated = await client.query<{
+        id: string;
+        tree_id: string;
+        proposed_email: string;
+        tree_name: string;
+        owner_name: string;
+      }>(
         `UPDATE app.ownership_transfers SET verified_at=now(),verification_code_hash=NULL,updated_at=now()
          WHERE id=$1 AND current_owner_user_id=$2 AND status='pending' AND expires_at>now()
-           AND verification_code_hash=$3 RETURNING id,tree_id`,
+           AND verification_expires_at>now() AND verification_code_hash=$3
+         RETURNING id,tree_id,
+           (SELECT email FROM app.users WHERE id=proposed_owner_user_id) proposed_email,
+           (SELECT COALESCE(name_en,name_ar) FROM app.family_trees WHERE id=tree_id) tree_name,
+           (SELECT full_name_en FROM app.users WHERE id=current_owner_user_id) owner_name`,
         [verifyTransfer[1], session.user_id, transferCodeHash(body.code)],
       );
       if (updated.rowCount)
@@ -930,7 +993,15 @@ export async function handleCollaborationRequest(
         );
       return updated;
     });
-    return result.rowCount ? json({ ok: true }) : json({ code: "INVALID_OR_EXPIRED_CODE" }, 400);
+    if (!result.rowCount) return json({ code: "INVALID_OR_EXPIRED_CODE" }, 400);
+    await sendMail(
+      ownershipTransferRequestedMail(
+        result.rows[0].proposed_email,
+        result.rows[0].tree_name,
+        result.rows[0].owner_name,
+      ),
+    );
+    return json({ ok: true });
   }
   const transferAction = url.pathname.match(
     /^\/api\/ownership-transfers\/([0-9a-f-]+)\/(accept|reject|cancel)$/,
@@ -945,13 +1016,17 @@ export async function handleCollaborationRequest(
           proposed_owner_user_id: string;
           previous_owner_branch_id: string | null;
           keep_previous_owner_read_only: boolean;
+          verified_at: string | null;
+          expires_at: string;
         }>(
           `SELECT * FROM app.ownership_transfers
-           WHERE id=$1 AND status='pending' AND expires_at>now() FOR UPDATE`,
+           WHERE id=$1 AND status='pending' FOR UPDATE`,
           [transferId],
         )
       ).rows[0];
       if (!transfer) throw new ApiError("TRANSFER_UNAVAILABLE", 409);
+      if (new Date(transfer.expires_at).getTime() <= Date.now())
+        throw new ApiError("TRANSFER_EXPIRED", 409);
       if (action === "cancel") {
         if (session.user_id !== transfer.current_owner_user_id)
           throw new ApiError("FORBIDDEN", 403);
@@ -981,21 +1056,41 @@ export async function handleCollaborationRequest(
         );
         return;
       }
-      const verified = await client.query(
-        "SELECT 1 FROM app.ownership_transfers WHERE id=$1 AND verified_at IS NOT NULL",
-        [transferId],
-      );
-      if (!verified.rowCount) throw new ApiError("TRANSFER_NOT_VERIFIED", 409);
-      await client.query("SET CONSTRAINTS ALL DEFERRED");
-      await client.query(
-        `UPDATE app.tree_memberships SET role='viewer',
-          affiliation_status=$3::app.affiliation_status
-         WHERE tree_id=$1 AND user_id=$2`,
+      if (!transfer.verified_at) throw new ApiError("TRANSFER_NOT_VERIFIED", 409);
+      const currentState = await client.query(
+        `SELECT 1
+         FROM app.family_trees t
+         JOIN app.tree_memberships owner
+           ON owner.tree_id=t.id AND owner.user_id=t.owner_user_id
+         JOIN app.tree_memberships proposed
+           ON proposed.tree_id=t.id AND proposed.user_id=$3
+         JOIN app.users u ON u.id=proposed.user_id
+         JOIN app.branch_grants g
+           ON g.tree_id=t.id AND g.user_id=proposed.user_id
+             AND g.root_subfamily_id=$4
+         JOIN app.subfamilies b ON b.tree_id=g.tree_id AND b.id=g.root_subfamily_id
+         WHERE t.id=$1 AND t.owner_user_id=$2 AND t.deleted_at IS NULL
+           AND owner.role='owner' AND owner.affiliation_status='active'
+           AND owner.revoked_at IS NULL
+           AND proposed.role<>'owner' AND proposed.affiliation_status='active'
+           AND proposed.revoked_at IS NULL AND u.status='active'
+           AND g.role='branch_editor' AND g.revoked_at IS NULL
+           AND (g.expires_at IS NULL OR g.expires_at>now())
+           AND b.status='active' AND b.deleted_at IS NULL
+         FOR UPDATE OF t,owner,proposed,g,b`,
         [
           transfer.tree_id,
           transfer.current_owner_user_id,
-          transfer.keep_previous_owner_read_only ? "read_only" : "active",
+          transfer.proposed_owner_user_id,
+          transfer.previous_owner_branch_id,
         ],
+      );
+      if (!currentState.rowCount) throw new ApiError("TRANSFER_STATE_CHANGED", 409);
+      await client.query("SET CONSTRAINTS ALL DEFERRED");
+      await client.query(
+        `UPDATE app.tree_memberships SET role='viewer',affiliation_status='active'
+         WHERE tree_id=$1 AND user_id=$2`,
+        [transfer.tree_id, transfer.current_owner_user_id],
       );
       await client.query(
         "UPDATE app.tree_memberships SET role='owner',affiliation_status='active' WHERE tree_id=$1 AND user_id=$2",
@@ -1009,17 +1104,16 @@ export async function handleCollaborationRequest(
         "UPDATE app.branch_grants SET revoked_at=now(),revoked_by=$3 WHERE tree_id=$1 AND user_id=$2 AND revoked_at IS NULL",
         [transfer.tree_id, transfer.proposed_owner_user_id, session.user_id],
       );
-      if (transfer.previous_owner_branch_id)
-        await client.query(
-          `INSERT INTO app.branch_grants(user_id,tree_id,root_subfamily_id,role,granted_by)
-           VALUES($1,$2,$3,'branch_editor',$4)`,
-          [
-            transfer.current_owner_user_id,
-            transfer.tree_id,
-            transfer.previous_owner_branch_id,
-            transfer.proposed_owner_user_id,
-          ],
-        );
+      await client.query(
+        `INSERT INTO app.branch_grants(user_id,tree_id,root_subfamily_id,role,granted_by)
+         VALUES($1,$2,$3,'branch_editor',$4)`,
+        [
+          transfer.current_owner_user_id,
+          transfer.tree_id,
+          transfer.previous_owner_branch_id,
+          transfer.proposed_owner_user_id,
+        ],
+      );
       await client.query(
         `UPDATE app.ownership_transfers SET status='accepted',accepted_at=now(),updated_at=now()
          WHERE id=$1`,

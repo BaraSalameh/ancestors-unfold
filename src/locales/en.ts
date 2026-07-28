@@ -349,6 +349,32 @@ export const en = {
     "Create family branches, link them to members, and manage their details.",
   branch_responsible: "Responsible: {name}",
   owner_controls: "Owner controls",
+  transfer_ownership: "Transfer ownership",
+  transfer_ownership_desc:
+    "Select an active contributor to become the new owner. After they accept, you will manage their current branch.",
+  former_owner_receives_branch: "You will become the contributor for {branch}.",
+  no_eligible_contributors: "There are no eligible active contributors.",
+  ownership_transfer_code_sent: "A verification code was sent to your email.",
+  ownership_transfer_pending: "Ownership transfer pending",
+  ownership_transfer_to: "Transfer to {name}; you will manage {branch}.",
+  verification_code: "Verification code",
+  verify_transfer: "Verify transfer",
+  ownership_transfer_verified: "Transfer verified. The contributor has been notified.",
+  ownership_transfer_invalid_code: "The verification code is invalid or expired.",
+  awaiting_contributor_acceptance: "Awaiting contributor acceptance",
+  cancel_transfer: "Cancel transfer",
+  ownership_transfer_request: "Ownership transfer request",
+  ownership_transfer_request_desc:
+    "{owner} asked you to become the owner of {tree}. Review the responsibility change before accepting.",
+  ownership_transfer_branch_swap:
+    "If you accept, the former owner will become the contributor for {branch}.",
+  accept_ownership: "Accept ownership",
+  reject: "Reject",
+  ownership_transfer_accepted: "Ownership transferred successfully.",
+  ownership_transfer_rejected: "Ownership transfer rejected.",
+  ownership_transfer_canceled: "Ownership transfer cancelled.",
+  ownership_transfer_failed:
+    "The ownership transfer could not be completed. Refresh and try again.",
   cancel_contribution: "Cancel contribution",
   delete_contributor_account: "Cancel contribution and delete account?",
   delete_contributor_account_desc:

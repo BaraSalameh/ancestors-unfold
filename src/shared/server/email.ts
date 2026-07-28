@@ -73,10 +73,30 @@ export function ownershipTransferCodeMail(to: string, code: string): Mail {
   return {
     to,
     subject: "Confirm family tree ownership transfer",
-    text: `Use code ${code} to confirm the ownership transfer request. It expires in 15 minutes.`,
+    text: `Use code ${code} to confirm the ownership transfer request. It expires in 15 minutes.\n\nاستخدم الرمز ${code} لتأكيد طلب نقل ملكية شجرة العائلة. تنتهي صلاحيته خلال 15 دقيقة.`,
     html: layout(
-      "Confirm ownership transfer",
-      `<p>Use this code to confirm the ownership transfer request:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>It expires in 15 minutes.</p>`,
+      "Confirm ownership transfer | تأكيد نقل الملكية",
+      `<p>Use this code to confirm the ownership transfer request:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>It expires in 15 minutes.</p><div dir="rtl"><p>استخدم هذا الرمز لتأكيد طلب نقل ملكية شجرة العائلة:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>تنتهي صلاحيته خلال 15 دقيقة.</p></div>`,
+    ),
+  };
+}
+
+export function ownershipTransferRequestedMail(
+  to: string,
+  treeName: string,
+  previousOwnerName: string,
+): Mail {
+  const origin = process.env.PUBLIC_ORIGIN;
+  if (!origin) throw new Error("MAIL_NOT_CONFIGURED");
+  const link = `${origin.replace(/\/$/, "")}/`;
+  const safeLink = escapeHtml(link);
+  return {
+    to,
+    subject: `Ownership transfer request for ${treeName}`,
+    text: `${previousOwnerName} asked you to become the owner of ${treeName}. Review and accept or reject the request from your family dashboard within 24 hours: ${link}\n\nطلب منك ${previousOwnerName} أن تصبح مالكاً لشجرة ${treeName}. راجع الطلب واقبله أو ارفضه من لوحة العائلة خلال 24 ساعة: ${link}`,
+    html: layout(
+      "Family tree ownership transfer | نقل ملكية شجرة العائلة",
+      `<p><strong>${escapeHtml(previousOwnerName)}</strong> asked you to become the owner of <strong>${escapeHtml(treeName)}</strong>.</p><p>Review and accept or reject this request from your family dashboard within 24 hours.</p><p><a href="${safeLink}">Open family dashboard</a></p><div dir="rtl"><p>طلب منك <strong>${escapeHtml(previousOwnerName)}</strong> أن تصبح مالكاً لشجرة <strong>${escapeHtml(treeName)}</strong>.</p><p>راجع الطلب واقبله أو ارفضه من لوحة العائلة خلال 24 ساعة.</p><p><a href="${safeLink}">فتح لوحة العائلة</a></p></div>`,
     ),
   };
 }

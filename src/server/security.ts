@@ -151,12 +151,9 @@ export const schemas = {
   transferRequest: z
     .object({
       proposedOwnerUserId: z.string().uuid(),
-      previousOwnerBranchId: z.string().uuid().nullable().optional(),
-      keepPreviousOwnerReadOnly: z.boolean().default(false),
       reason: z.string().trim().max(1000).optional(),
     })
-    .strict()
-    .refine((v) => Boolean(v.previousOwnerBranchId) !== v.keepPreviousOwnerReadOnly),
+    .strict(),
   transferCode: z.object({ code: z.string().regex(/^\d{6}$/) }).strict(),
   complaint: z
     .object({
