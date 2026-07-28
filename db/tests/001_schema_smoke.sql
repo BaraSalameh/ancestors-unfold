@@ -232,13 +232,15 @@ SET CONSTRAINTS ALL IMMEDIATE;
 DO $$
 DECLARE
   contributor_id uuid;
+  cancellation_count integer;
+  recorded_name text;
 BEGIN
   SELECT id INTO STRICT contributor_id
   FROM app.users WHERE email='collab-contributor@example.test';
   INSERT INTO app.tree_activity(
-    tree_id,branch_id,actor_user_id,action_type,target_type,target_id
+    tree_id,branch_id,actor_user_id,subject_user_id,action_type,target_type,target_id
   )
-  SELECT m.tree_id,g.root_subfamily_id,contributor_id,
+  SELECT m.tree_id,g.root_subfamily_id,contributor_id,contributor_id,
     'contributor_account_deleted','user',contributor_id
   FROM app.tree_memberships m
   LEFT JOIN app.branch_grants g
@@ -252,6 +254,11 @@ BEGIN
     SET family_member_id=NULL,affiliation_status='removed',
         revoked_at=now(),revoked_by=contributor_id
     WHERE user_id=contributor_id AND role<>'owner' AND revoked_at IS NULL;
+  UPDATE app.users SET
+    email='deleted+'||id::text||'@invalid.local',
+    full_name_en='Deleted User',full_name_ar='مستخدم محذوف',
+    status='deleted',deleted_at=now()
+  WHERE id=contributor_id;
   IF EXISTS (
     SELECT 1 FROM app.branch_grants
     WHERE user_id=contributor_id AND revoked_at IS NULL
@@ -261,12 +268,13 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'contributor cancellation did not revoke active access';
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM app.tree_activity
+  SELECT count(*),max(actor_name_en)
+    INTO cancellation_count,recorded_name
+  FROM app.tree_activity
     WHERE actor_user_id=contributor_id
-      AND action_type='contributor_account_deleted'
-  ) THEN
-    RAISE EXCEPTION 'contributor cancellation activity was not recorded';
+      AND action_type='contributor_account_deleted';
+  IF cancellation_count<>1 OR recorded_name<>'Contributor' THEN
+    RAISE EXCEPTION 'contributor cancellation activity was not recorded with its identity';
   END IF;
 END $$;
 
@@ -328,6 +336,48 @@ BEGIN
   IF app.can_edit_member(tree_id,outside_member_id)
      OR app.can_edit_member(tree_id,other_draft_id) THEN
     RAISE EXCEPTION 'contributor could edit a protected member';
+  END IF;
+  PERFORM app.set_request_context(NULL,NULL,gen_random_uuid());
+END $$;
+
+-- Activity identities are immutable event-time snapshots.
+DO $$
+DECLARE
+  actor_id uuid := gen_random_uuid();
+  subject_id uuid := gen_random_uuid();
+  tree_id uuid := gen_random_uuid();
+  activity_id uuid;
+  recorded_actor text;
+  recorded_subject text;
+BEGIN
+  IF to_regclass('app.tree_activity_tree_order_idx') IS NULL
+     OR to_regclass('app.tree_activity_identity_search_idx') IS NULL THEN
+    RAISE EXCEPTION 'activity pagination/search indexes are missing';
+  END IF;
+  INSERT INTO app.users(id,email,full_name_en,full_name_ar,status) VALUES
+    (actor_id,'activity-actor@example.test','Original actor','المُنفّذ الأصلي','active'),
+    (subject_id,'activity-subject@example.test','Original subject','المستلم الأصلي','active');
+  INSERT INTO app.family_trees(id,owner_user_id,name_en)
+    VALUES(tree_id,actor_id,'Activity tree');
+  INSERT INTO app.tree_memberships(tree_id,user_id,role)
+    VALUES(tree_id,actor_id,'owner');
+  PERFORM app.set_request_context(actor_id,NULL,gen_random_uuid());
+  INSERT INTO app.tree_activity(
+    tree_id,actor_user_id,subject_user_id,action_type,target_type,target_id
+  ) VALUES(
+    tree_id,actor_id,subject_id,'attribution_test','user',subject_id
+  ) RETURNING id INTO activity_id;
+  UPDATE app.users SET
+    email='deleted+'||id::text||'@invalid.local',
+    full_name_en='Deleted User',full_name_ar='مستخدم محذوف',
+    status='deleted',deleted_at=now()
+  WHERE id=actor_id;
+  UPDATE app.users SET full_name_en='Renamed subject' WHERE id=subject_id;
+  SELECT actor_name_en,subject_name_en
+    INTO recorded_actor,recorded_subject
+  FROM app.tree_activity WHERE id=activity_id;
+  IF recorded_actor<>'Original actor' OR recorded_subject<>'Original subject' THEN
+    RAISE EXCEPTION 'activity identity snapshots changed with live profiles';
   END IF;
   PERFORM app.set_request_context(NULL,NULL,gen_random_uuid());
 END $$;

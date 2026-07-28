@@ -7,7 +7,12 @@ export {
   useFamilyLoadState,
   useFamilyPersistence,
 } from "./client/family-store";
-export { activityLabel } from "./domain/activity-label";
+export {
+  activityDescription,
+  activityLabel,
+  type ActivityItem,
+  type ActivityPageResponse,
+} from "./domain/activity-label";
 export { isTreeEditorDestination } from "./domain/editor-navigation";
 export { routeParentEdges } from "./domain/route-edges";
 export { computeWivesByHusband, wifeColorFor } from "./domain/wife-colors";

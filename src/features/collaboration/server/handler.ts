@@ -9,9 +9,136 @@ import {
 } from "@/shared/server/email";
 import { jsonResponse as json } from "@/shared/http/response";
 import { ApiError, parseBody, schemas } from "@/server/security";
+import { matchingActivityActionTypes } from "../domain/activity-search";
 import { activityRequestLimit } from "../domain/policy";
 
 type Session = { id: string; user_id: string; email: string };
+type ActivityDatabaseRow = {
+  id: string;
+  action_type: string;
+  actor_user_id: string | null;
+  actor_name_en: string | null;
+  actor_name_ar: string | null;
+  subject_user_id: string | null;
+  subject_name_en: string | null;
+  subject_name_ar: string | null;
+  target_type: string;
+  target_id: string | null;
+  target_name_en: string | null;
+  target_name_ar: string | null;
+  branch_id: string | null;
+  branch_name_en: string | null;
+  branch_name_ar: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+type ActivityCursor = { createdAt: string; id: string };
+type ActivityGroup = { item: Record<string, unknown>; endCursor: ActivityCursor };
+
+const activityPerson = (userId: string | null, nameEn: string | null, nameAr: string | null) =>
+  nameEn && nameAr ? { userId, nameEn, nameAr } : null;
+
+// eslint-disable-next-line complexity -- Group construction handles optional actor, target, branch, and session fields.
+const activityGroups = (rows: ActivityDatabaseRow[]): ActivityGroup[] => {
+  const projected: ActivityGroup[] = [];
+  for (const row of rows) {
+    const previous = projected.at(-1);
+    const version = Number(row.metadata.version);
+    const canGroup =
+      row.action_type === "tree_updated" &&
+      previous?.item.actionType === "tree_updated" &&
+      (previous.item.actor as { userId: string | null } | null)?.userId === row.actor_user_id &&
+      previous.item.branchId === row.branch_id &&
+      new Date(previous.item.createdAt as string).getTime() - new Date(row.created_at).getTime() <=
+        15 * 60_000;
+    if (canGroup) {
+      const editingSession = previous.item.editingSession as {
+        firstVersion: number;
+        lastVersion: number;
+        snapshotCount: number;
+        endedAt: string;
+      };
+      editingSession.firstVersion = Number.isFinite(version)
+        ? Math.min(editingSession.firstVersion, version)
+        : editingSession.firstVersion;
+      editingSession.snapshotCount += 1;
+      previous.endCursor = { createdAt: row.created_at, id: row.id };
+      continue;
+    }
+    projected.push({
+      item: {
+        id: row.id,
+        actionType: row.action_type,
+        actor: activityPerson(row.actor_user_id, row.actor_name_en, row.actor_name_ar),
+        subject: activityPerson(row.subject_user_id, row.subject_name_en, row.subject_name_ar),
+        target: {
+          type: row.target_type,
+          id: row.target_id,
+          nameEn: row.target_name_en ?? (row.target_type === "branch" ? row.branch_name_en : null),
+          nameAr: row.target_name_ar ?? (row.target_type === "branch" ? row.branch_name_ar : null),
+        },
+        branchId: row.branch_id,
+        branch:
+          row.branch_name_en || row.branch_name_ar
+            ? { nameEn: row.branch_name_en, nameAr: row.branch_name_ar }
+            : null,
+        createdAt: row.created_at,
+        editingSession:
+          row.action_type === "tree_updated"
+            ? {
+                firstVersion: version,
+                lastVersion: version,
+                snapshotCount: 1,
+                endedAt: row.created_at,
+              }
+            : null,
+      },
+      endCursor: { createdAt: row.created_at, id: row.id },
+    });
+  }
+  return projected;
+};
+
+export function projectActivity(rows: ActivityDatabaseRow[], limit: number) {
+  return activityGroups(rows)
+    .slice(0, limit)
+    .map(({ item }) => item);
+}
+
+const encodeActivityCursor = (cursor: ActivityCursor) =>
+  Buffer.from(JSON.stringify(cursor)).toString("base64url");
+
+const decodeActivityCursor = (value: string | null): ActivityCursor | null => {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as ActivityCursor;
+    if (
+      typeof parsed.createdAt !== "string" ||
+      !Number.isFinite(Date.parse(parsed.createdAt)) ||
+      typeof parsed.id !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed.id)
+    )
+      throw new Error("invalid cursor");
+    return parsed;
+  } catch {
+    throw new ApiError("INVALID_CURSOR", 400);
+  }
+};
+
+const activityPageFromGroups = (groups: ActivityGroup[], limit: number) => {
+  const pageGroups = groups.slice(0, limit);
+  return {
+    items: pageGroups.map(({ item }) => item),
+    nextCursor:
+      groups.length > limit
+        ? encodeActivityCursor(pageGroups[pageGroups.length - 1].endCursor)
+        : null,
+  };
+};
+
+export function projectActivityPage(rows: ActivityDatabaseRow[], limit: number) {
+  return activityPageFromGroups(activityGroups(rows), limit);
+}
 const sha256 = (value: string) => createHash("sha256").update(value).digest();
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const transferCodeHash = (code: string) => {
@@ -64,8 +191,11 @@ export async function provisionOwnedTree(
     [tree.id, user.id, member.id],
   );
   await client.query(
-    `INSERT INTO app.tree_activity(tree_id,actor_user_id,action_type,target_type,target_id)
-     VALUES($1,$2,'tree_created','family_tree',$1)`,
+    `INSERT INTO app.tree_activity(
+       tree_id,actor_user_id,action_type,target_type,target_id,target_name_en,target_name_ar
+     )
+     SELECT id,$2,'tree_created','family_tree',id,name_en,name_ar
+     FROM app.family_trees WHERE id=$1`,
     [tree.id, user.id],
   );
   await client.query(
@@ -156,8 +286,8 @@ export async function acceptRegistrationInvitation(
   );
   await client.query(
     `INSERT INTO app.tree_activity(
-      tree_id,branch_id,actor_user_id,action_type,target_type,target_id
-    ) VALUES($1,$2,$3,'invitation_accepted','user',$3)`,
+      tree_id,branch_id,actor_user_id,subject_user_id,action_type,target_type,target_id
+    ) VALUES($1,$2,$3,$3,'invitation_accepted','user',$3)`,
     [invitation.tree_id, invitation.branch_id, user.id],
   );
 }
@@ -389,9 +519,11 @@ export async function handleCollaborationRequest(
         )
       ).rows[0];
       await client.query(
-        `INSERT INTO app.tree_activity(tree_id,branch_id,actor_user_id,action_type,target_type,target_id)
-         VALUES($1,$2,$3,'branch_created','branch',$2)`,
-        [branches[1], created.id, session.user_id],
+        `INSERT INTO app.tree_activity(
+           tree_id,branch_id,actor_user_id,action_type,target_type,target_id,
+           target_name_en,target_name_ar
+         ) VALUES($1,$2,$3,'branch_created','branch',$2,$4,$5)`,
+        [branches[1], created.id, session.user_id, created.name_en, created.name_ar],
       );
       return created;
     });
@@ -432,6 +564,28 @@ export async function handleCollaborationRequest(
           [branchUpdate[1], branchUpdate[2], session.user_id],
         );
       }
+      await client.query(
+        `INSERT INTO app.tree_activity(
+           tree_id,branch_id,actor_user_id,action_type,target_type,target_id,
+           target_name_en,target_name_ar
+         ) VALUES(
+           $1,$2,$3,
+           CASE
+             WHEN $6='active' THEN 'branch_activated'
+             WHEN $6='inactive' THEN 'branch_deactivated'
+             ELSE 'branch_updated'
+           END,
+           'branch',$2,$4,$5
+         )`,
+        [
+          branchUpdate[1],
+          branchUpdate[2],
+          session.user_id,
+          updated.name_en,
+          updated.name_ar,
+          body.status ?? null,
+        ],
+      );
       return updated;
     });
     return json(result);
@@ -505,9 +659,20 @@ export async function handleCollaborationRequest(
         )
       ).rows[0];
       await client.query(
-        `INSERT INTO app.tree_activity(tree_id,branch_id,actor_user_id,action_type,target_type,target_id)
-         VALUES($1,$2,$3,'invitation_sent','invitation',$4)`,
-        [invitations[1], body.branchId, session.user_id, row.id],
+        `INSERT INTO app.tree_activity(
+           tree_id,branch_id,actor_user_id,action_type,target_type,target_id,
+           subject_name_en,subject_name_ar,target_name_en,target_name_ar
+         ) VALUES($1,$2,$3,'invitation_sent','invitation',$4,$5,$6,$7,$8)`,
+        [
+          invitations[1],
+          body.branchId,
+          session.user_id,
+          row.id,
+          member.name_en,
+          member.name_ar,
+          branch.name_en,
+          null,
+        ],
       );
       return { row, branch };
     });
@@ -520,22 +685,38 @@ export async function handleCollaborationRequest(
   if (cancelInvitation && request.method === "POST") {
     await transaction(session.user_id, session.id, requestId, async (client) => {
       const invitation = (
-        await client.query<{ tree_id: string }>(
-          "SELECT tree_id FROM app.contributor_invitations WHERE id=$1",
+        await client.query<{
+          tree_id: string;
+          branch_id: string;
+          invited_name_en: string;
+          invited_name_ar: string;
+        }>(
+          `SELECT tree_id,branch_id,invited_name_en,invited_name_ar
+           FROM app.contributor_invitations WHERE id=$1`,
           [cancelInvitation[1]],
         )
       ).rows[0];
       if (!invitation) throw new ApiError("NOT_FOUND", 404);
       await requireOwner(client, invitation.tree_id, session.user_id);
-      await client.query(
+      const cancelled = await client.query(
         `UPDATE app.contributor_invitations SET status='cancelled',updated_at=now()
-         WHERE id=$1 AND status='pending'`,
+         WHERE id=$1 AND status='pending' RETURNING id`,
         [cancelInvitation[1]],
       );
+      if (!cancelled.rowCount) throw new ApiError("INVALID_INVITATION", 409);
       await client.query(
-        `INSERT INTO app.tree_activity(tree_id,actor_user_id,action_type,target_type,target_id)
-         VALUES($1,$2,'invitation_cancelled','invitation',$3)`,
-        [invitation.tree_id, session.user_id, cancelInvitation[1]],
+        `INSERT INTO app.tree_activity(
+           tree_id,branch_id,actor_user_id,action_type,target_type,target_id,
+           subject_name_en,subject_name_ar
+         ) VALUES($1,$2,$3,'invitation_cancelled','invitation',$4,$5,$6)`,
+        [
+          invitation.tree_id,
+          invitation.branch_id,
+          session.user_id,
+          cancelInvitation[1],
+          invitation.invited_name_en,
+          invitation.invited_name_ar,
+        ],
       );
     });
     return json({ ok: true });
@@ -551,9 +732,12 @@ export async function handleCollaborationRequest(
           invited_email: string;
           tree_name: string;
           branch_name: string;
+          invited_name_en: string;
+          invited_name_ar: string;
           updated_at: string;
         }>(
-          `SELECT i.tree_id,i.branch_id,i.invited_email,i.updated_at,
+          `SELECT i.tree_id,i.branch_id,i.invited_email,i.invited_name_en,
+              i.invited_name_ar,i.updated_at,
               t.name_en tree_name,b.name_en branch_name
              FROM app.contributor_invitations i
              JOIN app.family_trees t ON t.id=i.tree_id
@@ -575,9 +759,18 @@ export async function handleCollaborationRequest(
       );
       await client.query(
         `INSERT INTO app.tree_activity(
-            tree_id,branch_id,actor_user_id,action_type,target_type,target_id
-          ) VALUES($1,$2,$3,'invitation_resent','invitation',$4)`,
-        [row.tree_id, row.branch_id, session.user_id, resendInvitation[1]],
+            tree_id,branch_id,actor_user_id,action_type,target_type,target_id,
+            subject_name_en,subject_name_ar,target_name_en
+          ) VALUES($1,$2,$3,'invitation_resent','invitation',$4,$5,$6,$7)`,
+        [
+          row.tree_id,
+          row.branch_id,
+          session.user_id,
+          resendInvitation[1],
+          row.invited_name_en,
+          row.invited_name_ar,
+          row.branch_name,
+        ],
       );
       return row;
     });
@@ -597,6 +790,25 @@ export async function handleCollaborationRequest(
   if (removeContributor && request.method === "POST") {
     await transaction(session.user_id, session.id, requestId, async (client) => {
       await requireOwner(client, removeContributor[1], session.user_id);
+      const contributor = (
+        await client.query<{
+          name_en: string;
+          name_ar: string;
+          branch_id: string | null;
+        }>(
+          `SELECT COALESCE(f.name_en,u.full_name_en) name_en,
+              COALESCE(f.name_ar,u.full_name_ar) name_ar,
+              g.root_subfamily_id branch_id
+           FROM app.tree_memberships m
+           JOIN app.users u ON u.id=m.user_id
+           LEFT JOIN app.family_members f ON f.id=m.family_member_id
+           LEFT JOIN app.branch_grants g ON g.tree_id=m.tree_id AND g.user_id=m.user_id
+             AND g.revoked_at IS NULL
+           WHERE m.tree_id=$1 AND m.user_id=$2 AND m.revoked_at IS NULL`,
+          [removeContributor[1], removeContributor[2]],
+        )
+      ).rows[0];
+      if (!contributor) throw new ApiError("CONTRIBUTOR_UNAVAILABLE", 409);
       await client.query(
         `UPDATE app.branch_grants SET revoked_at=now(),revoked_by=$3
          WHERE tree_id=$1 AND user_id=$2 AND revoked_at IS NULL`,
@@ -612,6 +824,20 @@ export async function handleCollaborationRequest(
         `UPDATE app.ownership_transfers SET status='cancelled',updated_at=now()
          WHERE tree_id=$1 AND proposed_owner_user_id=$2 AND status='pending'`,
         [removeContributor[1], removeContributor[2]],
+      );
+      await client.query(
+        `INSERT INTO app.tree_activity(
+           tree_id,branch_id,actor_user_id,subject_user_id,subject_name_en,subject_name_ar,
+           action_type,target_type,target_id
+         ) VALUES($1,$2,$3,$4,$5,$6,'contributor_removed','user',$4)`,
+        [
+          removeContributor[1],
+          contributor.branch_id,
+          session.user_id,
+          removeContributor[2],
+          contributor.name_en,
+          contributor.name_ar,
+        ],
       );
     });
     return json({ ok: true });
@@ -642,12 +868,19 @@ export async function handleCollaborationRequest(
         );
         if (!available.rowCount) throw new ApiError("BRANCH_ALREADY_ASSIGNED", 409);
       }
-      return (
-        await client.query(
+      const subject = (
+        await client.query<{ full_name_en: string; full_name_ar: string }>(
+          "SELECT full_name_en,full_name_ar FROM app.users WHERE id=$1",
+          [body.proposedOwnerUserId],
+        )
+      ).rows[0];
+      const created = (
+        await client.query<{ id: string; status: string; expires_at: string }>(
           `INSERT INTO app.ownership_transfers(
             tree_id,current_owner_user_id,proposed_owner_user_id,previous_owner_branch_id,
             keep_previous_owner_read_only,verification_code_hash,expires_at,reason
-          ) VALUES($1,$2,$3,$4,$5,$6,now()+interval '24 hours',$7) RETURNING id,status,expires_at`,
+          ) VALUES($1,$2,$3,$4,$5,$6,now()+interval '24 hours',$7)
+          RETURNING id,status,expires_at`,
           [
             transfers[1],
             session.user_id,
@@ -659,21 +892,44 @@ export async function handleCollaborationRequest(
           ],
         )
       ).rows[0];
+      await client.query(
+        `INSERT INTO app.tree_activity(
+           tree_id,actor_user_id,subject_user_id,subject_name_en,subject_name_ar,
+           action_type,target_type,target_id
+         ) VALUES($1,$2,$3,$4,$5,'ownership_transfer_requested','ownership_transfer',$6)`,
+        [
+          transfers[1],
+          session.user_id,
+          body.proposedOwnerUserId,
+          subject.full_name_en,
+          subject.full_name_ar,
+          created.id,
+        ],
+      );
+      return created;
     });
     await sendMail(ownershipTransferCodeMail(session.email, code));
-    return json(transfer, 201);
+    return json({ id: transfer.id, status: transfer.status, expires_at: transfer.expires_at }, 201);
   }
   const verifyTransfer = url.pathname.match(/^\/api\/ownership-transfers\/([0-9a-f-]+)\/verify$/);
   if (verifyTransfer && request.method === "POST") {
     const body = await parseBody(request, schemas.transferCode);
-    const result = await transaction(session.user_id, session.id, requestId, (client) =>
-      client.query(
+    const result = await transaction(session.user_id, session.id, requestId, async (client) => {
+      const updated = await client.query<{ id: string; tree_id: string }>(
         `UPDATE app.ownership_transfers SET verified_at=now(),verification_code_hash=NULL,updated_at=now()
          WHERE id=$1 AND current_owner_user_id=$2 AND status='pending' AND expires_at>now()
-           AND verification_code_hash=$3 RETURNING id`,
+           AND verification_code_hash=$3 RETURNING id,tree_id`,
         [verifyTransfer[1], session.user_id, transferCodeHash(body.code)],
-      ),
-    );
+      );
+      if (updated.rowCount)
+        await client.query(
+          `INSERT INTO app.tree_activity(
+             tree_id,actor_user_id,action_type,target_type,target_id
+           ) VALUES($1,$2,'ownership_transfer_verified','ownership_transfer',$3)`,
+          [updated.rows[0].tree_id, session.user_id, updated.rows[0].id],
+        );
+      return updated;
+    });
     return result.rowCount ? json({ ok: true }) : json({ code: "INVALID_OR_EXPIRED_CODE" }, 400);
   }
   const transferAction = url.pathname.match(
@@ -703,6 +959,12 @@ export async function handleCollaborationRequest(
           "UPDATE app.ownership_transfers SET status='cancelled',updated_at=now() WHERE id=$1",
           [transferId],
         );
+        await client.query(
+          `INSERT INTO app.tree_activity(
+             tree_id,actor_user_id,subject_user_id,action_type,target_type,target_id
+           ) VALUES($1,$2,$3,'ownership_transfer_cancelled','ownership_transfer',$4)`,
+          [transfer.tree_id, session.user_id, transfer.proposed_owner_user_id, transferId],
+        );
         return;
       }
       if (session.user_id !== transfer.proposed_owner_user_id) throw new ApiError("FORBIDDEN", 403);
@@ -710,6 +972,12 @@ export async function handleCollaborationRequest(
         await client.query(
           "UPDATE app.ownership_transfers SET status='rejected',updated_at=now() WHERE id=$1",
           [transferId],
+        );
+        await client.query(
+          `INSERT INTO app.tree_activity(
+             tree_id,actor_user_id,subject_user_id,action_type,target_type,target_id
+           ) VALUES($1,$2,$3,'ownership_transfer_rejected','ownership_transfer',$4)`,
+          [transfer.tree_id, session.user_id, transfer.current_owner_user_id, transferId],
         );
         return;
       }
@@ -764,22 +1032,72 @@ export async function handleCollaborationRequest(
           FROM app.ownership_transfers WHERE id=$1`,
         [transferId],
       );
+      await client.query(
+        `INSERT INTO app.tree_activity(
+           tree_id,actor_user_id,subject_user_id,action_type,target_type,target_id
+         ) VALUES($1,$2,$3,'ownership_transfer_accepted','ownership_transfer',$4)`,
+        [transfer.tree_id, session.user_id, transfer.current_owner_user_id, transferId],
+      );
     });
     return json({ ok: true });
   }
   const activity = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/activity$/);
   if (activity && request.method === "GET") {
     const limit = activityRequestLimit(url.searchParams.get("limit"));
+    const cursor = decodeActivityCursor(url.searchParams.get("cursor"));
+    const queryText = (url.searchParams.get("query") ?? "").trim().slice(0, 100);
+    const locale = url.searchParams.get("locale") === "ar" ? "ar" : "en";
+    const actionTypes = matchingActivityActionTypes(queryText, locale);
+    const pattern = queryText
+      ? `%${queryText
+          .toLocaleLowerCase(locale)
+          .replaceAll("\\", "\\\\")
+          .replaceAll("%", "\\%")
+          .replaceAll("_", "\\_")}%`
+      : null;
     const result = await transaction(session.user_id, session.id, requestId, async (client) => {
       const visible = await client.query("SELECT app.can_view_tree($1) allowed", [activity[1]]);
       if (!visible.rows[0]?.allowed) throw new ApiError("FORBIDDEN", 403);
-      return client.query(
-        `SELECT action_type,target_type,target_id,branch_id,created_at
-         FROM app.tree_activity WHERE tree_id=$1 ORDER BY created_at DESC LIMIT $2`,
-        [activity[1], limit],
-      );
+      const rows: ActivityDatabaseRow[] = [];
+      let fetchCursor = cursor;
+      let exhausted = false;
+      do {
+        const batch = await client.query<ActivityDatabaseRow>(
+          `SELECT a.id,a.action_type,a.actor_user_id,a.actor_name_en,a.actor_name_ar,
+             a.subject_user_id,a.subject_name_en,a.subject_name_ar,
+             a.target_type,a.target_id,a.target_name_en,a.target_name_ar,
+             a.branch_id,b.name_en branch_name_en,b.name_ar branch_name_ar,
+             a.metadata,a.created_at
+           FROM app.tree_activity a
+           LEFT JOIN app.subfamilies b ON b.id=a.branch_id AND b.tree_id=a.tree_id
+           WHERE a.tree_id=$1
+             AND ($2::timestamptz IS NULL OR (a.created_at,a.id)<($2::timestamptz,$3::uuid))
+             AND (
+               $4::text IS NULL
+               OR lower(
+                 COALESCE(a.actor_name_en,'')||' '||COALESCE(a.actor_name_ar,'')||' '||
+                 COALESCE(a.subject_name_en,'')||' '||COALESCE(a.subject_name_ar,'')
+               ) LIKE $4 ESCAPE '\\'
+               OR a.action_type=ANY($5::text[])
+             )
+           ORDER BY a.created_at DESC,a.id DESC LIMIT 250`,
+          [
+            activity[1],
+            fetchCursor?.createdAt ?? null,
+            fetchCursor?.id ?? null,
+            pattern,
+            actionTypes,
+          ],
+        );
+        rows.push(...batch.rows);
+        exhausted = batch.rows.length < 250;
+        const last = batch.rows.at(-1);
+        if (last) fetchCursor = { createdAt: last.created_at, id: last.id };
+        if (!last) exhausted = true;
+      } while (!exhausted && activityGroups(rows).length <= limit);
+      return activityGroups(rows);
     });
-    return json(result.rows);
+    return json(activityPageFromGroups(result, limit));
   }
   const complaints = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/complaints$/);
   if (complaints && request.method === "POST") {

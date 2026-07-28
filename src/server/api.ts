@@ -606,19 +606,24 @@ export async function handleApi(request: Request): Promise<Response | null> {
         );
         if (!canDeleteContributorAccount(membership.rows.map(({ role }) => role)))
           throw new ApiError("OWNER_ACCOUNT_DELETE_FORBIDDEN", 403);
-        await client.query(
+        const recordedActivity = await client.query(
           `INSERT INTO app.tree_activity(
-             tree_id,branch_id,actor_user_id,action_type,target_type,target_id
+             tree_id,branch_id,actor_user_id,subject_user_id,
+             action_type,target_type,target_id
            )
-           SELECT m.tree_id,g.root_subfamily_id,$1,
+           SELECT m.tree_id,g.root_subfamily_id,$1,$1,
              'contributor_account_deleted','user',$1
            FROM app.tree_memberships m
-           LEFT JOIN app.branch_grants g
-             ON g.tree_id=m.tree_id AND g.user_id=m.user_id
-             AND g.revoked_at IS NULL
+           LEFT JOIN LATERAL (
+             SELECT root_subfamily_id FROM app.branch_grants
+             WHERE tree_id=m.tree_id AND user_id=m.user_id AND revoked_at IS NULL
+             ORDER BY granted_at DESC LIMIT 1
+           ) g ON true
            WHERE m.user_id=$1 AND m.role<>'owner' AND m.revoked_at IS NULL`,
           [session.user_id],
         );
+        if (!recordedActivity.rowCount)
+          throw new ApiError("ACCOUNT_CANCELLATION_ACTIVITY_NOT_RECORDED", 500);
         await client.query(
           "UPDATE app.family_members SET linked_user_id=NULL WHERE linked_user_id=$1",
           [session.user_id],
@@ -867,7 +872,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
         if (!canUpdateTreeMetadata(membership.rows[0]?.role)) throw new Error("FORBIDDEN");
         const descriptionEn = descriptionPatchValue(b.description_en);
         const descriptionAr = descriptionPatchValue(b.description_ar);
-        return (
+        const updated = (
           await c.query(
             `UPDATE app.family_trees SET name_en=$2,name_ar=$3,
              description_en=CASE WHEN $6 THEN $4 ELSE description_en END,
@@ -884,6 +889,14 @@ export async function handleApi(request: Request): Promise<Response | null> {
             ],
           )
         ).rows[0];
+        await c.query(
+          `INSERT INTO app.tree_activity(
+             tree_id,actor_user_id,action_type,target_type,target_id,
+             target_name_en,target_name_ar
+           ) VALUES($1,$2,'tree_metadata_updated','family_tree',$1,$3,$4)`,
+          [treeMatch[1], session.user_id, updated.name_en, updated.name_ar],
+        );
+        return updated;
       });
       return json(r);
     }

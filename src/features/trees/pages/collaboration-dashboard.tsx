@@ -34,7 +34,11 @@ import {
 } from "@/shared/ui/alert-dialog";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
-import { activityLabel } from "../domain/activity-label";
+import {
+  activityDescription,
+  type ActivityItem,
+  type ActivityPageResponse,
+} from "../domain/activity-label";
 import {
   authenticityLevels,
   authenticityRequirementStates,
@@ -98,13 +102,12 @@ type Invitation = {
   branch_name_en: string;
   branch_name_ar: string | null;
 };
-type ActivityRow = { action_type: string; target_type: string; created_at: string };
 type DashboardData = {
   tree: CurrentTree;
   stats: Statistics;
   branches: Branch[];
   invitations: Invitation[];
-  activity: ActivityRow[];
+  activity: ActivityItem[];
 };
 
 let dashboardCache: DashboardData | undefined;
@@ -123,7 +126,7 @@ export function CollaborationDashboard() {
   const [stats, setStats] = useState<Statistics>();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [activity, setActivity] = useState<ActivityRow[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [nameEn, setNameEn] = useState("");
@@ -145,13 +148,14 @@ export function CollaborationDashboard() {
   const load = async (force = false) => {
     if (!force && dashboardCache) {
       applyDashboard(dashboardCache);
-      return;
     }
     const current = await getJson<CurrentTree>("/api/tree/current");
     const [nextStats, nextBranches, nextActivity] = await Promise.all([
       getJson<Statistics>(`/api/trees/${current.id}/statistics`),
       getJson<Branch[]>(`/api/trees/${current.id}/branches`),
-      getJson<ActivityRow[]>(`/api/trees/${current.id}/activity?limit=1`),
+      getJson<ActivityPageResponse>(
+        `/api/trees/${current.id}/activity?limit=5&locale=${lang}`,
+      ).then((page) => page.items),
     ]);
     const nextInvitations =
       current.role === "owner"
@@ -167,7 +171,19 @@ export function CollaborationDashboard() {
     applyDashboard(dashboardCache);
   };
   useEffect(() => {
-    void load().catch(() => setTree(undefined));
+    void load().catch(() => {
+      if (!dashboardCache) setTree(undefined);
+    });
+    const refresh = () => void load(true).catch(() => undefined);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, []);
   const assigned = branches.find((branch) => branch.id === tree?.assigned_branch_id);
   const actOnInvitation = async (id: string, action: "cancel" | "resend") => {
@@ -392,18 +408,15 @@ export function CollaborationDashboard() {
               {activity.length === 0 && (
                 <p className="text-sm text-muted-foreground">{t("no_activity")}</p>
               )}
-              {activity.slice(0, 1).map((row, index) => (
-                <div
-                  key={`${row.created_at}-${index}`}
-                  className="flex items-center gap-3 border-b pb-3 last:border-0"
-                >
+              {activity.slice(0, 5).map((row) => (
+                <div key={row.id} className="flex items-center gap-3 border-b pb-3 last:border-0">
                   <Activity className="h-4 w-4 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
-                      {activityLabel(row.action_type, t)}
+                      {activityDescription(row, lang, t)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(row.created_at).toLocaleString()}
+                      {new Date(row.createdAt).toLocaleString(lang === "ar" ? "ar" : "en")}
                     </p>
                   </div>
                 </div>
