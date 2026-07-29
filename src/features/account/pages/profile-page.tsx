@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, KeyRound, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
+import { ArrowLeft, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { AuthError, useAuth } from "@/features/auth";
 import { useI18n } from "@/shared/i18n";
@@ -56,6 +56,7 @@ export function ProfilePage() {
               : t("auth_error");
   const request = async (e: FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     setAccountError(null);
     try {
@@ -69,6 +70,7 @@ export function ProfilePage() {
     }
   };
   const confirm = async () => {
+    if (busy) return;
     setBusy(true);
     setAccountError(null);
     try {
@@ -84,7 +86,7 @@ export function ProfilePage() {
   };
   const saveProfileNames = async (event: FormEvent) => {
     event.preventDefault();
-    if (!fullNameEn.trim() || !fullNameAr.trim()) return;
+    if (nameBusy || !fullNameEn.trim() || !fullNameAr.trim()) return;
     setNameBusy(true);
     setProfileError(null);
     try {
@@ -165,14 +167,13 @@ export function ProfilePage() {
               )}
               <Button
                 className="sm:col-span-2 sm:w-fit"
+                loading={nameBusy}
                 disabled={
-                  nameBusy ||
-                  (fullNameEn.trim() === (user?.fullNameEn ?? "") &&
-                    fullNameAr.trim() === (user?.fullNameAr ?? "") &&
-                    gender === (user?.gender ?? "unspecified"))
+                  fullNameEn.trim() === (user?.fullNameEn ?? "") &&
+                  fullNameAr.trim() === (user?.fullNameAr ?? "") &&
+                  gender === (user?.gender ?? "unspecified")
                 }
               >
-                {nameBusy && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}
                 {t("save_changes")}
               </Button>
             </form>
@@ -209,8 +210,7 @@ export function ProfilePage() {
                       <AlertDescription>{accountError}</AlertDescription>
                     </Alert>
                   )}
-                  <Button disabled={busy || code.length !== 6} onClick={confirm}>
-                    {busy && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}
+                  <Button loading={busy} disabled={code.length !== 6} onClick={confirm}>
                     {t("confirm_code")}
                   </Button>
                   <Button
@@ -256,9 +256,9 @@ export function ProfilePage() {
                   )}
                   <Button
                     className="sm:col-span-2 sm:w-fit"
-                    disabled={busy || email.trim().toLowerCase() === (user?.email ?? "")}
+                    loading={busy}
+                    disabled={email.trim().toLowerCase() === (user?.email ?? "")}
                   >
-                    {busy && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}
                     {t("send_verification_code")}
                   </Button>
                 </form>

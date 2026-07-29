@@ -2,7 +2,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { LoaderCircle, LockKeyhole, Mail, TreePine, UserRound } from "lucide-react";
+import { LockKeyhole, Mail, TreePine, UserRound } from "lucide-react";
 import { z } from "zod";
 import { AuthError } from "../domain/auth-service";
 import { useAuth } from "../components/auth-provider";
@@ -68,7 +68,7 @@ export function AuthPage({
     [pendingEmail, setPendingEmail] = useState(""),
     [code, setCode] = useState(""),
     [error, setError] = useState<string | null>(null),
-    [busy, setBusy] = useState(false),
+    [busyAction, setBusyAction] = useState<"verify" | "resend" | "forgot">(),
     [invitationLoading, setInvitationLoading] = useState(Boolean(invitationToken));
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -166,29 +166,32 @@ export function AuthPage({
     }
   });
   const verify = async () => {
-    setBusy(true);
+    if (busyAction) return;
+    setBusyAction("verify");
     setError(null);
     try {
       await auth.confirmEmail(pendingEmail, code);
     } catch (e) {
       setError(errorText(e, t));
     } finally {
-      setBusy(false);
+      setBusyAction(undefined);
     }
   };
   const resend = async () => {
-    setBusy(true);
+    if (busyAction) return;
+    setBusyAction("resend");
     setError(null);
     try {
       await auth.resendEmailCode(pendingEmail);
     } catch (e) {
       setError(errorText(e, t));
     } finally {
-      setBusy(false);
+      setBusyAction(undefined);
     }
   };
   const forgot = form.handleSubmit(async (v) => {
-    setBusy(true);
+    if (busyAction) return;
+    setBusyAction("forgot");
     setError(null);
     try {
       await auth.requestPasswordReset(v.email);
@@ -196,7 +199,7 @@ export function AuthPage({
     } catch (e) {
       setError(errorText(e, t));
     } finally {
-      setBusy(false);
+      setBusyAction(undefined);
     }
   });
   const msg = (k?: string) => (k ? t(k as TranslationKey) : undefined);
@@ -250,11 +253,21 @@ export function AuthPage({
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              <Button className="w-full" disabled={busy || code.length !== 6} onClick={verify}>
-                {busy && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}
+              <Button
+                className="w-full"
+                loading={busyAction === "verify"}
+                disabled={Boolean(busyAction) || code.length !== 6}
+                onClick={verify}
+              >
                 {t("confirm_code")}
               </Button>
-              <Button variant="ghost" className="w-full" disabled={busy} onClick={resend}>
+              <Button
+                variant="ghost"
+                className="w-full"
+                loading={busyAction === "resend"}
+                disabled={Boolean(busyAction)}
+                onClick={resend}
+              >
                 {t("resend_code")}
               </Button>
               <Button
@@ -291,7 +304,11 @@ export function AuthPage({
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
-                  <Button className="w-full" disabled={busy}>
+                  <Button
+                    className="w-full"
+                    loading={busyAction === "forgot"}
+                    disabled={Boolean(busyAction)}
+                  >
                     {t("send_reset_link")}
                   </Button>
                 </>
@@ -445,11 +462,9 @@ export function AuthPage({
                   )}
                   <Button
                     className="w-full"
+                    loading={form.formState.isSubmitting}
                     disabled={form.formState.isSubmitting || invitationLoading}
                   >
-                    {form.formState.isSubmitting && (
-                      <LoaderCircle className="me-2 h-4 w-4 animate-spin" />
-                    )}
                     {mode === "login" ? t("login") : t("create_account")}
                   </Button>
                 </form>

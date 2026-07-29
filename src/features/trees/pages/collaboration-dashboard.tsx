@@ -24,7 +24,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -164,12 +163,14 @@ export function CollaborationDashboard() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteAccountCode, setDeleteAccountCode] = useState("");
   const [deleteAccountCodeExpiresAt, setDeleteAccountCodeExpiresAt] = useState<string>();
-  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountAction, setDeleteAccountAction] = useState<"request" | "delete">();
   const [invitationAction, setInvitationAction] = useState<string>();
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferUserId, setTransferUserId] = useState("");
   const [transferCode, setTransferCode] = useState("");
-  const [transferAction, setTransferAction] = useState(false);
+  const [transferAction, setTransferAction] = useState<
+    "request" | "verify" | "resend" | "accept" | "reject" | "cancel"
+  >();
   const [removalOpen, setRemovalOpen] = useState(false);
   const [removalContributorId, setRemovalContributorId] = useState("");
   const [removalChallenge, setRemovalChallenge] = useState<{
@@ -177,7 +178,7 @@ export function CollaborationDashboard() {
     expires_at: string;
   }>();
   const [removalCode, setRemovalCode] = useState("");
-  const [removalAction, setRemovalAction] = useState(false);
+  const [removalAction, setRemovalAction] = useState<"request" | "resend" | "confirm">();
   const mounted = useRef(false);
   const loadInFlight = useRef<Promise<DashboardData> | undefined>(undefined);
   const local = (en?: string | null, ar?: string | null) =>
@@ -254,6 +255,7 @@ export function CollaborationDashboard() {
   }, [load]);
   const assigned = branches.find((branch) => branch.id === tree?.assigned_branch_id);
   const actOnInvitation = async (id: string, action: "cancel" | "resend") => {
+    if (invitationAction) return;
     setInvitationAction(`${id}:${action}`);
     try {
       const response = await fetch(`/api/invitations/${id}/${action}`, {
@@ -278,7 +280,7 @@ export function CollaborationDashboard() {
     setRenameOpen(true);
   };
   const renameTree = async () => {
-    if (!tree || !canUseOwnerTreeControls(tree.role) || !nameEn.trim()) return;
+    if (renaming || !tree || !canUseOwnerTreeControls(tree.role) || !nameEn.trim()) return;
     setRenaming(true);
     try {
       const response = await fetch(`/api/trees/${tree.id}`, {
@@ -307,8 +309,8 @@ export function CollaborationDashboard() {
     }
   };
   const requestTransfer = async () => {
-    if (!tree || !transferUserId) return;
-    setTransferAction(true);
+    if (transferAction || !tree || !transferUserId) return;
+    setTransferAction("request");
     try {
       const response = await fetch(`/api/trees/${tree.id}/ownership-transfers`, {
         method: "POST",
@@ -322,12 +324,12 @@ export function CollaborationDashboard() {
     } catch {
       toast.error(t("ownership_transfer_failed"));
     } finally {
-      setTransferAction(false);
+      setTransferAction(undefined);
     }
   };
   const verifyTransfer = async () => {
-    if (!ownershipTransfer || !/^\d{6}$/.test(transferCode)) return;
-    setTransferAction(true);
+    if (transferAction || !ownershipTransfer || !/^\d{6}$/.test(transferCode)) return;
+    setTransferAction("verify");
     try {
       const response = await fetch(`/api/ownership-transfers/${ownershipTransfer.id}/verify`, {
         method: "POST",
@@ -343,12 +345,12 @@ export function CollaborationDashboard() {
     } catch {
       toast.error(t("ownership_transfer_invalid_code"));
     } finally {
-      setTransferAction(false);
+      setTransferAction(undefined);
     }
   };
   const resendTransferCode = async () => {
-    if (!ownershipTransfer || ownershipTransfer.verified) return;
-    setTransferAction(true);
+    if (transferAction || !ownershipTransfer || ownershipTransfer.verified) return;
+    setTransferAction("resend");
     try {
       const response = await fetch(`/api/ownership-transfers/${ownershipTransfer.id}/resend-code`, {
         method: "POST",
@@ -361,12 +363,12 @@ export function CollaborationDashboard() {
     } catch {
       toast.error(t("ownership_transfer_failed"));
     } finally {
-      setTransferAction(false);
+      setTransferAction(undefined);
     }
   };
   const actOnTransfer = async (action: "accept" | "reject" | "cancel") => {
-    if (!ownershipTransfer) return;
-    setTransferAction(true);
+    if (transferAction || !ownershipTransfer) return;
+    setTransferAction(action);
     try {
       const response = await fetch(`/api/ownership-transfers/${ownershipTransfer.id}/${action}`, {
         method: "POST",
@@ -385,7 +387,7 @@ export function CollaborationDashboard() {
     } catch {
       toast.error(t("ownership_transfer_failed"));
     } finally {
-      setTransferAction(false);
+      setTransferAction(undefined);
     }
   };
   const selectedRemovalBranch = branches.find(
@@ -393,8 +395,8 @@ export function CollaborationDashboard() {
   );
   const removableContributorBranches = activeContributorBranches(branches);
   const requestContributorRemoval = async () => {
-    if (!tree || tree.role !== "owner" || !removalContributorId) return;
-    setRemovalAction(true);
+    if (removalAction || !tree || tree.role !== "owner" || !removalContributorId) return;
+    setRemovalAction(removalChallenge ? "resend" : "request");
     try {
       const response = await fetch(
         `/api/trees/${tree.id}/contributors/${removalContributorId}/removal-requests`,
@@ -419,12 +421,12 @@ export function CollaborationDashboard() {
     } catch {
       toast.error(t("contributor_removal_code_failed"));
     } finally {
-      setRemovalAction(false);
+      setRemovalAction(undefined);
     }
   };
   const confirmContributorRemoval = async () => {
-    if (!removalChallenge || !/^\d{6}$/.test(removalCode)) return;
-    setRemovalAction(true);
+    if (removalAction || !removalChallenge || !/^\d{6}$/.test(removalCode)) return;
+    setRemovalAction("confirm");
     try {
       const response = await fetch(
         `/api/contributor-removal-requests/${removalChallenge.id}/confirm`,
@@ -455,12 +457,12 @@ export function CollaborationDashboard() {
     } catch {
       toast.error(t("contributor_removal_failed"));
     } finally {
-      setRemovalAction(false);
+      setRemovalAction(undefined);
     }
   };
   const requestDeleteAccountCode = async () => {
-    if (deleteConfirmation !== "DELETE") return;
-    setDeletingAccount(true);
+    if (deleteAccountAction || deleteConfirmation !== "DELETE") return;
+    setDeleteAccountAction("request");
     try {
       const result = await requestContributorAccountDeletionCode("DELETE");
       setDeleteAccountCode("");
@@ -473,12 +475,17 @@ export function CollaborationDashboard() {
           : t("account_deletion_code_failed"),
       );
     } finally {
-      setDeletingAccount(false);
+      setDeleteAccountAction(undefined);
     }
   };
   const deleteAccount = async () => {
-    if (deleteConfirmation !== "DELETE" || !/^\d{6}$/.test(deleteAccountCode)) return;
-    setDeletingAccount(true);
+    if (
+      deleteAccountAction ||
+      deleteConfirmation !== "DELETE" ||
+      !/^\d{6}$/.test(deleteAccountCode)
+    )
+      return;
+    setDeleteAccountAction("delete");
     try {
       await deleteContributorAccount("DELETE", deleteAccountCode);
       await navigate({ to: "/auth", search: { redirect: "/", oauthError: undefined } });
@@ -488,7 +495,7 @@ export function CollaborationDashboard() {
           ? t("account_deletion_invalid_code")
           : t("account_delete_failed"),
       );
-      setDeletingAccount(false);
+      setDeleteAccountAction(undefined);
     }
   };
   if (!tree || !stats)
@@ -562,7 +569,7 @@ export function CollaborationDashboard() {
               <OwnershipTransferPrompt
                 transfer={ownershipTransfer}
                 local={local}
-                busy={transferAction}
+                action={transferAction}
                 onAction={actOnTransfer}
               />
             )}
@@ -620,6 +627,7 @@ export function CollaborationDashboard() {
                           <Button
                             size="sm"
                             variant="outline"
+                            loading={invitationAction === `${item.id}:resend`}
                             disabled={Boolean(invitationAction)}
                             onClick={() => void actOnInvitation(item.id, "resend")}
                           >
@@ -629,6 +637,7 @@ export function CollaborationDashboard() {
                           <Button
                             size="sm"
                             variant="destructive"
+                            loading={invitationAction === `${item.id}:cancel`}
                             disabled={Boolean(invitationAction)}
                             onClick={() => void actOnInvitation(item.id, "cancel")}
                           >
@@ -777,7 +786,8 @@ export function CollaborationDashboard() {
                     )}
                     <Button
                       variant="outline"
-                      disabled={transferAction}
+                      loading={transferAction === "cancel"}
+                      disabled={Boolean(transferAction)}
                       onClick={() => void actOnTransfer("cancel")}
                     >
                       {t("cancel_transfer")}
@@ -838,7 +848,8 @@ export function CollaborationDashboard() {
                   {t("cancel")}
                 </Button>
                 <Button
-                  disabled={!transferUserId || transferAction}
+                  loading={transferAction === "request"}
+                  disabled={!transferUserId || Boolean(transferAction)}
                   onClick={() => void requestTransfer()}
                 >
                   {t("send_verification_code")}
@@ -885,13 +896,15 @@ export function CollaborationDashboard() {
               <DialogFooter>
                 <Button
                   variant="outline"
-                  disabled={transferAction}
+                  loading={transferAction === "resend"}
+                  disabled={Boolean(transferAction)}
                   onClick={() => void resendTransferCode()}
                 >
                   {t("resend_code")}
                 </Button>
                 <Button
-                  disabled={transferAction || transferCode.length !== 6}
+                  loading={transferAction === "verify"}
+                  disabled={Boolean(transferAction) || transferCode.length !== 6}
                   onClick={() => void verifyTransfer()}
                 >
                   {t("verify_transfer")}
@@ -946,7 +959,8 @@ export function CollaborationDashboard() {
                 </Button>
                 <Button
                   variant="destructive"
-                  disabled={!removalContributorId || removalAction}
+                  loading={removalAction === "request"}
+                  disabled={!removalContributorId || Boolean(removalAction)}
                   onClick={() => void requestContributorRemoval()}
                 >
                   {t("send_verification_code")}
@@ -989,14 +1003,16 @@ export function CollaborationDashboard() {
               <DialogFooter>
                 <Button
                   variant="outline"
-                  disabled={removalAction}
+                  loading={removalAction === "resend"}
+                  disabled={Boolean(removalAction)}
                   onClick={() => void requestContributorRemoval()}
                 >
                   {t("resend_code")}
                 </Button>
                 <Button
                   variant="destructive"
-                  disabled={removalAction || removalCode.length !== 6}
+                  loading={removalAction === "confirm"}
+                  disabled={Boolean(removalAction) || removalCode.length !== 6}
                   onClick={() => void confirmContributorRemoval()}
                 >
                   {t("confirm_contributor_removal")}
@@ -1039,7 +1055,7 @@ export function CollaborationDashboard() {
             <Button variant="outline" onClick={() => setRenameOpen(false)}>
               {t("cancel")}
             </Button>
-            <Button disabled={renaming || !nameEn.trim()} onClick={() => void renameTree()}>
+            <Button loading={renaming} disabled={!nameEn.trim()} onClick={() => void renameTree()}>
               {t("save_changes")}
             </Button>
           </DialogFooter>
@@ -1065,16 +1081,18 @@ export function CollaborationDashboard() {
               </div>
               <AlertDialogFooter>
                 <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-                <AlertDialogAction
+                <Button
+                  variant="destructive"
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  disabled={deletingAccount || deleteConfirmation !== "DELETE"}
+                  loading={deleteAccountAction === "request"}
+                  disabled={Boolean(deleteAccountAction) || deleteConfirmation !== "DELETE"}
                   onClick={(event) => {
                     event.preventDefault();
                     void requestDeleteAccountCode();
                   }}
                 >
                   {t("send_verification_code")}
-                </AlertDialogAction>
+                </Button>
               </AlertDialogFooter>
             </>
           ) : (
@@ -1106,21 +1124,24 @@ export function CollaborationDashboard() {
                 <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
                 <Button
                   variant="outline"
-                  disabled={deletingAccount}
+                  loading={deleteAccountAction === "request"}
+                  disabled={Boolean(deleteAccountAction)}
                   onClick={() => void requestDeleteAccountCode()}
                 >
                   {t("resend_code")}
                 </Button>
-                <AlertDialogAction
+                <Button
+                  variant="destructive"
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  disabled={deletingAccount || deleteAccountCode.length !== 6}
+                  loading={deleteAccountAction === "delete"}
+                  disabled={Boolean(deleteAccountAction) || deleteAccountCode.length !== 6}
                   onClick={(event) => {
                     event.preventDefault();
                     void deleteAccount();
                   }}
                 >
                   {t("delete_account")}
-                </AlertDialogAction>
+                </Button>
               </AlertDialogFooter>
             </>
           )}
@@ -1133,12 +1154,12 @@ export function CollaborationDashboard() {
 function OwnershipTransferPrompt({
   transfer,
   local,
-  busy,
+  action,
   onAction,
 }: {
   transfer: OwnershipTransfer;
   local: (en?: string | null, ar?: string | null) => string;
-  busy: boolean;
+  action: "accept" | "reject" | "cancel" | "request" | "verify" | "resend" | undefined;
   onAction: (action: "accept" | "reject") => Promise<void>;
 }) {
   const { t } = useI18n();
@@ -1160,10 +1181,19 @@ function OwnershipTransferPrompt({
           })}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button disabled={busy} onClick={() => void onAction("accept")}>
+          <Button
+            loading={action === "accept"}
+            disabled={Boolean(action)}
+            onClick={() => void onAction("accept")}
+          >
             {t("accept_ownership")}
           </Button>
-          <Button variant="outline" disabled={busy} onClick={() => void onAction("reject")}>
+          <Button
+            variant="outline"
+            loading={action === "reject"}
+            disabled={Boolean(action)}
+            onClick={() => void onAction("reject")}
+          >
             {t("reject")}
           </Button>
         </div>
@@ -1402,30 +1432,39 @@ function InviteDialog({
   const [member, setMember] = useState<SearchOption>();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const submit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
     setError("");
-    const response = await fetch(`/api/trees/${treeId}/invitations`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        email,
-        branchId: branch?.id,
-        existingFamilyMemberId: member?.id,
-      }),
-    });
-    if (!response.ok) {
-      const body = (await response.json()) as { code?: string };
-      setError(
-        body.code === "INVITEE_ALREADY_REGISTERED"
-          ? t("existing_user_invitation_error")
-          : body.code === "BRANCH_ALREADY_ASSIGNED"
-            ? t("branch_already_has_contributor")
-            : t("auth_error"),
-      );
-      return;
+    try {
+      const response = await fetch(`/api/trees/${treeId}/invitations`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email,
+          branchId: branch?.id,
+          existingFamilyMemberId: member?.id,
+        }),
+      });
+      if (!response.ok) {
+        const body = (await response.json()) as { code?: string };
+        setError(
+          body.code === "INVITEE_ALREADY_REGISTERED"
+            ? t("existing_user_invitation_error")
+            : body.code === "BRANCH_ALREADY_ASSIGNED"
+              ? t("branch_already_has_contributor")
+              : t("auth_error"),
+        );
+        return;
+      }
+      await onSent();
+    } catch {
+      setError(t("auth_error"));
+    } finally {
+      setSubmitting(false);
     }
-    await onSent();
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1440,7 +1479,11 @@ function InviteDialog({
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
-          <Button onClick={() => void submit()} disabled={!branch || !member || !email.trim()}>
+          <Button
+            loading={submitting}
+            onClick={() => void submit()}
+            disabled={!branch || !member || !email.trim()}
+          >
             {t("send_invitation")}
           </Button>
         </DialogFooter>

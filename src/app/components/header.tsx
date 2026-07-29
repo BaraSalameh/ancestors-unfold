@@ -8,7 +8,6 @@ import {
   LogOut,
   UserRound,
   Settings,
-  LoaderCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
@@ -101,11 +100,11 @@ export function Header() {
             <Button
               size="sm"
               variant={persistence.dirty ? "default" : "secondary"}
-              disabled={!persistence.dirty || persistence.saving}
+              loading={persistence.saving}
+              disabled={!persistence.dirty}
               onClick={() => void updateTree()}
               aria-live="polite"
             >
-              {persistence.saving && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}
               {persistence.saving
                 ? t("updating_tree")
                 : persistence.conflicted

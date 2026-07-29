@@ -192,7 +192,7 @@ export function ActivityPage() {
               type="button"
               variant="outline"
               className="w-full"
-              disabled={loading}
+              loading={loading}
               onClick={() => void loadNext()}
             >
               {t("activity_load_more")}

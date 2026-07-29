@@ -1,6 +1,6 @@
 import { Link, useSearch } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { LoaderCircle, LockKeyhole } from "lucide-react";
+import { LockKeyhole } from "lucide-react";
 import { AuthError, useAuth } from "@/features/auth";
 import { useI18n } from "@/shared/i18n";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
@@ -20,6 +20,7 @@ export function ResetPasswordPage() {
     [error, setError] = useState<string | null>(null);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     setError(null);
     if (password.length < 12) {
       setError(t("registration_password_too_short"));
@@ -97,8 +98,7 @@ export function ResetPasswordPage() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              <Button className="w-full" disabled={busy}>
-                {busy && <LoaderCircle className="me-2 h-4 w-4 animate-spin" />}
+              <Button className="w-full" loading={busy}>
                 {t("reset_password")}
               </Button>
             </form>
