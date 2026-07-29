@@ -5,6 +5,7 @@ import { familyStore } from "@/features/trees";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/shared/i18n";
 import { contributorSubfamilyAccess } from "@/features/subfamilies";
+import { SubfamiliesPageSkeleton } from "@/shared/ui/page-skeletons";
 
 type CurrentTree = {
   id: string;
@@ -36,7 +37,7 @@ export function SubfamiliesPage() {
       });
   }, [treeIdFromSearch]);
 
-  if (!tree) return <div className="p-8 text-center text-muted-foreground">{t("loading")}</div>;
+  if (!tree) return <SubfamiliesPageSkeleton label={t("loading")} />;
   const access = contributorSubfamilyAccess(tree.role, tree.assigned_branch_id);
 
   return (

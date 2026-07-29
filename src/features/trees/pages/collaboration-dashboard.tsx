@@ -48,6 +48,8 @@ import {
 import { copyTreePreviewUrl } from "./dashboard-share";
 import { useAuth } from "@/features/auth";
 import { useI18n } from "@/shared/i18n";
+import { DashboardPageSkeleton, LoadingStatus } from "@/shared/ui/page-skeletons";
+import { Skeleton } from "@/shared/ui/skeleton";
 import {
   activeContributorBranches,
   canUseOwnerTreeControls,
@@ -498,8 +500,7 @@ export function CollaborationDashboard() {
       setDeleteAccountAction(undefined);
     }
   };
-  if (!tree || !stats)
-    return <main className="mx-auto max-w-7xl p-8 text-center">{t("loading")}</main>;
+  if (!tree || !stats) return <DashboardPageSkeleton label={t("loading")} />;
   return (
     <main className="min-h-[calc(100vh-3.5rem)] bg-muted/25">
       <section className="border-b bg-card">
@@ -1561,7 +1562,14 @@ function SearchPicker({
       />
       {!value && query.trim().length >= 2 && (
         <div className="absolute z-50 mt-1 max-h-52 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-          {loading && <p className="px-3 py-2 text-sm text-muted-foreground">{t("loading")}</p>}
+          {loading && (
+            <div className="space-y-2 px-3 py-2">
+              <LoadingStatus label={t("loading")} />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          )}
           {!loading && results.length === 0 && (
             <p className="px-3 py-2 text-sm text-muted-foreground">{t("no_search_results")}</p>
           )}

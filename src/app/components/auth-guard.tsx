@@ -1,10 +1,12 @@
 import { useEffect, type ReactNode } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { LoaderCircle } from "lucide-react";
 import { useAuth } from "@/features/auth";
+import { useI18n } from "@/shared/i18n";
+import { SessionPageSkeleton } from "@/shared/ui/page-skeletons";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useI18n();
   const location = useRouterState({ select: (state) => state.location });
   const navigate = useNavigate();
   const isAuthPage = location.pathname === "/auth";
@@ -26,11 +28,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }, [isLoading, mayView, location.pathname, location.href, navigate]);
 
   if (isLoading || !mayView) {
-    return (
-      <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
-        <LoaderCircle className="h-7 w-7 animate-spin text-primary" aria-label="Loading session" />
-      </div>
-    );
+    return <SessionPageSkeleton label={t("loading")} />;
   }
   return children;
 }
