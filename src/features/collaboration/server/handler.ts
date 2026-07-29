@@ -1,9 +1,17 @@
 /* eslint-disable max-lines -- Collaboration routes share transactional authorization helpers during API modularization. */
-import { createHash, createHmac, randomBytes, randomInt } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  randomInt,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import type { PoolClient } from "pg";
 import { transaction } from "@/shared/server/database";
 import {
   contributorInvitationMail,
+  contributorRemovalCodeMail,
   ownershipTransferCodeMail,
   ownershipTransferRequestedMail,
   sendMail,
@@ -12,6 +20,7 @@ import { jsonResponse as json } from "@/shared/http/response";
 import { ApiError, parseBody, schemas } from "@/server/security";
 import { matchingActivityActionTypes } from "../domain/activity-search";
 import { activityRequestLimit } from "../domain/policy";
+import { deleteContributorIdentity } from "./account-deletion";
 
 type Session = { id: string; user_id: string; email: string };
 type ActivityDatabaseRow = {
@@ -150,6 +159,15 @@ const transferCodeHash = (code: string) => {
       : undefined);
   if (!secret || secret.length < 16) throw new Error("MAIL_NOT_CONFIGURED");
   return createHmac("sha256", secret).update(`ownership:${code}`).digest();
+};
+const contributorRemovalCodeHash = (challengeId: string, code: string) => {
+  const secret =
+    process.env.EMAIL_CODE_SECRET ??
+    ((process.env.AUTH_TOKEN_DELIVERY ?? "console") === "console"
+      ? "ancestors-unfold-console-development-only"
+      : undefined);
+  if (!secret || secret.length < 16) throw new Error("MAIL_NOT_CONFIGURED");
+  return createHmac("sha256", secret).update(`contributor-removal:${challengeId}:${code}`).digest();
 };
 
 export async function provisionOwnedTree(
@@ -785,64 +803,165 @@ export async function handleCollaborationRequest(
     );
     return json({ ok: true });
   }
-  const removeContributor = url.pathname.match(
-    /^\/api\/trees\/([0-9a-f-]+)\/contributors\/([0-9a-f-]+)\/remove$/,
+  const requestContributorRemoval = url.pathname.match(
+    /^\/api\/trees\/([0-9a-f-]+)\/contributors\/([0-9a-f-]+)\/removal-requests$/,
   );
-  if (removeContributor && request.method === "POST") {
-    await transaction(session.user_id, session.id, requestId, async (client) => {
-      await requireOwner(client, removeContributor[1], session.user_id);
+  if (requestContributorRemoval && request.method === "POST") {
+    const challengeId = randomUUID();
+    const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    const requested = await transaction(session.user_id, session.id, requestId, async (client) => {
+      await requireOwner(client, requestContributorRemoval[1], session.user_id);
       const contributor = (
         await client.query<{
           name_en: string;
           name_ar: string;
-          branch_id: string | null;
+          tree_name: string;
+        }>(
+          `SELECT COALESCE(f.name_en,u.full_name_en) name_en,
+                COALESCE(f.name_ar,u.full_name_ar) name_ar,
+                COALESCE(t.name_en,t.name_ar) tree_name
+             FROM app.tree_memberships m
+             JOIN app.users u ON u.id=m.user_id AND u.status='active'
+             JOIN app.family_trees t ON t.id=m.tree_id AND t.deleted_at IS NULL
+             JOIN app.branch_grants g ON g.tree_id=m.tree_id AND g.user_id=m.user_id
+               AND g.role='branch_editor' AND g.revoked_at IS NULL
+               AND (g.expires_at IS NULL OR g.expires_at>now())
+             JOIN app.subfamilies b ON b.tree_id=g.tree_id AND b.id=g.root_subfamily_id
+               AND b.status='active' AND b.deleted_at IS NULL
+             LEFT JOIN app.family_members f ON f.id=m.family_member_id
+             WHERE m.tree_id=$1 AND m.user_id=$2 AND m.role<>'owner'
+               AND m.affiliation_status='active' AND m.revoked_at IS NULL
+             FOR UPDATE OF m,g`,
+          [requestContributorRemoval[1], requestContributorRemoval[2]],
+        )
+      ).rows[0];
+      if (!contributor) throw new ApiError("CONTRIBUTOR_UNAVAILABLE", 409);
+      await client.query(
+        `UPDATE app.contributor_removal_challenges
+           SET cancelled_at=now(),updated_at=now()
+           WHERE tree_id=$1 AND owner_user_id=$2 AND contributor_user_id=$3
+             AND consumed_at IS NULL AND cancelled_at IS NULL`,
+        [requestContributorRemoval[1], session.user_id, requestContributorRemoval[2]],
+      );
+      const challenge = (
+        await client.query<{ id: string; expires_at: string }>(
+          `INSERT INTO app.contributor_removal_challenges(
+               id,tree_id,owner_user_id,contributor_user_id,verification_code_hash,expires_at
+             ) VALUES($1,$2,$3,$4,$5,now()+interval '15 minutes')
+             RETURNING id,expires_at`,
+          [
+            challengeId,
+            requestContributorRemoval[1],
+            session.user_id,
+            requestContributorRemoval[2],
+            contributorRemovalCodeHash(challengeId, code),
+          ],
+        )
+      ).rows[0];
+      return { ...challenge, contributor };
+    });
+    await sendMail(
+      contributorRemovalCodeMail(
+        session.email,
+        code,
+        requested.contributor.name_en,
+        requested.contributor.tree_name,
+      ),
+    );
+    return json({ id: requested.id, expires_at: requested.expires_at }, 201);
+  }
+  const confirmContributorRemoval = url.pathname.match(
+    /^\/api\/contributor-removal-requests\/([0-9a-f-]+)\/confirm$/,
+  );
+  if (confirmContributorRemoval && request.method === "POST") {
+    const body = await parseBody(request, schemas.contributorRemovalCode);
+    await transaction(session.user_id, session.id, requestId, async (client) => {
+      const challenge = (
+        await client.query<{
+          tree_id: string;
+          contributor_user_id: string;
+          verification_code_hash: Buffer;
+          expires_at: string;
+        }>(
+          `SELECT tree_id,contributor_user_id,verification_code_hash,expires_at
+           FROM app.contributor_removal_challenges
+           WHERE id=$1 AND owner_user_id=$2 AND consumed_at IS NULL AND cancelled_at IS NULL
+           FOR UPDATE`,
+          [confirmContributorRemoval[1], session.user_id],
+        )
+      ).rows[0];
+      if (
+        !challenge ||
+        new Date(challenge.expires_at).getTime() <= Date.now() ||
+        !timingSafeEqual(
+          challenge.verification_code_hash,
+          contributorRemovalCodeHash(confirmContributorRemoval[1], body.code),
+        )
+      )
+        throw new ApiError("INVALID_OR_EXPIRED_CODE", 400);
+      await requireOwner(client, challenge.tree_id, session.user_id);
+      const deletable = await client.query<{ allowed: boolean }>(
+        "SELECT app.owner_can_delete_contributor($1,$2) allowed",
+        [challenge.tree_id, challenge.contributor_user_id],
+      );
+      if (!deletable.rows[0]?.allowed)
+        throw new ApiError("CONTRIBUTOR_ACCOUNT_DELETE_CONFLICT", 409);
+      const contributor = (
+        await client.query<{
+          name_en: string;
+          name_ar: string;
+          branch_id: string;
         }>(
           `SELECT COALESCE(f.name_en,u.full_name_en) name_en,
               COALESCE(f.name_ar,u.full_name_ar) name_ar,
               g.root_subfamily_id branch_id
            FROM app.tree_memberships m
-           JOIN app.users u ON u.id=m.user_id
+           JOIN app.users u ON u.id=m.user_id AND u.status='active'
+           JOIN app.branch_grants g ON g.tree_id=m.tree_id AND g.user_id=m.user_id
+             AND g.role='branch_editor' AND g.revoked_at IS NULL
+             AND (g.expires_at IS NULL OR g.expires_at>now())
+           JOIN app.subfamilies b ON b.tree_id=g.tree_id AND b.id=g.root_subfamily_id
+             AND b.status='active' AND b.deleted_at IS NULL
            LEFT JOIN app.family_members f ON f.id=m.family_member_id
-           LEFT JOIN app.branch_grants g ON g.tree_id=m.tree_id AND g.user_id=m.user_id
-             AND g.revoked_at IS NULL
-           WHERE m.tree_id=$1 AND m.user_id=$2 AND m.revoked_at IS NULL`,
-          [removeContributor[1], removeContributor[2]],
+           WHERE m.tree_id=$1 AND m.user_id=$2 AND m.role<>'owner'
+             AND m.affiliation_status='active' AND m.revoked_at IS NULL
+           FOR UPDATE OF m,g`,
+          [challenge.tree_id, challenge.contributor_user_id],
         )
       ).rows[0];
       if (!contributor) throw new ApiError("CONTRIBUTOR_UNAVAILABLE", 409);
-      await client.query(
-        `UPDATE app.branch_grants SET revoked_at=now(),revoked_by=$3
-         WHERE tree_id=$1 AND user_id=$2 AND revoked_at IS NULL`,
-        [removeContributor[1], removeContributor[2], session.user_id],
-      );
-      const changed = await client.query(
-        `UPDATE app.tree_memberships SET affiliation_status='removed',revoked_at=now(),revoked_by=$3
-         WHERE tree_id=$1 AND user_id=$2 AND role<>'owner' AND affiliation_status<>'removed'`,
-        [removeContributor[1], removeContributor[2], session.user_id],
-      );
-      if (!changed.rowCount) throw new ApiError("CONTRIBUTOR_UNAVAILABLE", 409);
-      await client.query(
-        `UPDATE app.ownership_transfers SET status='cancelled',updated_at=now()
-         WHERE tree_id=$1 AND proposed_owner_user_id=$2 AND status='pending'`,
-        [removeContributor[1], removeContributor[2]],
-      );
       await client.query(
         `INSERT INTO app.tree_activity(
            tree_id,branch_id,actor_user_id,subject_user_id,subject_name_en,subject_name_ar,
            action_type,target_type,target_id
          ) VALUES($1,$2,$3,$4,$5,$6,'contributor_removed','user',$4)`,
         [
-          removeContributor[1],
+          challenge.tree_id,
           contributor.branch_id,
           session.user_id,
-          removeContributor[2],
+          challenge.contributor_user_id,
           contributor.name_en,
           contributor.name_ar,
+        ],
+      );
+      await deleteContributorIdentity(client, challenge.contributor_user_id, session.user_id);
+      await client.query(
+        `UPDATE app.contributor_removal_challenges
+         SET consumed_at=now(),verification_code_hash=$2,updated_at=now()
+         WHERE id=$1`,
+        [
+          confirmContributorRemoval[1],
+          contributorRemovalCodeHash(confirmContributorRemoval[1], body.code),
         ],
       );
     });
     return json({ ok: true });
   }
+  const removeContributor = url.pathname.match(
+    /^\/api\/trees\/([0-9a-f-]+)\/contributors\/([0-9a-f-]+)\/remove$/,
+  );
+  if (removeContributor && request.method === "POST")
+    throw new ApiError("CONTRIBUTOR_REMOVAL_VERIFICATION_REQUIRED", 409);
   const transfers = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/ownership-transfers$/);
   if (transfers && request.method === "GET") {
     const pending = await transaction(session.user_id, session.id, requestId, async (client) => {
@@ -947,6 +1066,27 @@ export async function handleCollaborationRequest(
     });
     await sendMail(ownershipTransferCodeMail(session.email, code));
     return json({ id: transfer.id, status: transfer.status, expires_at: transfer.expires_at }, 201);
+  }
+  const resendTransferCode = url.pathname.match(
+    /^\/api\/ownership-transfers\/([0-9a-f-]+)\/resend-code$/,
+  );
+  if (resendTransferCode && request.method === "POST") {
+    const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    const resent = await transaction(session.user_id, session.id, requestId, async (client) => {
+      const updated = await client.query<{ verification_expires_at: string }>(
+        `UPDATE app.ownership_transfers
+         SET verification_code_hash=$3,
+           verification_expires_at=LEAST(expires_at,now()+interval '15 minutes'),updated_at=now()
+         WHERE id=$1 AND current_owner_user_id=$2 AND status='pending'
+           AND verified_at IS NULL AND expires_at>now()
+         RETURNING verification_expires_at`,
+        [resendTransferCode[1], session.user_id, transferCodeHash(code)],
+      );
+      if (!updated.rowCount) throw new ApiError("TRANSFER_UNAVAILABLE", 409);
+      return updated.rows[0];
+    });
+    await sendMail(ownershipTransferCodeMail(session.email, code));
+    return json(resent);
   }
   const verifyTransfer = url.pathname.match(/^\/api\/ownership-transfers\/([0-9a-f-]+)\/verify$/);
   if (verifyTransfer && request.method === "POST") {

@@ -130,10 +130,18 @@ describe("profile mutation input", () => {
   });
 
   it("requires the exact destructive account confirmation", () => {
-    expect(schemas.deleteContributorAccount.parse({ confirmation: "DELETE" })).toEqual({
+    expect(schemas.deleteContributorAccountRequest.parse({ confirmation: "DELETE" })).toEqual({
       confirmation: "DELETE",
     });
-    expect(() => schemas.deleteContributorAccount.parse({ confirmation: "delete" })).toThrow();
+    expect(() =>
+      schemas.deleteContributorAccountRequest.parse({ confirmation: "delete" }),
+    ).toThrow();
+    expect(
+      schemas.deleteContributorAccount.parse({ confirmation: "DELETE", code: "012345" }),
+    ).toEqual({ confirmation: "DELETE", code: "012345" });
+    expect(() =>
+      schemas.deleteContributorAccount.parse({ confirmation: "DELETE", code: "12345" }),
+    ).toThrow();
   });
 
   it("accepts only the successor identity and optional reason for an ownership transfer", () => {
@@ -148,5 +156,11 @@ describe("profile mutation input", () => {
       }),
     ).toThrow();
     expect(() => schemas.transferRequest.parse({ proposedOwnerUserId: "not-a-user" })).toThrow();
+  });
+
+  it("accepts only a six-digit contributor removal code", () => {
+    expect(schemas.contributorRemovalCode.parse({ code: "012345" })).toEqual({ code: "012345" });
+    expect(() => schemas.contributorRemovalCode.parse({ code: "12345" })).toThrow();
+    expect(() => schemas.contributorRemovalCode.parse({ code: "123456", extra: true })).toThrow();
   });
 });

@@ -58,7 +58,8 @@ export interface AuthService {
     fullNameAr: string,
     gender: AuthUser["gender"],
   ): Promise<AuthSession>;
-  deleteContributorAccount(confirmation: "DELETE"): Promise<void>;
+  requestContributorAccountDeletionCode(confirmation: "DELETE"): Promise<{ expiresAt: string }>;
+  deleteContributorAccount(confirmation: "DELETE", code: string): Promise<void>;
   login(email: string, password: string): Promise<AuthSession>;
   logout(): Promise<void>;
   getSession(): Promise<AuthSession | null>;

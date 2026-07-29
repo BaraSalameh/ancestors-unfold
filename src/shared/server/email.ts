@@ -11,19 +11,29 @@ const layout = (heading: string, body: string) =>
 export function verificationMail(
   to: string,
   code: string,
-  purpose: "registration" | "email_change",
+  purpose: "registration" | "email_change" | "account_deletion",
 ): Mail {
   const action =
-    purpose === "registration" ? "confirm your account" : "confirm your new email address";
+    purpose === "registration"
+      ? "confirm your account"
+      : purpose === "email_change"
+        ? "confirm your new email address"
+        : "confirm permanent deletion of your contributor account";
   const arAction =
-    purpose === "registration" ? "تأكيد حسابك" : "تأكيد عنوان بريدك الإلكتروني الجديد";
+    purpose === "registration"
+      ? "تأكيد حسابك"
+      : purpose === "email_change"
+        ? "تأكيد عنوان بريدك الإلكتروني الجديد"
+        : "تأكيد الحذف النهائي لحساب المساهم الخاص بك";
   const safeCode = escapeHtml(code);
   return {
     to,
     subject:
       purpose === "registration"
         ? "Confirm your Ancestors Unfold account"
-        : "Confirm your new email address",
+        : purpose === "email_change"
+          ? "Confirm your new email address"
+          : "Confirm permanent contributor account deletion",
     text: `Use code ${code} to ${action}. It expires in 15 minutes.\n\nاستخدم الرمز ${code} من أجل ${arAction}. تنتهي صلاحيته خلال 15 دقيقة.`,
     html: layout(
       "Email verification | التحقق من البريد الإلكتروني",
@@ -77,6 +87,23 @@ export function ownershipTransferCodeMail(to: string, code: string): Mail {
     html: layout(
       "Confirm ownership transfer | تأكيد نقل الملكية",
       `<p>Use this code to confirm the ownership transfer request:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>It expires in 15 minutes.</p><div dir="rtl"><p>استخدم هذا الرمز لتأكيد طلب نقل ملكية شجرة العائلة:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>تنتهي صلاحيته خلال 15 دقيقة.</p></div>`,
+    ),
+  };
+}
+
+export function contributorRemovalCodeMail(
+  to: string,
+  code: string,
+  contributorName: string,
+  treeName: string,
+): Mail {
+  return {
+    to,
+    subject: `Confirm contributor account deletion from ${treeName}`,
+    text: `Use code ${code} to permanently delete ${contributorName}'s contributor account from ${treeName}. It expires in 15 minutes.\n\nاستخدم الرمز ${code} لحذف حساب المساهم ${contributorName} من ${treeName} نهائيًا. تنتهي صلاحيته خلال 15 دقيقة.`,
+    html: layout(
+      "Confirm contributor account deletion | تأكيد حذف حساب المساهم",
+      `<p>Use this code to permanently delete <strong>${escapeHtml(contributorName)}</strong>'s contributor account from <strong>${escapeHtml(treeName)}</strong>:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>It expires in 15 minutes.</p><div dir="rtl"><p>استخدم هذا الرمز لحذف حساب المساهم <strong>${escapeHtml(contributorName)}</strong> من <strong>${escapeHtml(treeName)}</strong> نهائيًا:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>تنتهي صلاحيته خلال 15 دقيقة.</p></div>`,
     ),
   };
 }

@@ -60,8 +60,13 @@ export const apiAuthService: AuthService = {
   updateProfile(fullNameEn, fullNameAr, gender) {
     return call<AuthSession>("/api/profile", "PATCH", { fullNameEn, fullNameAr, gender });
   },
-  deleteContributorAccount(confirmation) {
-    return call<void>("/api/profile", "DELETE", { confirmation });
+  requestContributorAccountDeletionCode(confirmation) {
+    return call<{ expiresAt: string }>("/api/profile/deletion-code/request", "POST", {
+      confirmation,
+    });
+  },
+  deleteContributorAccount(confirmation, code) {
+    return call<void>("/api/profile", "DELETE", { confirmation, code });
   },
   login(email: string, password: string) {
     return call<AuthSession>("/api/auth/login", "POST", { email, password });

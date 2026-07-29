@@ -50,4 +50,22 @@ describe("API authentication adapter", () => {
       code: "CONTRIBUTOR_EMAIL_CHANGE_FORBIDDEN",
     });
   });
+
+  it("sends both destructive confirmation and email code for account deletion", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await apiAuthService.deleteContributorAccount("DELETE", "012345");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/profile",
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({ confirmation: "DELETE", code: "012345" }),
+      }),
+    );
+  });
 });

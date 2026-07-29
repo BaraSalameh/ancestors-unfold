@@ -20,7 +20,8 @@ type AuthContextValue = {
     fullNameAr: string,
     gender: AuthSession["user"]["gender"],
   ) => Promise<void>;
-  deleteContributorAccount: (confirmation: "DELETE") => Promise<void>;
+  requestContributorAccountDeletionCode: (confirmation: "DELETE") => Promise<{ expiresAt: string }>;
+  deleteContributorAccount: (confirmation: "DELETE", code: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -67,8 +68,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const next = await apiAuthService.updateProfile(fullNameEn, fullNameAr, gender);
         setSession(next);
       },
-      deleteContributorAccount: async (confirmation) => {
-        await apiAuthService.deleteContributorAccount(confirmation);
+      requestContributorAccountDeletionCode: (confirmation) =>
+        apiAuthService.requestContributorAccountDeletionCode(confirmation),
+      deleteContributorAccount: async (confirmation, code) => {
+        await apiAuthService.deleteContributorAccount(confirmation, code);
         setSession(null);
       },
       logout: async () => {

@@ -21,6 +21,7 @@ import {
   provisionOwnedTree,
   validatePublicInvitation,
   canDeleteContributorAccount,
+  deleteContributorIdentity,
 } from "@/features/collaboration/server";
 import {
   importSnapshot,
@@ -128,12 +129,12 @@ async function createSession(
 async function issueVerificationCode(
   userId: string,
   email: string,
-  purpose: "registration" | "email_change",
+  purpose: "registration" | "email_change" | "account_deletion",
   pendingEmail: string | null,
   ip: string | null,
 ) {
   const code = newCode();
-  await transaction(userId, null, randomUUID(), async (c) => {
+  const token = await transaction(userId, null, randomUUID(), async (c) => {
     const recent = await c.query(
       "SELECT 1 FROM app.email_verification_tokens WHERE user_id=$1 AND purpose=$2 AND last_sent_at>now()-interval '60 seconds' AND consumed_at IS NULL AND invalidated_at IS NULL",
       [userId, purpose],
@@ -143,10 +144,11 @@ async function issueVerificationCode(
       "UPDATE app.email_verification_tokens SET invalidated_at=now() WHERE user_id=$1 AND purpose=$2 AND consumed_at IS NULL AND invalidated_at IS NULL",
       [userId, purpose],
     );
-    await c.query(
-      "INSERT INTO app.email_verification_tokens(user_id,token_hash,requested_ip,expires_at,purpose,pending_email,last_sent_at) VALUES($1,$2,$3,now()+interval '15 minutes',$4,$5,now())",
+    const inserted = await c.query<{ expires_at: string }>(
+      "INSERT INTO app.email_verification_tokens(user_id,token_hash,requested_ip,expires_at,purpose,pending_email,last_sent_at) VALUES($1,$2,$3,now()+interval '15 minutes',$4,$5,now()) RETURNING expires_at",
       [userId, codeHash(code), ip, purpose, pendingEmail],
     );
+    return inserted.rows[0];
   });
   try {
     await sendMail(verificationMail(email, code, purpose));
@@ -157,6 +159,7 @@ async function issueVerificationCode(
     );
     throw error;
   }
+  return token;
 }
 
 export async function handleApi(request: Request): Promise<Response | null> {
@@ -596,9 +599,9 @@ export async function handleApi(request: Request): Promise<Response | null> {
       });
       return json({ user: userDto(updated.rows[0]), createdAt: new Date().toISOString() });
     }
-    if (url.pathname === "/api/profile" && request.method === "DELETE") {
-      await parseBody(request, schemas.deleteContributorAccount);
-      await transaction(session.user_id, session.id, requestId, async (client) => {
+    if (url.pathname === "/api/profile/deletion-code/request" && request.method === "POST") {
+      await parseBody(request, schemas.deleteContributorAccountRequest);
+      const roles = await transaction(session.user_id, session.id, requestId, async (client) => {
         const membership = await client.query<{ role: string }>(
           `SELECT role FROM app.tree_memberships
            WHERE user_id=$1 AND revoked_at IS NULL FOR UPDATE`,
@@ -606,6 +609,41 @@ export async function handleApi(request: Request): Promise<Response | null> {
         );
         if (!canDeleteContributorAccount(membership.rows.map(({ role }) => role)))
           throw new ApiError("OWNER_ACCOUNT_DELETE_FORBIDDEN", 403);
+        return membership.rows;
+      });
+      if (!roles.length) throw new ApiError("CONTRIBUTOR_ACCOUNT_DELETE_FORBIDDEN", 403);
+      const token = await issueVerificationCode(
+        session.user_id,
+        session.email,
+        "account_deletion",
+        null,
+        requestIp(request),
+      );
+      return json({ expiresAt: token.expires_at }, 201);
+    }
+    if (url.pathname === "/api/profile" && request.method === "DELETE") {
+      const body = await parseBody(request, schemas.deleteContributorAccount);
+      const rate = await enforceRateLimit(request, "email_verification", session.user_id, 8, 30);
+      const deleted = await transaction(session.user_id, session.id, requestId, async (client) => {
+        const membership = await client.query<{ role: string }>(
+          `SELECT role FROM app.tree_memberships
+           WHERE user_id=$1 AND revoked_at IS NULL FOR UPDATE`,
+          [session.user_id],
+        );
+        if (!canDeleteContributorAccount(membership.rows.map(({ role }) => role)))
+          throw new ApiError("OWNER_ACCOUNT_DELETE_FORBIDDEN", 403);
+        const token = await client.query<{ id: string }>(
+          `SELECT id FROM app.email_verification_tokens
+           WHERE user_id=$1 AND purpose='account_deletion' AND token_hash=$2
+             AND consumed_at IS NULL AND invalidated_at IS NULL AND expires_at>now()
+           FOR UPDATE`,
+          [session.user_id, codeHash(body.code)],
+        );
+        if (!token.rowCount) return false;
+        await client.query(
+          "UPDATE app.email_verification_tokens SET consumed_at=now() WHERE id=$1",
+          [token.rows[0].id],
+        );
         const recordedActivity = await client.query(
           `INSERT INTO app.tree_activity(
              tree_id,branch_id,actor_user_id,subject_user_id,
@@ -624,57 +662,16 @@ export async function handleApi(request: Request): Promise<Response | null> {
         );
         if (!recordedActivity.rowCount)
           throw new ApiError("ACCOUNT_CANCELLATION_ACTIVITY_NOT_RECORDED", 500);
-        await client.query(
-          "UPDATE app.family_members SET linked_user_id=NULL WHERE linked_user_id=$1",
-          [session.user_id],
-        );
-        await client.query(
-          `UPDATE app.branch_grants SET revoked_at=now(),revoked_by=$1
-           WHERE user_id=$1 AND revoked_at IS NULL`,
-          [session.user_id],
-        );
-        await client.query(
-          `UPDATE app.tree_memberships SET family_member_id=NULL,
-             affiliation_status='removed',revoked_at=now(),revoked_by=$1
-           WHERE user_id=$1 AND role<>'owner' AND revoked_at IS NULL`,
-          [session.user_id],
-        );
-        await client.query(
-          `UPDATE app.ownership_transfers SET status='cancelled',updated_at=now()
-           WHERE proposed_owner_user_id=$1 AND status='pending'`,
-          [session.user_id],
-        );
-        await client.query(
-          `UPDATE app.sessions SET revoked_at=now(),revocation_reason='account_deleted'
-           WHERE user_id=$1 AND revoked_at IS NULL`,
-          [session.user_id],
-        );
-        await client.query(
-          `UPDATE app.email_verification_tokens SET invalidated_at=now()
-           WHERE user_id=$1 AND consumed_at IS NULL AND invalidated_at IS NULL`,
-          [session.user_id],
-        );
-        await client.query(
-          `UPDATE app.password_reset_tokens SET invalidated_at=now()
-           WHERE user_id=$1 AND consumed_at IS NULL AND invalidated_at IS NULL`,
-          [session.user_id],
-        );
-        await client.query("DELETE FROM app.password_credentials WHERE user_id=$1", [
-          session.user_id,
-        ]);
-        await client.query("DELETE FROM app.oauth_accounts WHERE user_id=$1", [session.user_id]);
-        await client.query("DELETE FROM app.totp_credentials WHERE user_id=$1", [session.user_id]);
-        await client.query(
-          `UPDATE app.users SET
-             email='deleted+'||id::text||'@invalid.local',
-             full_name_en='Deleted User',
-             full_name_ar='مستخدم محذوف',
-             status='deleted',deleted_at=now(),updated_at=now()
-           WHERE id=$1`,
-          [session.user_id],
-        );
+        await deleteContributorIdentity(client, session.user_id, session.user_id);
+        return true;
       });
-      return json({ ok: true }, 200, { "set-cookie": sessionCookie("", 0) });
+      await query(
+        "INSERT INTO app.auth_attempts(user_id,attempt_type,identifier_hash,ip_address,succeeded) VALUES($1,'email_verification',$2,$3,$4)",
+        [session.user_id, rate.hash, rate.ip, deleted],
+      );
+      return deleted
+        ? json({ ok: true }, 200, { "set-cookie": sessionCookie("", 0) })
+        : json({ code: "INVALID_OR_EXPIRED_CODE" }, 400);
     }
     if (url.pathname === "/api/profile/email-change/confirm" && request.method === "POST") {
       const b = await parseBody(request, schemas.emailChangeConfirm);

@@ -97,7 +97,10 @@ export const schemas = {
       gender: z.enum(["male", "female", "unspecified"]).optional(),
     })
     .strict(),
-  deleteContributorAccount: z.object({ confirmation: z.literal("DELETE") }).strict(),
+  deleteContributorAccountRequest: z.object({ confirmation: z.literal("DELETE") }).strict(),
+  deleteContributorAccount: z
+    .object({ confirmation: z.literal("DELETE"), code: z.string().regex(/^\d{6}$/) })
+    .strict(),
   resetRequest: z.object({ email: z.string().trim().email().max(320) }).strict(),
   resetConfirm: z
     .object({ token: z.string().min(32).max(512), password: z.string().min(12).max(256) })
@@ -155,6 +158,7 @@ export const schemas = {
     })
     .strict(),
   transferCode: z.object({ code: z.string().regex(/^\d{6}$/) }).strict(),
+  contributorRemovalCode: z.object({ code: z.string().regex(/^\d{6}$/) }).strict(),
   complaint: z
     .object({
       category: z.enum([

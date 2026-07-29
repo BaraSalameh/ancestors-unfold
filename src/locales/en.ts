@@ -350,11 +350,15 @@ export const en = {
   branch_responsible: "Responsible: {name}",
   owner_controls: "Owner controls",
   transfer_ownership: "Transfer ownership",
+  continue_ownership_transfer: "Continue ownership transfer",
   transfer_ownership_desc:
     "Select an active contributor to become the new owner. After they accept, you will manage their current branch.",
   former_owner_receives_branch: "You will become the contributor for {branch}.",
   no_eligible_contributors: "There are no eligible active contributors.",
   ownership_transfer_code_sent: "A verification code was sent to your email.",
+  ownership_transfer_code_desc:
+    "Enter the code sent to your email to confirm the ownership transfer to {name}.",
+  verification_code_required: "Email verification required",
   ownership_transfer_pending: "Ownership transfer pending",
   ownership_transfer_to: "Transfer to {name}; you will manage {branch}.",
   verification_code: "Verification code",
@@ -382,7 +386,28 @@ export const en = {
   type_delete_to_confirm: "Type DELETE to confirm",
   delete_account: "Delete account",
   account_delete_failed: "The account could not be deleted. Please try again.",
+  account_deletion_code_sent: "A verification code was sent to your email.",
+  account_deletion_code_failed: "The account-deletion code could not be sent. Please try again.",
+  account_deletion_code_desc:
+    "Enter the code sent to your account email to confirm permanent deletion.",
+  account_deletion_invalid_code: "The verification code is invalid or expired.",
   invite_contributor: "Invite contributor",
+  cancel_contributor_contribution: "Cancel contributor contribution",
+  no_active_contributors_to_remove: "There are no active contributor contributions to cancel.",
+  select_contributor_to_cancel:
+    "Select the contributor whose contribution and login account you want to permanently delete.",
+  contributor_removal_code_sent: "A verification code was sent to your email.",
+  contributor_removal_code_failed: "The verification code could not be sent. Please try again.",
+  contributor_removal_code_desc:
+    "Enter the code sent to your email to permanently remove {name} from {branch} and delete their login account.",
+  verification_code_expires: "This code expires at {time}.",
+  confirm_contributor_removal: "Cancel contribution",
+  contributor_removal_invalid_code: "The verification code is invalid or expired.",
+  contributor_removal_unavailable:
+    "This contributor is no longer available. Refresh and try again.",
+  contributor_removal_failed: "The contribution could not be cancelled. Please try again.",
+  contributor_removal_completed:
+    "The contribution and contributor account were permanently deleted.",
   invited_name_en: "Invitee name (English)",
   invited_name_ar: "Invitee name (Arabic)",
   family_position: "Position in the family",

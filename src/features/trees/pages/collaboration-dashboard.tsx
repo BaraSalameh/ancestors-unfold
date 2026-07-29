@@ -1,6 +1,6 @@
 /* eslint-disable max-lines, max-lines-per-function, complexity -- Role-aware dashboard keeps coordinated remote state in one controller. */
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -49,7 +49,11 @@ import {
 import { copyTreePreviewUrl } from "./dashboard-share";
 import { useAuth } from "@/features/auth";
 import { useI18n } from "@/shared/i18n";
-import { canUseOwnerTreeControls } from "./dashboard-owner-controls";
+import {
+  activeContributorBranches,
+  canUseOwnerTreeControls,
+  shouldRefreshDashboard,
+} from "./dashboard-owner-controls";
 
 type CurrentTree = {
   id: string;
@@ -132,6 +136,8 @@ type DashboardData = {
 };
 
 let dashboardCache: DashboardData | undefined;
+let dashboardCacheUpdatedAt = 0;
+const DASHBOARD_STALE_MS = 60_000;
 
 const getJson = async <T,>(url: string): Promise<T> => {
   const response = await fetch(url, { credentials: "include" });
@@ -141,7 +147,7 @@ const getJson = async <T,>(url: string): Promise<T> => {
 
 export function CollaborationDashboard() {
   const { t, lang } = useI18n();
-  const { deleteContributorAccount } = useAuth();
+  const { deleteContributorAccount, requestContributorAccountDeletionCode } = useAuth();
   const navigate = useNavigate();
   const [tree, setTree] = useState<CurrentTree>();
   const [stats, setStats] = useState<Statistics>();
@@ -156,64 +162,96 @@ export function CollaborationDashboard() {
   const [renaming, setRenaming] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteAccountCode, setDeleteAccountCode] = useState("");
+  const [deleteAccountCodeExpiresAt, setDeleteAccountCodeExpiresAt] = useState<string>();
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [invitationAction, setInvitationAction] = useState<string>();
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferUserId, setTransferUserId] = useState("");
   const [transferCode, setTransferCode] = useState("");
   const [transferAction, setTransferAction] = useState(false);
+  const [removalOpen, setRemovalOpen] = useState(false);
+  const [removalContributorId, setRemovalContributorId] = useState("");
+  const [removalChallenge, setRemovalChallenge] = useState<{
+    id: string;
+    expires_at: string;
+  }>();
+  const [removalCode, setRemovalCode] = useState("");
+  const [removalAction, setRemovalAction] = useState(false);
+  const mounted = useRef(false);
+  const loadInFlight = useRef<Promise<DashboardData> | undefined>(undefined);
   const local = (en?: string | null, ar?: string | null) =>
     lang === "ar" ? ar || en || "" : en || ar || "";
-  const applyDashboard = (data: DashboardData) => {
+  const applyDashboard = useCallback((data: DashboardData) => {
     setTree(data.tree);
     setStats(data.stats);
     setBranches(data.branches);
     setInvitations(data.invitations);
     setActivity(data.activity);
     setOwnershipTransfer(data.ownershipTransfer);
-  };
-  const load = async (force = false) => {
-    if (!force && dashboardCache) {
-      applyDashboard(dashboardCache);
-    }
-    const current = await getJson<CurrentTree>("/api/tree/current");
-    const [nextStats, nextBranches, nextActivity, nextTransfer] = await Promise.all([
-      getJson<Statistics>(`/api/trees/${current.id}/statistics`),
-      getJson<Branch[]>(`/api/trees/${current.id}/branches`),
-      getJson<ActivityPageResponse>(
-        `/api/trees/${current.id}/activity?limit=5&locale=${lang}`,
-      ).then((page) => page.items),
-      getJson<OwnershipTransfer | null>(`/api/trees/${current.id}/ownership-transfers`),
-    ]);
-    const nextInvitations =
-      current.role === "owner"
-        ? await getJson<Invitation[]>(`/api/trees/${current.id}/invitations`)
-        : [];
-    dashboardCache = {
-      tree: current,
-      stats: nextStats,
-      branches: nextBranches,
-      activity: nextActivity,
-      invitations: nextInvitations,
-      ownershipTransfer: nextTransfer,
-    };
-    applyDashboard(dashboardCache);
-  };
+  }, []);
+  const load = useCallback(
+    async (force = false) => {
+      if (!force && dashboardCache) {
+        applyDashboard(dashboardCache);
+        if (Date.now() - dashboardCacheUpdatedAt < DASHBOARD_STALE_MS) return;
+      }
+      if (!loadInFlight.current) {
+        loadInFlight.current = (async () => {
+          const current = await getJson<CurrentTree>("/api/tree/current");
+          const [nextStats, nextBranches, nextActivity, nextTransfer] = await Promise.all([
+            getJson<Statistics>(`/api/trees/${current.id}/statistics`),
+            getJson<Branch[]>(`/api/trees/${current.id}/branches`),
+            getJson<ActivityPageResponse>(
+              `/api/trees/${current.id}/activity?limit=5&locale=${lang}`,
+            ).then((page) => page.items),
+            getJson<OwnershipTransfer | null>(`/api/trees/${current.id}/ownership-transfers`),
+          ]);
+          const nextInvitations =
+            current.role === "owner"
+              ? await getJson<Invitation[]>(`/api/trees/${current.id}/invitations`)
+              : [];
+          return {
+            tree: current,
+            stats: nextStats,
+            branches: nextBranches,
+            activity: nextActivity,
+            invitations: nextInvitations,
+            ownershipTransfer: nextTransfer,
+          };
+        })().finally(() => {
+          loadInFlight.current = undefined;
+        });
+      }
+      const data = await loadInFlight.current;
+      dashboardCache = data;
+      dashboardCacheUpdatedAt = Date.now();
+      if (mounted.current) applyDashboard(data);
+    },
+    [applyDashboard, lang],
+  );
   useEffect(() => {
+    mounted.current = true;
     void load().catch(() => {
-      if (!dashboardCache) setTree(undefined);
+      if (mounted.current && !dashboardCache) setTree(undefined);
     });
-    const refresh = () => void load(true).catch(() => undefined);
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") refresh();
+      if (
+        shouldRefreshDashboard(
+          document.visibilityState,
+          dashboardCacheUpdatedAt,
+          Date.now(),
+          DASHBOARD_STALE_MS,
+        )
+      )
+        void load(true).catch(() => undefined);
     };
-    window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
-      window.removeEventListener("focus", refresh);
+      mounted.current = false;
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, []);
+  }, [load]);
   const assigned = branches.find((branch) => branch.id === tree?.assigned_branch_id);
   const actOnInvitation = async (id: string, action: "cancel" | "resend") => {
     setInvitationAction(`${id}:${action}`);
@@ -279,8 +317,6 @@ export function CollaborationDashboard() {
         body: JSON.stringify({ proposedOwnerUserId: transferUserId }),
       });
       if (!response.ok) throw new Error(((await response.json()) as { code?: string }).code);
-      setTransferOpen(false);
-      setTransferUserId("");
       toast.success(t("ownership_transfer_code_sent"));
       await load(true);
     } catch {
@@ -303,8 +339,27 @@ export function CollaborationDashboard() {
       setTransferCode("");
       toast.success(t("ownership_transfer_verified"));
       await load(true);
+      setTransferOpen(false);
     } catch {
       toast.error(t("ownership_transfer_invalid_code"));
+    } finally {
+      setTransferAction(false);
+    }
+  };
+  const resendTransferCode = async () => {
+    if (!ownershipTransfer || ownershipTransfer.verified) return;
+    setTransferAction(true);
+    try {
+      const response = await fetch(`/api/ownership-transfers/${ownershipTransfer.id}/resend-code`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("RESEND_FAILED");
+      setTransferCode("");
+      toast.success(t("ownership_transfer_code_sent"));
+      await load(true);
+    } catch {
+      toast.error(t("ownership_transfer_failed"));
     } finally {
       setTransferAction(false);
     }
@@ -333,14 +388,106 @@ export function CollaborationDashboard() {
       setTransferAction(false);
     }
   };
-  const deleteAccount = async () => {
+  const selectedRemovalBranch = branches.find(
+    (branch) => branch.contributor_user_id === removalContributorId,
+  );
+  const removableContributorBranches = activeContributorBranches(branches);
+  const requestContributorRemoval = async () => {
+    if (!tree || tree.role !== "owner" || !removalContributorId) return;
+    setRemovalAction(true);
+    try {
+      const response = await fetch(
+        `/api/trees/${tree.id}/contributors/${removalContributorId}/removal-requests`,
+        { method: "POST", credentials: "include" },
+      );
+      const body = (await response.json()) as {
+        id?: string;
+        expires_at?: string;
+        code?: string;
+      };
+      if (!response.ok || !body.id || !body.expires_at) {
+        toast.error(
+          body.code === "CONTRIBUTOR_UNAVAILABLE"
+            ? t("contributor_removal_unavailable")
+            : t("contributor_removal_code_failed"),
+        );
+        return;
+      }
+      setRemovalChallenge({ id: body.id, expires_at: body.expires_at });
+      setRemovalCode("");
+      toast.success(t("contributor_removal_code_sent"));
+    } catch {
+      toast.error(t("contributor_removal_code_failed"));
+    } finally {
+      setRemovalAction(false);
+    }
+  };
+  const confirmContributorRemoval = async () => {
+    if (!removalChallenge || !/^\d{6}$/.test(removalCode)) return;
+    setRemovalAction(true);
+    try {
+      const response = await fetch(
+        `/api/contributor-removal-requests/${removalChallenge.id}/confirm`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ code: removalCode }),
+        },
+      );
+      const body = (await response.json()) as { code?: string };
+      if (!response.ok) {
+        toast.error(
+          body.code === "INVALID_OR_EXPIRED_CODE"
+            ? t("contributor_removal_invalid_code")
+            : body.code === "CONTRIBUTOR_UNAVAILABLE"
+              ? t("contributor_removal_unavailable")
+              : t("contributor_removal_failed"),
+        );
+        return;
+      }
+      setRemovalOpen(false);
+      setRemovalContributorId("");
+      setRemovalChallenge(undefined);
+      setRemovalCode("");
+      toast.success(t("contributor_removal_completed"));
+      await load(true);
+    } catch {
+      toast.error(t("contributor_removal_failed"));
+    } finally {
+      setRemovalAction(false);
+    }
+  };
+  const requestDeleteAccountCode = async () => {
     if (deleteConfirmation !== "DELETE") return;
     setDeletingAccount(true);
     try {
-      await deleteContributorAccount("DELETE");
+      const result = await requestContributorAccountDeletionCode("DELETE");
+      setDeleteAccountCode("");
+      setDeleteAccountCodeExpiresAt(result.expiresAt);
+      toast.success(t("account_deletion_code_sent"));
+    } catch (error) {
+      toast.error(
+        (error as { code?: string }).code === "RESEND_TOO_SOON"
+          ? t("resend_too_soon")
+          : t("account_deletion_code_failed"),
+      );
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+  const deleteAccount = async () => {
+    if (deleteConfirmation !== "DELETE" || !/^\d{6}$/.test(deleteAccountCode)) return;
+    setDeletingAccount(true);
+    try {
+      await deleteContributorAccount("DELETE", deleteAccountCode);
       await navigate({ to: "/auth", search: { redirect: "/", oauthError: undefined } });
-    } catch {
-      toast.error(t("account_delete_failed"));
+    } catch (error) {
+      toast.error(
+        (error as { code?: string }).code === "INVALID_OR_EXPIRED_CODE"
+          ? t("account_deletion_invalid_code")
+          : t("account_delete_failed"),
+      );
       setDeletingAccount(false);
     }
   };
@@ -584,11 +731,29 @@ export function CollaborationDashboard() {
                 <Button
                   className="w-full justify-start"
                   variant="outline"
-                  disabled={Boolean(ownershipTransfer)}
+                  disabled={removableContributorBranches.length === 0}
+                  onClick={() => setRemovalOpen(true)}
+                >
+                  <Trash2 className="me-2 h-4 w-4" />
+                  {t("cancel_contributor_contribution")}
+                </Button>
+                {removableContributorBranches.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {t("no_active_contributors_to_remove")}
+                  </p>
+                )}
+                <Button
+                  className="w-full justify-start"
+                  variant="outline"
+                  disabled={Boolean(ownershipTransfer?.verified)}
                   onClick={() => setTransferOpen(true)}
                 >
                   <ShieldCheck className="me-2 h-4 w-4" />
-                  {t("transfer_ownership")}
+                  {t(
+                    ownershipTransfer && !ownershipTransfer.verified
+                      ? "continue_ownership_transfer"
+                      : "transfer_ownership",
+                  )}
                 </Button>
                 {ownershipTransfer && (
                   <div className="mt-4 space-y-3 rounded-lg border p-4 text-foreground">
@@ -605,29 +770,10 @@ export function CollaborationDashboard() {
                         ),
                       })}
                     </p>
-                    {!ownershipTransfer.verified ? (
-                      <div className="flex flex-wrap gap-2">
-                        <Input
-                          className="max-w-40"
-                          aria-label={t("verification_code")}
-                          inputMode="numeric"
-                          autoComplete="one-time-code"
-                          dir="ltr"
-                          maxLength={6}
-                          value={transferCode}
-                          onChange={(event) =>
-                            setTransferCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                          }
-                        />
-                        <Button
-                          disabled={transferAction || transferCode.length !== 6}
-                          onClick={() => void verifyTransfer()}
-                        >
-                          {t("verify_transfer")}
-                        </Button>
-                      </div>
-                    ) : (
+                    {ownershipTransfer.verified ? (
                       <Badge>{t("awaiting_contributor_acceptance")}</Badge>
+                    ) : (
+                      <Badge variant="outline">{t("verification_code_required")}</Badge>
                     )}
                     <Button
                       variant="outline"
@@ -658,46 +804,206 @@ export function CollaborationDashboard() {
           <DialogHeader>
             <DialogTitle>{t("transfer_ownership")}</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">{t("transfer_ownership_desc")}</p>
-          <div className="space-y-2">
-            {branches
-              .filter((branch) => branch.status === "active" && branch.contributor_user_id)
-              .map((branch) => (
-                <button
-                  type="button"
-                  key={branch.id}
-                  className={`w-full rounded-lg border p-4 text-start ${
-                    transferUserId === branch.contributor_user_id
-                      ? "border-primary bg-primary/5"
-                      : ""
-                  }`}
-                  onClick={() => setTransferUserId(branch.contributor_user_id ?? "")}
+          {!ownershipTransfer ? (
+            <>
+              <p className="text-sm text-muted-foreground">{t("transfer_ownership_desc")}</p>
+              <div className="space-y-2">
+                {removableContributorBranches.map((branch) => (
+                  <button
+                    type="button"
+                    key={branch.id}
+                    className={`w-full rounded-lg border p-4 text-start ${
+                      transferUserId === branch.contributor_user_id
+                        ? "border-primary bg-primary/5"
+                        : ""
+                    }`}
+                    onClick={() => setTransferUserId(branch.contributor_user_id ?? "")}
+                  >
+                    <span className="block font-medium">
+                      {local(branch.contributor_name_en, branch.contributor_name_ar)}
+                    </span>
+                    <span className="block text-sm text-muted-foreground">
+                      {t("former_owner_receives_branch", {
+                        branch: local(branch.name_en, branch.name_ar),
+                      })}
+                    </span>
+                  </button>
+                ))}
+                {removableContributorBranches.length === 0 && (
+                  <p className="text-sm text-muted-foreground">{t("no_eligible_contributors")}</p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setTransferOpen(false)}>
+                  {t("cancel")}
+                </Button>
+                <Button
+                  disabled={!transferUserId || transferAction}
+                  onClick={() => void requestTransfer()}
                 >
-                  <span className="block font-medium">
-                    {local(branch.contributor_name_en, branch.contributor_name_ar)}
-                  </span>
-                  <span className="block text-sm text-muted-foreground">
-                    {t("former_owner_receives_branch", {
-                      branch: local(branch.name_en, branch.name_ar),
+                  {t("send_verification_code")}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {t("ownership_transfer_code_desc", {
+                  name: local(
+                    ownershipTransfer.proposed_owner_name_en,
+                    ownershipTransfer.proposed_owner_name_ar,
+                  ),
+                })}
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="ownership-transfer-code">{t("verification_code")}</Label>
+                <Input
+                  id="ownership-transfer-code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  dir="ltr"
+                  maxLength={6}
+                  value={transferCode}
+                  onChange={(event) =>
+                    setTransferCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                />
+                {ownershipTransfer.verification_expires_at && (
+                  <p className="text-xs text-muted-foreground">
+                    {t("verification_code_expires", {
+                      time: new Date(ownershipTransfer.verification_expires_at).toLocaleTimeString(
+                        lang === "ar" ? "ar" : "en",
+                        {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        },
+                      ),
                     })}
-                  </span>
-                </button>
-              ))}
-            {!branches.some(
-              (branch) => branch.status === "active" && branch.contributor_user_id,
-            ) && <p className="text-sm text-muted-foreground">{t("no_eligible_contributors")}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTransferOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button
-              disabled={!transferUserId || transferAction}
-              onClick={() => void requestTransfer()}
-            >
-              {t("send_verification_code")}
-            </Button>
-          </DialogFooter>
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  disabled={transferAction}
+                  onClick={() => void resendTransferCode()}
+                >
+                  {t("resend_code")}
+                </Button>
+                <Button
+                  disabled={transferAction || transferCode.length !== 6}
+                  onClick={() => void verifyTransfer()}
+                >
+                  {t("verify_transfer")}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={removalOpen}
+        onOpenChange={(open) => {
+          setRemovalOpen(open);
+          if (!open) {
+            setRemovalContributorId("");
+            setRemovalChallenge(undefined);
+            setRemovalCode("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("cancel_contributor_contribution")}</DialogTitle>
+          </DialogHeader>
+          {!removalChallenge ? (
+            <>
+              <p className="text-sm text-muted-foreground">{t("select_contributor_to_cancel")}</p>
+              <div className="space-y-2">
+                {removableContributorBranches.map((branch) => (
+                  <button
+                    type="button"
+                    key={branch.id}
+                    className={`w-full rounded-lg border p-4 text-start ${
+                      removalContributorId === branch.contributor_user_id
+                        ? "border-destructive bg-destructive/5"
+                        : ""
+                    }`}
+                    onClick={() => setRemovalContributorId(branch.contributor_user_id ?? "")}
+                  >
+                    <span className="block font-medium">
+                      {local(branch.contributor_name_en, branch.contributor_name_ar)}
+                    </span>
+                    <span className="block text-sm text-muted-foreground">
+                      {local(branch.name_en, branch.name_ar)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRemovalOpen(false)}>
+                  {t("cancel")}
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={!removalContributorId || removalAction}
+                  onClick={() => void requestContributorRemoval()}
+                >
+                  {t("send_verification_code")}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {t("contributor_removal_code_desc", {
+                  name: local(
+                    selectedRemovalBranch?.contributor_name_en,
+                    selectedRemovalBranch?.contributor_name_ar,
+                  ),
+                  branch: local(selectedRemovalBranch?.name_en, selectedRemovalBranch?.name_ar),
+                })}
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="contributor-removal-code">{t("verification_code")}</Label>
+                <Input
+                  id="contributor-removal-code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  dir="ltr"
+                  maxLength={6}
+                  value={removalCode}
+                  onChange={(event) =>
+                    setRemovalCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("verification_code_expires", {
+                    time: new Date(removalChallenge.expires_at).toLocaleTimeString(
+                      lang === "ar" ? "ar" : "en",
+                      { hour: "2-digit", minute: "2-digit" },
+                    ),
+                  })}
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  disabled={removalAction}
+                  onClick={() => void requestContributorRemoval()}
+                >
+                  {t("resend_code")}
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={removalAction || removalCode.length !== 6}
+                  onClick={() => void confirmContributorRemoval()}
+                >
+                  {t("confirm_contributor_removal")}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
@@ -739,41 +1045,85 @@ export function CollaborationDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <AlertDialog
-        open={deleteAccountOpen}
-        onOpenChange={(open) => {
-          setDeleteAccountOpen(open);
-          if (!open) setDeleteConfirmation("");
-        }}
-      >
+      <AlertDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("delete_contributor_account")}</AlertDialogTitle>
             <AlertDialogDescription>{t("delete_contributor_account_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="delete-account-confirmation">{t("type_delete_to_confirm")}</Label>
-            <Input
-              id="delete-account-confirmation"
-              value={deleteConfirmation}
-              onChange={(event) => setDeleteConfirmation(event.target.value)}
-              autoComplete="off"
-              dir="ltr"
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deletingAccount || deleteConfirmation !== "DELETE"}
-              onClick={(event) => {
-                event.preventDefault();
-                void deleteAccount();
-              }}
-            >
-              {t("delete_account")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {!deleteAccountCodeExpiresAt ? (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="delete-account-confirmation">{t("type_delete_to_confirm")}</Label>
+                <Input
+                  id="delete-account-confirmation"
+                  value={deleteConfirmation}
+                  onChange={(event) => setDeleteConfirmation(event.target.value)}
+                  autoComplete="off"
+                  dir="ltr"
+                />
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={deletingAccount || deleteConfirmation !== "DELETE"}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void requestDeleteAccountCode();
+                  }}
+                >
+                  {t("send_verification_code")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="delete-account-code">{t("verification_code")}</Label>
+                <Input
+                  id="delete-account-code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  dir="ltr"
+                  maxLength={6}
+                  value={deleteAccountCode}
+                  onChange={(event) =>
+                    setDeleteAccountCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">{t("account_deletion_code_desc")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("verification_code_expires", {
+                    time: new Date(deleteAccountCodeExpiresAt).toLocaleTimeString(
+                      lang === "ar" ? "ar" : "en",
+                      { hour: "2-digit", minute: "2-digit" },
+                    ),
+                  })}
+                </p>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+                <Button
+                  variant="outline"
+                  disabled={deletingAccount}
+                  onClick={() => void requestDeleteAccountCode()}
+                >
+                  {t("resend_code")}
+                </Button>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={deletingAccount || deleteAccountCode.length !== 6}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void deleteAccount();
+                  }}
+                >
+                  {t("delete_account")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
     </main>
