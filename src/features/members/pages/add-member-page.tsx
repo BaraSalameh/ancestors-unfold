@@ -13,11 +13,14 @@ export const addMemberSearchSchema = z
     childId: z.string().optional(),
     spouseId: z.string().optional(),
     parentRole: z.enum(["father", "mother"]).optional(),
+    returnPreview: z.enum(["lineage", "chronological"]).optional(),
   })
   .strict();
 
 export function AddPage() {
-  const { fatherId, motherId, childId, spouseId, parentRole } = useSearch({ from: "/add" });
+  const { fatherId, motherId, childId, spouseId, parentRole, returnPreview } = useSearch({
+    from: "/add",
+  });
   const treeId = familyStore.getActiveTreeId();
   return (
     <AddMemberPage
@@ -27,6 +30,7 @@ export function AddPage() {
       childId={childId}
       spouseId={spouseId}
       parentRole={parentRole}
+      returnPreview={returnPreview}
     />
   );
 }
@@ -38,6 +42,7 @@ export function AddMemberPage({
   childId,
   spouseId,
   parentRole,
+  returnPreview = "lineage",
 }: {
   treeId: string;
   fatherId?: string;
@@ -45,6 +50,7 @@ export function AddMemberPage({
   childId?: string;
   spouseId?: string;
   parentRole?: "father" | "mother";
+  returnPreview?: "lineage" | "chronological";
 }) {
   const navigate = useNavigate();
   const members = useFamily();
@@ -93,8 +99,18 @@ export function AddMemberPage({
           }
           submitLabel={t("save")}
           onCancel={() => {
-            if (spouseTo) navigate({ to: "/edit/$id", params: { id: spouseTo.id } });
-            else navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } });
+            if (spouseTo)
+              navigate({
+                to: "/edit/$id",
+                params: { id: spouseTo.id },
+                search: { returnPreview },
+              });
+            else
+              navigate({
+                to: "/tree/$id",
+                params: { id: treeId },
+                search: { mode: "edit", preview: returnPreview },
+              });
           }}
           onSubmit={(data) => {
             const m =
@@ -103,8 +119,18 @@ export function AddMemberPage({
                 : familyStore.add(data);
             if (child && parentRole === "father") familyStore.update(child.id, { father_id: m.id });
             toast.success(t("created"));
-            if (spouseTo) navigate({ to: "/edit/$id", params: { id: spouseTo.id } });
-            else navigate({ to: "/member/$id", params: { id: m.id } });
+            if (spouseTo)
+              navigate({
+                to: "/edit/$id",
+                params: { id: spouseTo.id },
+                search: { returnPreview },
+              });
+            else
+              navigate({
+                to: "/member/$id",
+                params: { id: m.id },
+                search: { returnPreview },
+              });
           }}
         />
       </div>

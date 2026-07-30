@@ -14,18 +14,19 @@ const member = (id: string, patch: Partial<FamilyMember> = {}): FamilyMember =>
   }) as FamilyMember;
 
 describe("canvas preview capabilities", () => {
-  it("makes the chronological preview static even with edit access", () => {
+  it("allows managing the chronological preview with edit access", () => {
     expect(canvasCapabilities(true, "chronological")).toEqual({
-      canMutate: false,
-      canDrag: false,
-      canConnect: false,
-      canSelect: false,
-      canAutoLayout: false,
+      canMutate: true,
+      canDrag: true,
+      canConnect: true,
+      canSelect: true,
+      canAutoLayout: true,
     });
   });
 
-  it("allows mutations only in an editable lineage preview", () => {
+  it("allows mutations in either preview only with tree edit access", () => {
     expect(canvasCapabilities(true, "lineage").canMutate).toBe(true);
+    expect(canvasCapabilities(false, "chronological").canMutate).toBe(false);
     expect(canvasCapabilities(false, "lineage").canMutate).toBe(false);
   });
 });

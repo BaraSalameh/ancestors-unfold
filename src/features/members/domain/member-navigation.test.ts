@@ -6,8 +6,15 @@ describe("member deletion navigation", () => {
     expect(memberDeleteDestination("family-tree")).toEqual({
       to: "/tree/$id",
       params: { id: "family-tree" },
-      search: { mode: "edit" },
+      search: { mode: "edit", preview: "lineage" },
       replace: true,
+    });
+  });
+
+  it("preserves the chronological preview after deletion", () => {
+    expect(memberDeleteDestination("family-tree", "chronological").search).toEqual({
+      mode: "edit",
+      preview: "chronological",
     });
   });
 

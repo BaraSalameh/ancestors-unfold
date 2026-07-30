@@ -263,6 +263,8 @@ export const schemas = {
               subfamily_id: z.string().max(200).optional(),
               pos_x: z.number().finite().optional(),
               pos_y: z.number().finite().optional(),
+              decade_pos_x: z.number().finite().optional(),
+              decade_pos_y: z.number().finite().optional(),
               created_at: z.string().max(50),
               updated_at: z.string().max(50),
             })

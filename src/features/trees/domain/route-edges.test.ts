@@ -2,143 +2,130 @@ import { describe, expect, it } from "vitest";
 import type { Edge, Node } from "reactflow";
 import type { FamilyMember } from "@/features/members";
 import type { MemberNodeData } from "../ui/member-node";
-import {
-  normalizeDecadeRoute,
-  routeParentEdges,
-  segmentHitsCard,
-  type RoutePoint,
-} from "./route-edges";
+import { alignDecadeSingleChildren, routeParentEdges, type DecadeBundleRoute } from "./route-edges";
 
-const node = (
-  id: string,
-  x: number,
-  y: number,
-  dimensions?: { width: number; height: number },
-): Node<MemberNodeData> =>
+const node = (id: string, x: number, y: number): Node<MemberNodeData> =>
   ({
     id,
     position: { x, y },
-    ...dimensions,
-    data: { member: { id, gender: "male" } as FamilyMember },
+    width: 260,
+    height: 130,
+    data: { member: { id, gender: "female" } as FamilyMember },
   }) as Node<MemberNodeData>;
-const edge = (target: string): Edge => ({
-  id: `root:${target}`,
-  source: "root",
+
+const edge = (target: string, familyKey = "parent:family"): Edge => ({
+  id: `parent:${target}`,
+  source: "parent",
   target,
-  data: { kind: "parent", familyKey: "root:family" },
+  data: { kind: "parent", familyKey },
 });
 
-describe("decade connector bundles", () => {
-  it("does not add routing metadata to Family Levels", () => {
+const bundle = (item: Edge) => (item.data as { decadeBundle: DecadeBundleRoute }).decadeBundle;
+
+describe("preview connector structure", () => {
+  it("keeps Family Levels edges unchanged", () => {
     const edges = [edge("child")];
-    expect(routeParentEdges([node("root", 0, 0), node("child", 0, 400)], edges, false)).toEqual(
+    expect(routeParentEdges([node("parent", 0, 0), node("child", 0, 400)], edges, false)).toBe(
       edges,
     );
   });
 
-  it("gives siblings independent lanes that avoid unrelated cards", () => {
-    const nodes = [
-      node("root", 0, 0),
-      node("blocker", 0, 400),
-      node("a", -320, 800),
-      node("b", 0, 800),
-      node("c", 320, 800),
-    ];
-    const routed = routeParentEdges(nodes, [edge("a"), edge("b"), edge("c")], true);
-    const laneXs = routed.map(
-      (item) => (item.data as { decadeRoute: RoutePoint[] }).decadeRoute[1].x,
-    );
-    expect(new Set(laneXs).size).toBe(3);
-    const sharedStem = routed.map(
-      (item) => (item.data as { decadeRoute: RoutePoint[] }).decadeRoute[0],
-    );
-    expect(new Set(sharedStem.map((point) => `${point.x}:${point.y}`)).size).toBe(1);
-    const blocker = { id: "blocker", left: -24, right: 284, top: 376, bottom: 644 };
-    for (const item of routed) {
-      const points = [
-        { x: 130, y: 220 },
-        ...(item.data as { decadeRoute: RoutePoint[] }).decadeRoute,
-        { x: nodes.find((entry) => entry.id === item.target)!.position.x + 130, y: 800 },
-      ];
-      expect(
-        points.slice(1).some((point, index) => segmentHitsCard(points[index], point, blocker)),
-      ).toBe(false);
-    }
-  });
-
-  it("uses measured dimensions and keeps generous endpoint clearance", () => {
-    const source = node("root", 0, 0, { width: 256, height: 150 });
-    const target = node("child", 300, 500, { width: 256, height: 130 });
-    const [routed] = routeParentEdges([source, target], [edge("child")], true);
-    const route = (routed.data as { decadeRoute: RoutePoint[] }).decadeRoute;
-    expect(route[0]).toEqual({ x: 128, y: 190 });
-    expect(route.at(-1)).toEqual({ x: 428, y: 460 });
-  });
-
-  it("normalizes parent endpoints without creating diagonal segments", () => {
-    const points = normalizeDecadeRoute(
-      { x: 128, y: 150 },
-      { x: 428, y: 500 },
-      [
-        { x: 130, y: 190 },
-        { x: 280, y: 190 },
-        { x: 280, y: 460 },
-        { x: 430, y: 460 },
-      ],
-      "parent",
-    );
-    expect(points[1]).toEqual({ x: 128, y: 190 });
-    expect(points.at(-2)).toEqual({ x: 428, y: 460 });
-    for (let index = 1; index < points.length; index++) {
-      expect(
-        points[index - 1].x === points[index].x || points[index - 1].y === points[index].y,
-      ).toBe(true);
-    }
-  });
-
-  it("keeps different family groups on separate source stems", () => {
-    const otherFamily = {
-      ...edge("b"),
-      id: "root:b:other",
-      data: { kind: "parent", familyKey: "root:other" },
-    };
+  it("draws one shared stem and visible junction for a By Decade combination", () => {
     const routed = routeParentEdges(
-      [node("root", 0, 0), node("a", 0, 500), node("b", 320, 500)],
-      [edge("a"), otherFamily],
+      [
+        node("parent", 0, 0),
+        node("first", -320, 500),
+        node("second", 0, 500),
+        node("third", 320, 500),
+      ],
+      [edge("first"), edge("second"), edge("third")],
       true,
     );
-    const stemYs = routed.map(
-      (item) => (item.data as { decadeRoute: RoutePoint[] }).decadeRoute[0].y,
-    );
-    expect(new Set(stemYs).size).toBe(2);
+
+    const owners = routed.filter((item) => bundle(item).sharedPaths);
+    expect(owners).toHaveLength(1);
+    expect(bundle(owners[0]).sharedPaths).toHaveLength(2);
+    expect(bundle(owners[0]).junction).toEqual({ x: 130, y: 170 });
   });
 
-  it("uses one straight vertical route when aligned cards have no obstacle", () => {
+  it("gives every child an independent route after the junction", () => {
+    const routed = routeParentEdges(
+      [
+        node("parent", 0, 0),
+        node("first", -320, 500),
+        node("second", 0, 500),
+        node("third", 320, 500),
+      ],
+      [edge("first"), edge("second"), edge("third")],
+      true,
+    );
+
+    const branchStarts = routed.map((item) => bundle(item).branch[0]);
+    const verticalLanes = routed.map((item) => bundle(item).branch[1].x);
+    const approachRows = routed.map((item) => bundle(item).branch[2].y);
+    expect(new Set(branchStarts.map(({ x, y }) => `${x}:${y}`)).size).toBe(3);
+    expect(new Set(verticalLanes).size).toBe(3);
+    expect(new Set(approachRows).size).toBe(3);
+  });
+
+  it("uses a straight vertical branch when the target lane is clear", () => {
     const [routed] = routeParentEdges(
-      [node("root", 0, 0), node("child", 0, 500)],
+      [node("parent", 0, 0), node("child", 0, 500)],
       [edge("child")],
       true,
     );
-    const route = (routed.data as { decadeRoute: RoutePoint[] }).decadeRoute;
-    expect(route).toHaveLength(1);
-    expect(route[0].x).toBe(130);
+
+    expect(bundle(routed).branch.every((point) => point.x === 130)).toBe(true);
   });
 
-  it("separates horizontal lanes for different families entering the same row", () => {
-    const secondFamily = {
-      ...edge("b"),
-      id: "other:b",
-      source: "other",
-      data: { kind: "parent", familyKey: "other:family" },
-    };
+  it("aligns an only child under its parent when the row has room", () => {
+    const nodes = [node("parent", 120, 0), node("child", 0, 700)];
+    alignDecadeSingleChildren(nodes, [edge("child")], 140);
+    expect(nodes[1].position.x).toBe(120);
+  });
+
+  it("puts left-side target approaches above right-side approaches", () => {
     const routed = routeParentEdges(
-      [node("root", -300, 0), node("other", 300, 0), node("a", -100, 500), node("b", 100, 500)],
-      [edge("a"), secondFamily],
+      [node("parent", 0, 0), node("left", -320, 500), node("right", 320, 500)],
+      [edge("left"), edge("right")],
       true,
     );
-    const horizontalYs = routed.map(
-      (item) => (item.data as { decadeRoute: RoutePoint[] }).decadeRoute.at(-1)!.y,
+    const byTarget = new Map(routed.map((item) => [item.target, bundle(item).branch[2].y]));
+    expect(byTarget.get("left")!).toBeLessThan(byTarget.get("right")!);
+  });
+
+  it("routes around an unrelated member card", () => {
+    const [routed] = routeParentEdges(
+      [node("parent", 0, 0), node("blocker", 0, 300), node("child", 0, 700)],
+      [edge("child")],
+      true,
     );
-    expect(Math.abs(horizontalYs[0] - horizontalYs[1])).toBeGreaterThanOrEqual(16);
+
+    const laneX = bundle(routed).branch[0].x;
+    expect(laneX <= -24 || laneX >= 284).toBe(true);
+  });
+
+  it("chooses the shortest valid side of an obstacle from root to child", () => {
+    const [routed] = routeParentEdges(
+      [node("parent", 640, 0), node("blocker", 0, 300), node("child", 0, 700)],
+      [edge("child")],
+      true,
+    );
+
+    expect(bundle(routed).branch[0].x).toBe(292);
+  });
+
+  it("gives separate combinations their own junction rows", () => {
+    const routed = routeParentEdges(
+      [node("parent", 0, 0), node("first", -160, 500), node("second", 160, 500)],
+      [edge("first", "parent:first-family"), edge("second", "parent:second-family")],
+      true,
+    );
+
+    const junctionRows = routed.map((item) => bundle(item).junction!.y);
+    expect(new Set(junctionRows).size).toBe(2);
+    const trunkXs = routed.map((item) => bundle(item).junction!.x);
+    expect(new Set(trunkXs).size).toBe(2);
+    expect(Math.abs(trunkXs[0] - trunkXs[1])).toBeGreaterThanOrEqual(20);
   });
 });

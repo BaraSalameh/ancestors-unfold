@@ -45,8 +45,8 @@ const NODE_W = 260;
 const NODE_H = 130;
 const NODE_H_HUSBAND = 220;
 const FAMILY_ROW_H = 340;
-const DECADE_ROW_H = 400;
-const DECADE_CARD_GAP = 60;
+const DECADE_ROW_H = 520;
+const DECADE_CARD_GAP = 140;
 const nodeTypes = { member: MemberNode };
 const edgeTypes = { relationship: RelationshipEdge };
 
@@ -70,7 +70,7 @@ const DIVORCED_COLOR = "#94a3b8";
 
 import { SubfamilyPanel } from "@/features/subfamilies";
 import { descendantIds } from "@/features/members";
-import { routeParentEdges } from "../domain/route-edges";
+import { alignDecadeSingleChildren, routeParentEdges } from "../domain/route-edges";
 import {
   canvasCapabilities,
   hierarchyPositions,
@@ -275,13 +275,17 @@ function layout(
       : (hierarchyPosition?.x ?? pos.x - pos.width / 2);
     const hierarchyY = hierarchyPosition?.y ?? genOf(id) * FAMILY_ROW_H;
     const hasCustom = typeof m.pos_x === "number" && typeof m.pos_y === "number";
+    const hasDecadeCustom =
+      typeof m.decade_pos_x === "number" && typeof m.decade_pos_y === "number";
     return {
       id,
       type: "member",
       position:
-        hasCustom && !chronological
-          ? { x: m.pos_x!, y: m.pos_y! }
-          : { x: autoX, y: chronological ? autoY : hierarchyY },
+        chronological && hasDecadeCustom
+          ? { x: m.decade_pos_x!, y: m.decade_pos_y! }
+          : hasCustom && !chronological
+            ? { x: m.pos_x!, y: m.pos_y! }
+            : { x: autoX, y: chronological ? autoY : hierarchyY },
       data: {
         member: m,
         highlighted: highlightId === id,
@@ -303,11 +307,13 @@ function layout(
   const HGAP = 40;
   const VGAP = 40;
   const fixedIds = new Set(
-    chronological
-      ? []
-      : members
-          .filter((member) => typeof member.pos_x === "number" && typeof member.pos_y === "number")
-          .map((member) => member.id),
+    members
+      .filter((member) =>
+        chronological
+          ? typeof member.decade_pos_x === "number" && typeof member.decade_pos_y === "number"
+          : typeof member.pos_x === "number" && typeof member.pos_y === "number",
+      )
+      .map((member) => member.id),
   );
   const ordered = [...nodes].sort(
     (a, b) => a.position.y - b.position.y || a.position.x - b.position.x,
@@ -364,6 +370,7 @@ function layout(
     }
   }
 
+  if (chronological) alignDecadeSingleChildren(nodes, edges, DECADE_CARD_GAP);
   const routedEdges = routeParentEdges(nodes, edges, chronological);
 
   return { nodes, edges: routedEdges };
@@ -386,7 +393,7 @@ function isDescendant(members: FamilyMember[], ancestorId: string, targetId: str
   return false;
 }
 
-function Inner({ readOnly = false }: { readOnly?: boolean }) {
+function Inner({ readOnly = false, preview }: { readOnly?: boolean; preview: TreePreviewType }) {
   const members = useFamily();
   const persistence = useFamilyPersistence();
   const canEdit = !readOnly && familyStore.canEditActiveTree();
@@ -405,7 +412,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const [subfamilyFilterEnabled, setSubfamilyFilterEnabled] = useState(false);
   const [generationYear, setGenerationYear] = useState("");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
-  const [previewType, setPreviewType] = useState<TreePreviewType>("lineage");
+  const previewType = preview;
   const capabilities = canvasCapabilities(canEdit, previewType);
   const canvasCanEdit = capabilities.canMutate;
   const collapsed = collapsedByPreview[previewType];
@@ -461,9 +468,13 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const onOpen = useCallback(
     (id: string) => {
       if (!canvasCanEdit) return;
-      navigate({ to: "/member/$id", params: { id } });
+      navigate({
+        to: "/member/$id",
+        params: { id },
+        search: { returnPreview: previewType },
+      });
     },
-    [canvasCanEdit, navigate],
+    [canvasCanEdit, navigate, previewType],
   );
   const navigateToAdd = useCallback(
     (search: {
@@ -475,9 +486,9 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       navigate({
         to: "/tree/$id/add",
         params: { id: familyStore.getActiveTreeId() },
-        search,
+        search: { ...search, returnPreview: previewType },
       }),
-    [navigate],
+    [navigate, previewType],
   );
   const onAddParent = useCallback(
     (id: string) => {
@@ -658,7 +669,11 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         const existing = currentById.get(node.id);
         if (!existing || replacePositions) return node;
         const hasPersistedPosition =
-          typeof node.data.member.pos_x === "number" && typeof node.data.member.pos_y === "number";
+          previewType === "chronological"
+            ? typeof node.data.member.decade_pos_x === "number" &&
+              typeof node.data.member.decade_pos_y === "number"
+            : typeof node.data.member.pos_x === "number" &&
+              typeof node.data.member.pos_y === "number";
         return {
           ...node,
           position: hasPersistedPosition ? node.position : existing.position,
@@ -881,6 +896,12 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       const draggedIds = new Set(draggedById.keys());
       const nextNodes = nodes.map((node) => draggedById.get(node.id) ?? node);
       setEdges((current) => {
+        const affectedFamilyKeys = new Set(
+          current
+            .filter((edge) => draggedIds.has(edge.source) || draggedIds.has(edge.target))
+            .map((edge) => (edge.data as { familyKey?: string } | undefined)?.familyKey)
+            .filter((key): key is string => !!key),
+        );
         const rerouted = new Map(
           routeParentEdges(nextNodes, current, previewType === "chronological").map((edge) => [
             edge.id,
@@ -888,7 +909,9 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
           ]),
         );
         return current.map((edge) =>
-          draggedIds.has(edge.source) || draggedIds.has(edge.target)
+          draggedIds.has(edge.source) ||
+          draggedIds.has(edge.target) ||
+          affectedFamilyKeys.has((edge.data as { familyKey?: string } | undefined)?.familyKey ?? "")
             ? (rerouted.get(edge.id) ?? edge)
             : edge,
         );
@@ -918,15 +941,15 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         );
         return;
       }
-      familyStore.setPositions(
-        new Map(
-          selection
-            .filter((dragged) => dragged.type === "member")
-            .map((dragged) => [dragged.id, { x: dragged.position.x, y: dragged.position.y }]),
-        ),
+      const positions = new Map(
+        selection
+          .filter((dragged) => dragged.type === "member")
+          .map((dragged) => [dragged.id, { x: dragged.position.x, y: dragged.position.y }]),
       );
+      if (previewType === "chronological") familyStore.setDecadePositions(positions);
+      else familyStore.setPositions(positions);
     },
-    [canvasCanEdit, setNodes],
+    [canvasCanEdit, previewType, setNodes],
   );
 
   const onAutoLayout = useCallback(() => {
@@ -936,6 +959,8 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         ...member,
         pos_x: undefined,
         pos_y: undefined,
+        decade_pos_x: undefined,
+        decade_pos_y: undefined,
       })),
       collapsed,
       onOpen,
@@ -944,13 +969,15 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       onRequestRemove,
       highlightId,
       canvasCanEdit,
-      false,
+      previewType === "chronological",
       onToggleCollapsed,
     );
     replacePositionsOnNextLayout.current = true;
     setNodes(auto.nodes);
     setEdges(auto.edges);
-    familyStore.setPositions(new Map(auto.nodes.map((node) => [node.id, node.position])));
+    const positions = new Map(auto.nodes.map((node) => [node.id, node.position]));
+    if (previewType === "lineage") familyStore.setPositions(positions);
+    else familyStore.setDecadePositions(positions);
     didFit.current = false;
     requestAnimationFrame(() => fitView({ padding: 0.2, duration: 400 }));
     toast.success(t("auto_layout_done"));
@@ -965,6 +992,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
     onOpen,
     onRequestRemove,
     onToggleCollapsed,
+    previewType,
     setEdges,
     setNodes,
     t,
@@ -1182,13 +1210,25 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
           {!collapsedWidgets.preview && (
             <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
               <button
-                onClick={() => setPreviewType("lineage")}
+                onClick={() =>
+                  navigate({
+                    to: "/tree/$id",
+                    params: { id: familyStore.getActiveTreeId() },
+                    search: { mode: readOnly ? "view" : "edit", preview: "lineage" },
+                  })
+                }
                 className={`rounded px-2 py-1.5 ${previewType === "lineage" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
                 {t("lineage_view")}
               </button>
               <button
-                onClick={() => setPreviewType("chronological")}
+                onClick={() =>
+                  navigate({
+                    to: "/tree/$id",
+                    params: { id: familyStore.getActiveTreeId() },
+                    search: { mode: readOnly ? "view" : "edit", preview: "chronological" },
+                  })
+                }
                 className={`rounded px-2 py-1.5 ${previewType === "chronological" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
                 {t("generation_view")}
@@ -1453,10 +1493,16 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   );
 }
 
-export function FamilyTree({ readOnly = false }: { readOnly?: boolean }) {
+export function FamilyTree({
+  readOnly = false,
+  preview = "lineage",
+}: {
+  readOnly?: boolean;
+  preview?: TreePreviewType;
+}) {
   return (
     <ReactFlowProvider>
-      <Inner readOnly={readOnly} />
+      <Inner readOnly={readOnly} preview={preview} />
     </ReactFlowProvider>
   );
 }

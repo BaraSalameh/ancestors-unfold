@@ -6,7 +6,7 @@ import { useI18n } from "@/shared/i18n";
 import { TreeLoadingIndicator } from "@/shared/ui/page-skeletons";
 
 export function TreePage() {
-  const { mode } = useSearch({ from: "/tree/$id" });
+  const { mode, preview } = useSearch({ from: "/tree/$id" });
   const { id } = useParams({ from: "/tree/$id" });
   const { t } = useI18n();
   familyStore.activateTree(id, mode);
@@ -25,7 +25,7 @@ export function TreePage() {
     );
   return (
     <div className="h-[calc(100vh-3.5rem)] w-full">
-      <FamilyTree readOnly={mode !== "edit"} />
+      <FamilyTree readOnly={mode !== "edit"} preview={preview ?? "lineage"} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { memo, useRef, useState } from "react";
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "reactflow";
 import { X } from "lucide-react";
-import { normalizeDecadeRoute, type RoutePoint } from "../domain/route-edges";
+import type { DecadeBundleRoute } from "../domain/route-edges";
 
 type Point = { x: number; y: number };
 
@@ -56,7 +56,8 @@ function RelationshipEdgeImpl(props: EdgeProps) {
     selected,
   } = props;
 
-  const relationship = props.data as { kind?: string; decadeRoute?: RoutePoint[] } | undefined;
+  const relationship = props.data as
+    { kind?: string; decadeBundle?: DecadeBundleRoute } | undefined;
   const fallback = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -68,21 +69,8 @@ function RelationshipEdgeImpl(props: EdgeProps) {
   });
   const isParentConnector = relationship?.kind === "parent";
   const middleY = sourceY + (targetY - sourceY) / 2;
-  const decadeRoute = relationship?.decadeRoute?.filter(
-    (point) => Number.isFinite(point.x) && Number.isFinite(point.y),
-  );
-  // Parent connectors are completely self-contained. Their geometry depends
-  // only on the two live React Flow handles, so moving one or many cards
-  // updates every attached path in the same render frame.
-  const path = decadeRoute?.length
-    ? roundedOrthogonalPath(
-        normalizeDecadeRoute(
-          { x: sourceX, y: sourceY },
-          { x: targetX, y: targetY },
-          decadeRoute,
-          relationship?.kind as "parent" | "spouse" | undefined,
-        ),
-      )
+  const path = relationship?.decadeBundle
+    ? roundedOrthogonalPath(relationship.decadeBundle.branch)
     : isParentConnector
       ? roundedOrthogonalPath([
           { x: sourceX, y: sourceY },
@@ -110,6 +98,14 @@ function RelationshipEdgeImpl(props: EdgeProps) {
 
   return (
     <>
+      {relationship?.decadeBundle?.sharedPaths?.map((sharedPath, index) => (
+        <path
+          key={`${id}:shared:${index}`}
+          d={roundedOrthogonalPath(sharedPath)}
+          fill="none"
+          style={style}
+        />
+      ))}
       <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />
       {/* wider invisible hit area for easier hover/click */}
       <path

@@ -29,6 +29,8 @@ export interface FamilyMember {
   subfamily_id?: string;
   pos_x?: number;
   pos_y?: number;
+  decade_pos_x?: number;
+  decade_pos_y?: number;
   created_at: string;
   updated_at: string;
 }

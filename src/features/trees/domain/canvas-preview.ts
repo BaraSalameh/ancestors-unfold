@@ -12,9 +12,9 @@ export interface CanvasCapabilities {
 
 export function canvasCapabilities(
   hasTreeEditAccess: boolean,
-  previewType: TreePreviewType,
+  _previewType: TreePreviewType,
 ): CanvasCapabilities {
-  const canMutate = hasTreeEditAccess && previewType === "lineage";
+  const canMutate = hasTreeEditAccess;
   return {
     canMutate,
     canDrag: canMutate,

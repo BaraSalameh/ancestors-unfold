@@ -31,7 +31,7 @@ export async function loadRenderableSnapshot(
     `SELECT m.id,coalesce(m.name_en, '') name_en,coalesce(m.name_ar, '') name_ar,
       m.gender,m.birth_date::text birth_date,m.death_date::text death_date,
       m.citizen_status,m.image_url,m.notes,m.is_unknown,m.subfamily_id,
-      m.pos_x,m.pos_y,m.created_at,m.updated_at,
+      m.pos_x,m.pos_y,m.decade_pos_x,m.decade_pos_y,m.created_at,m.updated_at,
       f.parent_id father_id,mo.parent_id mother_id FROM app.family_members m
     LEFT JOIN app.parent_child_relationships f ON f.child_id=m.id AND f.parent_role='father' AND f.deleted_at IS NULL
     LEFT JOIN app.parent_child_relationships mo ON mo.child_id=m.id AND mo.parent_role='mother' AND mo.deleted_at IS NULL
@@ -113,6 +113,8 @@ export async function loadRenderableSnapshot(
       subfamily_id: member.subfamily_id ?? undefined,
       pos_x: member.pos_x ?? undefined,
       pos_y: member.pos_y ?? undefined,
+      decade_pos_x: member.decade_pos_x ?? undefined,
+      decade_pos_y: member.decade_pos_y ?? undefined,
       created_at: member.created_at,
       updated_at: member.updated_at,
     })),
@@ -404,6 +406,8 @@ export async function importSnapshot(
         !!m.is_unknown,
         m.pos_x ?? null,
         m.pos_y ?? null,
+        m.decade_pos_x ?? null,
+        m.decade_pos_y ?? null,
         m.subfamily_id
           ? (sfMap.get(m.subfamily_id) ?? null)
           : isBranchEditor
@@ -415,14 +419,14 @@ export async function importSnapshot(
         await c.query(
           `UPDATE app.family_members SET name_en=$3,name_ar=$4,gender=$5,birth_date=$6,
             death_date=$7,citizen_status=$8,image_url=$9,notes=$10,is_unknown=$11,pos_x=$12,pos_y=$13,
-            updated_by=$14,updated_at=now(),version=version+1
+            decade_pos_x=$14,decade_pos_y=$15,updated_by=$16,updated_at=now(),version=version+1
            WHERE id=$1 AND tree_id=$2 AND deleted_at IS NULL`,
-          [...values.slice(0, 13), s.user_id],
+          [...values.slice(0, 15), s.user_id],
         );
       else
         await c.query(
-          `INSERT INTO app.family_members(id,tree_id,name_en,name_ar,gender,birth_date,death_date,citizen_status,image_url,notes,is_unknown,pos_x,pos_y,subfamily_id,created_by,updated_by)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15) ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,gender=excluded.gender,birth_date=excluded.birth_date,death_date=excluded.death_date,citizen_status=excluded.citizen_status,image_url=excluded.image_url,notes=excluded.notes,is_unknown=excluded.is_unknown,pos_x=excluded.pos_x,pos_y=excluded.pos_y,updated_by=excluded.updated_by,updated_at=now(),version=app.family_members.version+1,deleted_at=NULL`,
+          `INSERT INTO app.family_members(id,tree_id,name_en,name_ar,gender,birth_date,death_date,citizen_status,image_url,notes,is_unknown,pos_x,pos_y,decade_pos_x,decade_pos_y,subfamily_id,created_by,updated_by)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17) ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,gender=excluded.gender,birth_date=excluded.birth_date,death_date=excluded.death_date,citizen_status=excluded.citizen_status,image_url=excluded.image_url,notes=excluded.notes,is_unknown=excluded.is_unknown,pos_x=excluded.pos_x,pos_y=excluded.pos_y,decade_pos_x=excluded.decade_pos_x,decade_pos_y=excluded.decade_pos_y,updated_by=excluded.updated_by,updated_at=now(),version=app.family_members.version+1,deleted_at=NULL`,
           values,
         );
       await c.query(
