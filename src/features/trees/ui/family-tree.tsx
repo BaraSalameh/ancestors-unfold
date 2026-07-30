@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   type Node,
@@ -43,6 +44,9 @@ import type { FamilyMember } from "@/features/members";
 const NODE_W = 260;
 const NODE_H = 130;
 const NODE_H_HUSBAND = 220;
+const FAMILY_ROW_H = 340;
+const DECADE_ROW_H = 400;
+const DECADE_CARD_GAP = 60;
 const nodeTypes = { member: MemberNode };
 const edgeTypes = { relationship: RelationshipEdge };
 
@@ -67,6 +71,11 @@ const DIVORCED_COLOR = "#94a3b8";
 import { SubfamilyPanel } from "@/features/subfamilies";
 import { descendantIds } from "@/features/members";
 import { routeParentEdges } from "../domain/route-edges";
+import {
+  canvasCapabilities,
+  hierarchyPositions,
+  type TreePreviewType,
+} from "../domain/canvas-preview";
 export { SubfamilyPanel };
 function layout(
   members: FamilyMember[],
@@ -221,16 +230,16 @@ function layout(
       target: sp.id,
       sourceHandle: "spouse-r",
       targetHandle: "spouse-l",
-      type: "straight",
+      type: "relationship",
       style: { stroke: "#a855f7", strokeWidth: 1.5, strokeDasharray: "2 4", strokeOpacity: 0.7 },
-      data: { kind: "spouse" },
+      data: { kind: "spouse", familyKey: `spouse:${key}` },
     });
   }
 
   dagre.layout(g);
+  const hierarchy = hierarchyPositions(members, new Set(renderedIds));
 
   // Generation depth â€” sons, cousins, second cousins etc. share a level.
-  const ROW_H = 340;
   const genCache = new Map<string, number>();
   const genOf = (id: string, seen = new Set<string>()): number => {
     if (genCache.has(id)) return genCache.get(id)!;
@@ -258,14 +267,21 @@ function layout(
     );
     const autoY =
       chronological && band && Number.isFinite(earliestBand)
-        ? ((band.start - earliestBand) / 10) * ROW_H
-        : genOf(id) * ROW_H;
-    const autoX = pos.x - pos.width / 2;
+        ? ((band.start - earliestBand) / 10) * DECADE_ROW_H
+        : genOf(id) * FAMILY_ROW_H;
+    const hierarchyPosition = hierarchy.get(id);
+    const autoX = chronological
+      ? pos.x - pos.width / 2
+      : (hierarchyPosition?.x ?? pos.x - pos.width / 2);
+    const hierarchyY = hierarchyPosition?.y ?? genOf(id) * FAMILY_ROW_H;
     const hasCustom = typeof m.pos_x === "number" && typeof m.pos_y === "number";
     return {
       id,
       type: "member",
-      position: hasCustom && !chronological ? { x: m.pos_x!, y: m.pos_y! } : { x: autoX, y: autoY },
+      position:
+        hasCustom && !chronological
+          ? { x: m.pos_x!, y: m.pos_y! }
+          : { x: autoX, y: chronological ? autoY : hierarchyY },
       data: {
         member: m,
         highlighted: highlightId === id,
@@ -287,9 +303,11 @@ function layout(
   const HGAP = 40;
   const VGAP = 40;
   const fixedIds = new Set(
-    members
-      .filter((member) => typeof member.pos_x === "number" && typeof member.pos_y === "number")
-      .map((member) => member.id),
+    chronological
+      ? []
+      : members
+          .filter((member) => typeof member.pos_x === "number" && typeof member.pos_y === "number")
+          .map((member) => member.id),
   );
   const ordered = [...nodes].sort(
     (a, b) => a.position.y - b.position.y || a.position.x - b.position.x,
@@ -300,59 +318,27 @@ function layout(
   for (const row of byRow.values()) {
     const layoutRow = row.filter((node) => !fixedIds.has(node.id));
     if (!layoutRow.length) continue;
-    const byAge = (a: Node<MemberNodeData>, b: Node<MemberNodeData>) =>
-      (birthYear(b.data.member) ?? Number.MIN_SAFE_INTEGER) -
-      (birthYear(a.data.member) ?? Number.MIN_SAFE_INTEGER);
     if (chronological) {
-      layoutRow.sort(byAge);
-      const totalWidth = layoutRow.length * NODE_W + Math.max(0, layoutRow.length - 1) * HGAP;
-      layoutRow.forEach((node, index) => {
-        node.position.x = index * (NODE_W + HGAP) - totalWidth / 2;
+      const nodeById = new Map(layoutRow.map((node) => [node.id, node]));
+      const memberOrder = layoutRow
+        .map((node) => node.data.member)
+        .sort(
+          (first, second) =>
+            (hierarchy.get(first.id)?.x ?? 0) - (hierarchy.get(second.id)?.x ?? 0) ||
+            (birthYear(second) ?? Number.MIN_SAFE_INTEGER) -
+              (birthYear(first) ?? Number.MIN_SAFE_INTEGER) ||
+            first.id.localeCompare(second.id),
+        );
+      const totalWidth =
+        memberOrder.length * NODE_W + Math.max(0, memberOrder.length - 1) * DECADE_CARD_GAP;
+      memberOrder.forEach((member, index) => {
+        const node = nodeById.get(member.id)!;
+        node.position.x = index * (NODE_W + DECADE_CARD_GAP) - totalWidth / 2;
       });
       continue;
     }
 
-    // Family Levels: keep siblings as a cluster beneath their parent instead
-    // of flattening cousins into one row. Wider inter-family gaps make branch
-    // ownership immediately visible and leave clean connector corridors.
-    const nodeByMemberId = new Map(nodes.map((node) => [node.id, node]));
-    const groups = new Map<string, Node<MemberNodeData>[]>();
-    for (const node of layoutRow) {
-      const member = node.data.member;
-      const parentId =
-        member.father_id && nodeByMemberId.has(member.father_id)
-          ? member.father_id
-          : member.mother_id && nodeByMemberId.has(member.mother_id)
-            ? member.mother_id
-            : `root:${member.id}`;
-      groups.set(parentId, [...(groups.get(parentId) ?? []), node]);
-    }
-    const FAMILY_GAP = 170;
-    const arranged = [...groups.entries()]
-      .map(([parentId, children]) => {
-        children.sort(byAge); // newest left, oldest right
-        const width = children.length * NODE_W + Math.max(0, children.length - 1) * HGAP;
-        const parent = nodeByMemberId.get(parentId);
-        const anchor = parent
-          ? parent.position.x + NODE_W / 2
-          : children[0].position.x + NODE_W / 2;
-        return { children, width, anchor, start: anchor - width / 2 };
-      })
-      .sort((a, b) => a.anchor - b.anchor);
-    let cursor = Number.NEGATIVE_INFINITY;
-    for (const group of arranged) {
-      group.start = Math.max(group.start, cursor);
-      cursor = group.start + group.width + FAMILY_GAP;
-    }
-    const balancingShift = arranged.length
-      ? arranged.reduce((sum, group) => sum + group.anchor - (group.start + group.width / 2), 0) /
-        arranged.length
-      : 0;
-    for (const group of arranged) {
-      group.children.forEach((node, index) => {
-        node.position.x = group.start + balancingShift + index * (NODE_W + HGAP);
-      });
-    }
+    // Family Levels already uses subtree widths from hierarchyPositions.
   }
   for (let i = 0; i < ordered.length; i++) {
     const current = ordered[i];
@@ -407,14 +393,22 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const canManageSubfamilies = familyStore.canManageSubfamilies();
   const { t, lang } = useI18n();
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsedByPreview, setCollapsedByPreview] = useState<
+    Record<TreePreviewType, Set<string>>
+  >({
+    lineage: new Set(),
+    chronological: new Set(),
+  });
   const [query, setQuery] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [selectedSubfamilyId, setSelectedSubfamilyId] = useState<string | null>(null);
   const [subfamilyFilterEnabled, setSubfamilyFilterEnabled] = useState(false);
   const [generationYear, setGenerationYear] = useState("");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
-  const [previewType, setPreviewType] = useState<"lineage" | "chronological">("lineage");
+  const [previewType, setPreviewType] = useState<TreePreviewType>("lineage");
+  const capabilities = canvasCapabilities(canEdit, previewType);
+  const canvasCanEdit = capabilities.canMutate;
+  const collapsed = collapsedByPreview[previewType];
   const [collapsedWidgets, setCollapsedWidgets] = useState({
     preview: false,
     generation: false,
@@ -424,9 +418,11 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
     setCollapsedWidgets((current) => ({ ...current, [widget]: !current[widget] }));
   const { setCenter, fitView } = useReactFlow();
   const didFit = useRef(false);
+  const previousPreviewType = useRef<TreePreviewType>(previewType);
+  const replacePositionsOnNextLayout = useRef(false);
   const edgeUpdateSuccessful = useRef(true);
   const visibleNodePositions = useRef(new Map<string, { x: number; y: number }>());
-  const nodeDragStartPosition = useRef<{ id: string; x: number; y: number } | null>(null);
+  const nodeDragStartPositions = useRef(new Map<string, { x: number; y: number }>());
 
   useEffect(() => {
     if (readOnly || !persistence.error) return;
@@ -464,10 +460,10 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
 
   const onOpen = useCallback(
     (id: string) => {
-      if (!canEdit) return;
+      if (!canvasCanEdit) return;
       navigate({ to: "/member/$id", params: { id } });
     },
-    [canEdit, navigate],
+    [canvasCanEdit, navigate],
   );
   const navigateToAdd = useCallback(
     (search: {
@@ -486,7 +482,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const onAddParent = useCallback(
     (id: string) => {
       const child = familyStore.get(id);
-      if (!canEdit || !child || (child.father_id && child.mother_id)) return;
+      if (!canvasCanEdit || !child || (child.father_id && child.mother_id)) return;
       if (!child.father_id && !child.mother_id) {
         setCreationChoice({ kind: "parent", memberId: id });
         return;
@@ -496,12 +492,12 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         parentRole: child.father_id ? "mother" : "father",
       });
     },
-    [canEdit, navigateToAdd],
+    [canvasCanEdit, navigateToAdd],
   );
   const onAddChild = useCallback(
     (id: string) => {
       const parent = familyStore.get(id);
-      if (!canEdit || !parent) return;
+      if (!canvasCanEdit || !parent) return;
       if (parent.gender === "unspecified") {
         setCreationChoice({ kind: "child-role", memberId: id });
         return;
@@ -523,7 +519,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       }
       navigateToAdd({ fatherId: id, motherId: wives[0]?.id });
     },
-    [canEdit, navigateToAdd],
+    [canvasCanEdit, navigateToAdd],
   );
   const preserveDetachedSubtree = useCallback(
     (childId: string, removedRole: "father_id" | "mother_id") => {
@@ -543,7 +539,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const onRequestRemove = useCallback(
     (relationship: { parentId: string; childId: string; motherId?: string }) => {
       const child = familyStore.get(relationship.childId);
-      if (!canEdit || !child) return;
+      if (!canvasCanEdit || !child) return;
       if (
         relationship.motherId &&
         relationship.motherId !== relationship.parentId &&
@@ -562,17 +558,20 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       familyStore.detachParent(child.id, role);
       toast.success(t("link_removed"));
     },
-    [canEdit, preserveDetachedSubtree, t],
+    [canvasCanEdit, preserveDetachedSubtree, t],
   );
 
-  const onToggleCollapsed = useCallback((id: string) => {
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const onToggleCollapsed = useCallback(
+    (id: string) => {
+      setCollapsedByPreview((current) => {
+        const next = new Set(current[previewType]);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return { ...current, [previewType]: next };
+      });
+    },
+    [previewType],
+  );
 
   const generations = useMemo(() => {
     const unique = new Map<string, GenerationBand>();
@@ -601,7 +600,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         onAddChild,
         onRequestRemove,
         highlightId,
-        canEdit,
+        canvasCanEdit,
         previewType === "chronological",
         onToggleCollapsed,
       ),
@@ -613,7 +612,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       onAddChild,
       onRequestRemove,
       highlightId,
-      canEdit,
+      canvasCanEdit,
       previewType,
       onToggleCollapsed,
     ],
@@ -625,8 +624,8 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
     const graphCenterY =
       ((typeof window === "undefined" ? 800 : window.innerHeight) / 2 - viewport.y) / viewport.zoom;
     return generations.reduce((closest, band) => {
-      const bandY = ((band.start - earliestGeneration) / 10) * 340;
-      const closestY = ((closest.start - earliestGeneration) / 10) * 340;
+      const bandY = ((band.start - earliestGeneration) / 10) * DECADE_ROW_H;
+      const closestY = ((closest.start - earliestGeneration) / 10) * DECADE_ROW_H;
       return Math.abs(bandY - graphCenterY) < Math.abs(closestY - graphCenterY) ? band : closest;
     });
   }, [generations, earliestGeneration, viewport]);
@@ -638,7 +637,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
     const closest = generations.reduce((best, band) =>
       Math.abs(band.start - requestedStart) < Math.abs(best.start - requestedStart) ? band : best,
     );
-    const y = ((closest.start - earliestGeneration) / 10) * 340 + NODE_H / 2;
+    const y = ((closest.start - earliestGeneration) / 10) * DECADE_ROW_H + NODE_H / 2;
     setCenter(0, y, { zoom: Math.max(viewport.zoom, 0.65), duration: 600 });
     setGenerationYear(String(year));
   };
@@ -647,19 +646,55 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   useEffect(() => {
-    setNodes(initialNodes);
-    setEdges(initialEdges);
+    const previewChanged = previousPreviewType.current !== previewType;
+    previousPreviewType.current = previewType;
+    if (previewChanged) didFit.current = false;
+    setNodes((current) => {
+      const currentById = new Map(current.map((node) => [node.id, node]));
+      const replacePositions = replacePositionsOnNextLayout.current;
+      replacePositionsOnNextLayout.current = false;
+      if (previewChanged) return initialNodes;
+      const merged = initialNodes.map((node) => {
+        const existing = currentById.get(node.id);
+        if (!existing || replacePositions) return node;
+        const hasPersistedPosition =
+          typeof node.data.member.pos_x === "number" && typeof node.data.member.pos_y === "number";
+        return {
+          ...node,
+          position: hasPersistedPosition ? node.position : existing.position,
+        };
+      });
+      return merged;
+    });
+    setEdges((current) => {
+      if (previewChanged) return initialEdges;
+      const currentById = new Map(current.map((edge) => [edge.id, edge]));
+      return initialEdges.map((edge) => {
+        const existing = currentById.get(edge.id);
+        return existing
+          ? {
+              ...edge,
+              data: { ...edge.data, ...existing.data },
+            }
+          : edge;
+      });
+    });
     if (!didFit.current && initialNodes.length) {
       requestAnimationFrame(() => fitView({ padding: 0.2, duration: 300 }));
       didFit.current = true;
     }
-  }, [initialNodes, initialEdges, setNodes, setEdges, fitView]);
+  }, [initialNodes, initialEdges, previewType, setNodes, setEdges, fitView]);
 
   useEffect(() => {
     visibleNodePositions.current = new Map(
       nodes.map((node) => [node.id, { x: node.position.x, y: node.position.y }]),
     );
   }, [nodes]);
+
+  useEffect(() => {
+    if (previewType !== "chronological") return;
+    setEdges((current) => routeParentEdges(nodes, current, true));
+  }, [nodes, previewType, setEdges]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -672,7 +707,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       }
 
       const isMeta = event.ctrlKey || event.metaKey;
-      if (!isMeta || readOnly) return;
+      if (!isMeta || !canvasCanEdit) return;
 
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
@@ -686,11 +721,11 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [readOnly]);
+  }, [canvasCanEdit]);
 
   const onConnect = useCallback(
     (conn: Connection) => {
-      if (!canEdit) return;
+      if (!canvasCanEdit) return;
       if (!conn.source || !conn.target) return;
       if (conn.source === conn.target) {
         toast.error(t("cannot_link_self"));
@@ -725,12 +760,12 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         }),
       );
     },
-    [canEdit, t, lang],
+    [canvasCanEdit, t, lang],
   );
 
   const onEdgesDelete = useCallback(
     (removed: Edge[]) => {
-      if (!canEdit) return;
+      if (!canvasCanEdit) return;
       let cleared = 0;
       for (const e of removed) {
         const data = e.data as { parentId?: string; childId?: string; kind?: string } | undefined;
@@ -760,7 +795,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       }
       if (cleared) toast.success(t("link_removed"));
     },
-    [canEdit, preserveDetachedSubtree, t],
+    [canvasCanEdit, preserveDetachedSubtree, t],
   );
 
   const onEdgeUpdateStart = useCallback(() => {
@@ -769,7 +804,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
 
   const onEdgeUpdate = useCallback(
     (oldEdge: Edge, newConn: Connection) => {
-      if (!canEdit) return;
+      if (!canvasCanEdit) return;
       edgeUpdateSuccessful.current = true;
       if (!newConn.source || !newConn.target) return;
       const data = oldEdge.data as
@@ -814,7 +849,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
       setEdges((es) => updateEdge(oldEdge, newConn, es));
       toast.success(t("link_updated"));
     },
-    [canEdit, setEdges, t],
+    [canvasCanEdit, setEdges, t],
   );
 
   const onEdgeUpdateEnd = useCallback(
@@ -828,43 +863,113 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
     [setEdges, onEdgesDelete],
   );
 
-  const onNodeDragStart = useCallback((_event: unknown, node: Node) => {
-    nodeDragStartPosition.current = {
-      id: node.id,
-      x: node.position.x,
-      y: node.position.y,
-    };
+  const onNodeDragStart = useCallback((_event: unknown, node: Node, draggedNodes: Node[]) => {
+    const selection = [
+      ...new Map([node, ...draggedNodes].map((dragged) => [dragged.id, dragged])).values(),
+    ];
+    nodeDragStartPositions.current = new Map(
+      selection.map((dragged) => [dragged.id, { x: dragged.position.x, y: dragged.position.y }]),
+    );
   }, []);
 
+  const onNodeDrag = useCallback(
+    (_event: unknown, draggedNode: Node, draggedNodes: Node[]) => {
+      const selection = [
+        ...new Map([draggedNode, ...draggedNodes].map((dragged) => [dragged.id, dragged])).values(),
+      ];
+      const draggedById = new Map(selection.map((node) => [node.id, node]));
+      const draggedIds = new Set(draggedById.keys());
+      const nextNodes = nodes.map((node) => draggedById.get(node.id) ?? node);
+      setEdges((current) => {
+        const rerouted = new Map(
+          routeParentEdges(nextNodes, current, previewType === "chronological").map((edge) => [
+            edge.id,
+            edge,
+          ]),
+        );
+        return current.map((edge) =>
+          draggedIds.has(edge.source) || draggedIds.has(edge.target)
+            ? (rerouted.get(edge.id) ?? edge)
+            : edge,
+        );
+      });
+    },
+    [nodes, previewType, setEdges],
+  );
+
   const onNodeDragStop = useCallback(
-    (_e: unknown, node: Node) => {
-      if (!canEdit || node.type !== "member") return;
-      const start = nodeDragStartPosition.current;
-      nodeDragStartPosition.current = null;
+    (_e: unknown, node: Node, draggedNodes: Node[]) => {
+      if (!canvasCanEdit || node.type !== "member") return;
+      const selection = [
+        ...new Map([node, ...draggedNodes].map((dragged) => [dragged.id, dragged])).values(),
+      ];
+      const starts = nodeDragStartPositions.current;
+      nodeDragStartPositions.current = new Map();
+      const leadStart = starts.get(node.id);
       if (
-        start?.id === node.id &&
-        Math.hypot(node.position.x - start.x, node.position.y - start.y) < 4
+        leadStart &&
+        Math.hypot(node.position.x - leadStart.x, node.position.y - leadStart.y) < 4
       ) {
         setNodes((current) =>
-          current.map((candidate) =>
-            candidate.id === node.id
-              ? { ...candidate, position: { x: start.x, y: start.y } }
-              : candidate,
-          ),
+          current.map((candidate) => {
+            const start = starts.get(candidate.id);
+            return start ? { ...candidate, position: start } : candidate;
+          }),
         );
         return;
       }
-      familyStore.setPosition(node.id, { x: node.position.x, y: node.position.y });
+      familyStore.setPositions(
+        new Map(
+          selection
+            .filter((dragged) => dragged.type === "member")
+            .map((dragged) => [dragged.id, { x: dragged.position.x, y: dragged.position.y }]),
+        ),
+      );
     },
-    [canEdit, setNodes],
+    [canvasCanEdit, setNodes],
   );
 
   const onAutoLayout = useCallback(() => {
-    familyStore.clearPositions();
+    if (!capabilities.canAutoLayout) return;
+    const auto = layout(
+      visibleMembers.map((member) => ({
+        ...member,
+        pos_x: undefined,
+        pos_y: undefined,
+      })),
+      collapsed,
+      onOpen,
+      onAddParent,
+      onAddChild,
+      onRequestRemove,
+      highlightId,
+      canvasCanEdit,
+      false,
+      onToggleCollapsed,
+    );
+    replacePositionsOnNextLayout.current = true;
+    setNodes(auto.nodes);
+    setEdges(auto.edges);
+    familyStore.setPositions(new Map(auto.nodes.map((node) => [node.id, node.position])));
     didFit.current = false;
     requestAnimationFrame(() => fitView({ padding: 0.2, duration: 400 }));
     toast.success(t("auto_layout_done"));
-  }, [fitView, t]);
+  }, [
+    canvasCanEdit,
+    capabilities.canAutoLayout,
+    collapsed,
+    fitView,
+    highlightId,
+    onAddChild,
+    onAddParent,
+    onOpen,
+    onRequestRemove,
+    onToggleCollapsed,
+    setEdges,
+    setNodes,
+    t,
+    visibleMembers,
+  ]);
 
   const pickMother = (wifeId: string | null) => {
     if (!motherPicker) return;
@@ -902,21 +1007,21 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         duration: 500,
       });
     } else {
-      setCollapsed(new Set());
+      setCollapsedByPreview((current) => ({ ...current, [previewType]: new Set() }));
     }
   };
 
   return (
     <div className="relative h-full w-full">
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 p-4">
-        <div className="pointer-events-auto w-full max-w-md">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-3 p-4">
+        <div className="pointer-events-auto w-full max-w-sm">
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ltr:left-3 rtl:right-3" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("search_placeholder")}
-              className="bg-card shadow-sm ltr:pl-9 rtl:pr-9"
+              className="h-10 rounded-xl border-border/80 bg-card/95 shadow-[0_4px_18px_-8px_rgba(15,23,42,0.28)] backdrop-blur ltr:pl-9 rtl:pr-9"
             />
             {query && (
               <button
@@ -928,7 +1033,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
             )}
           </div>
           {query && (
-            <div className="mt-1 max-h-72 overflow-y-auto rounded-md border bg-popover shadow-lg">
+            <div className="mt-2 max-h-72 overflow-y-auto rounded-xl border bg-popover/98 p-1 shadow-xl backdrop-blur">
               {matches.length === 0 ? (
                 <div className="p-3 text-sm text-muted-foreground">{t("no_results")}</div>
               ) : (
@@ -949,80 +1054,95 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
           )}
         </div>
         {canEdit && (
-          <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2">
-            <Button asChild size="sm" variant="outline">
+          <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1 rounded-xl border border-border/80 bg-card/95 p-1 shadow-[0_4px_18px_-8px_rgba(15,23,42,0.28)] backdrop-blur">
+            <Button asChild size="sm" variant="ghost">
               <Link to="/">{t("back_to_dashboard")}</Link>
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="ghost"
               onClick={() => familyStore.undo()}
-              disabled={!familyStore.canUndo()}
-              className="shadow-sm"
+              disabled={!canvasCanEdit || !familyStore.canUndo()}
+              className="shadow-none"
             >
               {t("undo")}
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="ghost"
               onClick={() => familyStore.redo()}
-              disabled={!familyStore.canRedo()}
-              className="shadow-sm"
+              disabled={!canvasCanEdit || !familyStore.canRedo()}
+              className="shadow-none"
             >
               {t("redo")}
             </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onAutoLayout}
-              className="gap-1.5 shadow-sm"
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              {t("auto_layout")}
-            </Button>
+            {capabilities.canAutoLayout && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onAutoLayout}
+                className="gap-1.5 shadow-none"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                {t("auto_layout")}
+              </Button>
+            )}
           </div>
         )}
       </div>
 
       <ReactFlow
+        key={previewType}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={canEdit ? onConnect : undefined}
-        onEdgesDelete={canEdit ? onEdgesDelete : undefined}
-        onEdgeUpdate={canEdit ? onEdgeUpdate : undefined}
-        onEdgeUpdateStart={canEdit ? onEdgeUpdateStart : undefined}
-        onEdgeUpdateEnd={canEdit ? onEdgeUpdateEnd : undefined}
-        onNodeDragStart={canEdit ? onNodeDragStart : undefined}
-        onNodeDragStop={canEdit ? onNodeDragStop : undefined}
+        onConnect={capabilities.canConnect ? onConnect : undefined}
+        onEdgesDelete={canvasCanEdit ? onEdgesDelete : undefined}
+        onEdgeUpdate={canvasCanEdit ? onEdgeUpdate : undefined}
+        onEdgeUpdateStart={canvasCanEdit ? onEdgeUpdateStart : undefined}
+        onEdgeUpdateEnd={canvasCanEdit ? onEdgeUpdateEnd : undefined}
+        onNodeDragStart={capabilities.canDrag ? onNodeDragStart : undefined}
+        onNodeDrag={capabilities.canDrag ? onNodeDrag : undefined}
+        onNodeDragStop={capabilities.canDrag ? onNodeDragStop : undefined}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        nodesDraggable={canEdit}
-        nodesConnectable={canEdit}
-        elementsSelectable={canEdit}
-        edgesUpdatable={canEdit}
-        edgesFocusable={canEdit}
+        nodesDraggable={capabilities.canDrag}
+        nodesConnectable={capabilities.canConnect}
+        elementsSelectable={capabilities.canSelect}
+        edgesUpdatable={canvasCanEdit}
+        edgesFocusable={capabilities.canSelect}
         minZoom={0.1}
         maxZoom={2}
+        selectionOnDrag={capabilities.canSelect}
+        panOnDrag={[1, 2]}
+        multiSelectionKeyCode={["Meta", "Control"]}
+        selectionKeyCode="Shift"
+        zoomOnDoubleClick={false}
         proOptions={{ hideAttribution: true }}
         connectionLineStyle={{ stroke: "#0ea5e9", strokeWidth: 2, strokeDasharray: "6 4" }}
         defaultEdgeOptions={{
           type: "relationship",
-          focusable: canEdit,
+          focusable: capabilities.canSelect,
           deletable: false,
-          updatable: canEdit,
+          updatable: canvasCanEdit,
         }}
         deleteKeyCode={null}
         fitView
         onMove={(_event, nextViewport) => setViewport(nextViewport)}
       >
-        <Background gap={24} className="bg-background!" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={20}
+          size={1.35}
+          color="var(--color-border)"
+          className="bg-muted/20!"
+        />
         {previewType === "chronological" && activeGeneration && (
           <div
             className="pointer-events-none absolute inset-x-0 z-0 border-t-2 border-dashed border-primary/25"
             style={{
-              top: `${((activeGeneration.start - earliestGeneration) / 10) * 340 * viewport.zoom + viewport.y}px`,
+              top: `${((activeGeneration.start - earliestGeneration) / 10) * DECADE_ROW_H * viewport.zoom + viewport.y}px`,
             }}
           >
             <span className="ms-3 rounded-b bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground">
@@ -1032,12 +1152,23 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
             </span>
           </div>
         )}
-        <MiniMap pannable zoomable className="bg-card! border!" />
-        <Controls showInteractive={false} className="bg-card! border!" />
+        <MiniMap
+          pannable
+          zoomable
+          position="bottom-right"
+          nodeStrokeWidth={3}
+          maskColor="color-mix(in oklab, var(--color-background) 72%, transparent)"
+          className="canvas-minimap! overflow-hidden! rounded-xl! border! border-border/80! bg-card/95! shadow-lg!"
+        />
+        <Controls
+          showInteractive={false}
+          position="bottom-left"
+          className="canvas-controls! overflow-hidden! rounded-xl! border! border-border/80! bg-card/95! p-1! shadow-lg!"
+        />
       </ReactFlow>
 
-      <div className="absolute bottom-45 right-4 z-10 flex w-72 max-w-[calc(100%-2rem)] flex-col gap-2">
-        <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
+      <div className="absolute top-24 right-4 z-10 flex max-h-[calc(100%-8rem)] w-72 max-w-[calc(100%-2rem)] flex-col gap-2 overflow-y-auto">
+        <div className="rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
           <button
             type="button"
             onClick={() => toggleWidget("preview")}
@@ -1066,7 +1197,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
           )}
         </div>
         {previewType === "chronological" && (
-          <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
+          <div className="rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
             <button
               type="button"
               onClick={() => toggleWidget("generation")}
@@ -1117,7 +1248,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
           </div>
         )}
         {canManageSubfamilies && (
-          <div className="rounded-lg border bg-card p-3 text-xs shadow-sm">
+          <div className="rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
             <button
               type="button"
               onClick={() => toggleWidget("subfamilies")}
@@ -1144,7 +1275,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         )}
       </div>
 
-      {canEdit && (
+      {canvasCanEdit && (
         <Dialog
           open={!!removeParentChoice}
           onOpenChange={(open) => !open && setRemoveParentChoice(null)}
@@ -1184,7 +1315,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         </Dialog>
       )}
 
-      {canEdit && (
+      {canvasCanEdit && (
         <Dialog open={!!creationChoice} onOpenChange={(open) => !open && setCreationChoice(null)}>
           <DialogContent>
             <DialogHeader>
@@ -1229,7 +1360,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         </Dialog>
       )}
 
-      {canEdit && (
+      {canvasCanEdit && (
         <Dialog
           open={!!childMotherChoice}
           onOpenChange={(open) => !open && setChildMotherChoice(null)}
@@ -1270,7 +1401,7 @@ function Inner({ readOnly = false }: { readOnly?: boolean }) {
         </Dialog>
       )}
 
-      {canEdit && (
+      {canvasCanEdit && (
         <Dialog open={!!motherPicker} onOpenChange={(o) => !o && setMotherPicker(null)}>
           <DialogContent>
             <DialogHeader>

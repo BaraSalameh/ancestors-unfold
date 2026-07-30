@@ -1,6 +1,7 @@
 import { memo, useRef, useState } from "react";
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "reactflow";
 import { X } from "lucide-react";
+import { normalizeDecadeRoute, type RoutePoint } from "../domain/route-edges";
 
 type Point = { x: number; y: number };
 
@@ -55,17 +56,7 @@ function RelationshipEdgeImpl(props: EdgeProps) {
     selected,
   } = props;
 
-  const routing = props.data as
-    | {
-        routeX?: number;
-        sourceLane?: number;
-        targetLane?: number;
-        branchY?: number;
-        drawTrunk?: boolean;
-        trunkEndY?: number;
-        generationBreakpoints?: number[];
-      }
-    | undefined;
+  const relationship = props.data as { kind?: string; decadeRoute?: RoutePoint[] } | undefined;
   const fallback = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -75,33 +66,33 @@ function RelationshipEdgeImpl(props: EdgeProps) {
     targetPosition,
     borderRadius: 12,
   });
-  const sourceLaneY = sourceY + (routing?.sourceLane ?? 0);
-  const targetLaneY = routing?.branchY ?? targetY - (routing?.targetLane ?? 0);
-  // Treat nearly aligned coordinates as identical. Sub-pixel/layout rounding
-  // must not create a visible hook in an otherwise straight connector.
-  const routeX =
-    routing?.routeX !== undefined && Math.abs(routing.routeX - sourceX) < 16
-      ? sourceX
-      : routing?.routeX;
-  const path =
-    routing?.routeX === undefined
-      ? fallback[0]
-      : roundedOrthogonalPath([
-          { x: routeX!, y: targetLaneY },
-          { x: targetX, y: targetLaneY },
+  const isParentConnector = relationship?.kind === "parent";
+  const middleY = sourceY + (targetY - sourceY) / 2;
+  const decadeRoute = relationship?.decadeRoute?.filter(
+    (point) => Number.isFinite(point.x) && Number.isFinite(point.y),
+  );
+  // Parent connectors are completely self-contained. Their geometry depends
+  // only on the two live React Flow handles, so moving one or many cards
+  // updates every attached path in the same render frame.
+  const path = decadeRoute?.length
+    ? roundedOrthogonalPath(
+        normalizeDecadeRoute(
+          { x: sourceX, y: sourceY },
           { x: targetX, y: targetY },
-        ]);
-  const trunkPath =
-    routing?.drawTrunk && routeX !== undefined
+          decadeRoute,
+          relationship?.kind as "parent" | "spouse" | undefined,
+        ),
+      )
+    : isParentConnector
       ? roundedOrthogonalPath([
           { x: sourceX, y: sourceY },
-          { x: sourceX, y: sourceLaneY },
-          { x: routeX, y: sourceLaneY },
-          { x: routeX, y: routing.trunkEndY ?? targetLaneY },
+          { x: sourceX, y: middleY },
+          { x: targetX, y: middleY },
+          { x: targetX, y: targetY },
         ])
-      : null;
-  const labelX = routeX ?? fallback[1];
-  const labelY = routing?.routeX === undefined ? fallback[2] : (sourceY + targetLaneY) / 2;
+      : fallback[0];
+  const labelX = isParentConnector ? (sourceX + targetX) / 2 : fallback[1];
+  const labelY = isParentConnector ? middleY : fallback[2];
 
   const [hovered, setHovered] = useState(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -119,7 +110,6 @@ function RelationshipEdgeImpl(props: EdgeProps) {
 
   return (
     <>
-      {trunkPath && <BaseEdge id={`${id}:trunk`} path={trunkPath} style={style} />}
       <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />
       {/* wider invisible hit area for easier hover/click */}
       <path
