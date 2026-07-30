@@ -17,6 +17,7 @@ import { jsonResponse as json } from "@/shared/http/response";
 import { handleOperationsRequest } from "@/app/server/operations-handler";
 import {
   acceptRegistrationInvitation,
+  currentTreeForSession,
   handleCollaborationRequest,
   provisionOwnedTree,
   validatePublicInvitation,
@@ -97,6 +98,26 @@ function userDto(s: Session) {
     fullNameEn: s.full_name_en,
     fullNameAr: s.full_name_ar,
     gender: s.profile_gender,
+  };
+}
+
+async function authSessionDto(session: Session, requestId: string) {
+  const current = await currentTreeForSession(
+    { id: session.id || null, user_id: session.user_id },
+    requestId,
+  );
+  const tree = current.rows[0];
+  return {
+    user: userDto(session),
+    createdAt: new Date().toISOString(),
+    currentTree: tree
+      ? {
+          id: tree.id,
+          nameEn: tree.name_en,
+          nameAr: tree.name_ar,
+          role: tree.role,
+        }
+      : null,
   };
 }
 async function createSession(
@@ -423,7 +444,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
         [verified ? verified.user.user_id : null, rate.hash, rate.ip, !!verified],
       );
       return verified
-        ? json({ user: userDto(verified.user), createdAt: new Date().toISOString() }, 200, {
+        ? json(await authSessionDto(verified.user, requestId), 200, {
             "set-cookie": sessionCookie(verified.session.token, verified.session.maxAge),
           })
         : json({ code: "INVALID_OR_EXPIRED_CODE" }, 400);
@@ -520,7 +541,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
       const s = await transaction(u.user_id, null, requestId, (c) =>
         createSession(c, u.user_id, u.credential_version, request),
       );
-      return json({ user: userDto(u), createdAt: new Date().toISOString() }, 200, {
+      return json(await authSessionDto(u, requestId), 200, {
         "set-cookie": sessionCookie(s.token, s.maxAge),
       });
     }
@@ -532,10 +553,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
     const session = await authenticate(request);
     if (url.pathname === "/api/auth/session" && request.method === "GET") {
       if (!session) return json(null);
-      return json({
-        user: userDto(session),
-        createdAt: new Date().toISOString(),
-      });
+      return json(await authSessionDto(session, requestId));
     }
     if (!session) return json({ code: "UNAUTHENTICATED" }, 401);
     const collaborationResponse = await handleCollaborationRequest(request, session, requestId);
@@ -597,7 +615,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
           );
         return profile;
       });
-      return json({ user: userDto(updated.rows[0]), createdAt: new Date().toISOString() });
+      return json(await authSessionDto(updated.rows[0], requestId));
     }
     if (url.pathname === "/api/profile/deletion-code/request" && request.method === "POST") {
       await parseBody(request, schemas.deleteContributorAccountRequest);
@@ -706,7 +724,7 @@ export async function handleApi(request: Request): Promise<Response | null> {
         [session.user_id, rate.hash, rate.ip, !!changed],
       );
       return changed
-        ? json({ user: userDto(changed), createdAt: new Date().toISOString() })
+        ? json(await authSessionDto(changed, requestId))
         : json({ code: "INVALID_OR_EXPIRED_CODE" }, 400);
     }
     if (url.pathname === "/api/auth/sessions" && request.method === "GET") {

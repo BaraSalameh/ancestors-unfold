@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { I18nProvider } from "@/shared/i18n";
 import { ThemeProvider } from "@/app/providers/theme-provider";
+import { themeBootstrapScript } from "@/app/providers/theme";
 import { Header } from "@/app/components/header";
 import { Toaster } from "@/shared/ui/sonner";
 import { AuthProvider } from "@/features/auth";
@@ -103,8 +104,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
         <HeadContent />
       </head>
       <body>

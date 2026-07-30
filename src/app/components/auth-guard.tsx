@@ -2,11 +2,11 @@ import { useEffect, type ReactNode } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/features/auth";
 import { useI18n } from "@/shared/i18n";
-import { SessionPageSkeleton } from "@/shared/ui/page-skeletons";
+import { RoutePageSkeleton } from "@/shared/ui/page-skeletons";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
-  const { t } = useI18n();
+  const { isAuthenticated, isLoading, session } = useAuth();
+  const { t, lang } = useI18n();
   const location = useRouterState({ select: (state) => state.location });
   const navigate = useNavigate();
   const isAuthPage = location.pathname === "/auth";
@@ -28,7 +28,18 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }, [isLoading, mayView, location.pathname, location.href, navigate]);
 
   if (isLoading || !mayView) {
-    return <SessionPageSkeleton label={t("loading")} />;
+    return (
+      <RoutePageSkeleton
+        pathname={location.pathname}
+        label={t("loading")}
+        dashboardRole={session?.currentTree?.role}
+        dashboardName={
+          (lang === "ar"
+            ? session?.currentTree?.nameAr || session?.currentTree?.nameEn
+            : session?.currentTree?.nameEn || session?.currentTree?.nameAr) ?? undefined
+        }
+      />
+    );
   }
   return children;
 }

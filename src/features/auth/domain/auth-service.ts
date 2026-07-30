@@ -18,6 +18,12 @@ export type RegistrationInput = {
 export type AuthSession = {
   user: AuthUser;
   createdAt: string;
+  currentTree: {
+    id: string;
+    nameEn: string | null;
+    nameAr: string | null;
+    role: "owner" | "contributor";
+  } | null;
 };
 export type RegistrationResult = { verificationRequired: true; email: string };
 

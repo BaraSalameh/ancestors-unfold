@@ -1,7 +1,7 @@
 import { useParams } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useI18n } from "@/shared/i18n";
-import { SessionPageSkeleton } from "@/shared/ui/page-skeletons";
+import { InvitationPageSkeleton } from "@/shared/ui/page-skeletons";
 
 export function InvitationPage() {
   const { token } = useParams({ from: "/invitation/$token" });
@@ -11,5 +11,5 @@ export function InvitationPage() {
       `/auth?redirect=${encodeURIComponent("/")}&invitationToken=${encodeURIComponent(token)}`,
     );
   }, [token]);
-  return <SessionPageSkeleton label={t("loading")} />;
+  return <InvitationPageSkeleton label={t("loading")} />;
 }

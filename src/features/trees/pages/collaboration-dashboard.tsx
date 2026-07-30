@@ -148,7 +148,7 @@ const getJson = async <T,>(url: string): Promise<T> => {
 
 export function CollaborationDashboard() {
   const { t, lang } = useI18n();
-  const { deleteContributorAccount, requestContributorAccountDeletionCode } = useAuth();
+  const { deleteContributorAccount, requestContributorAccountDeletionCode, session } = useAuth();
   const navigate = useNavigate();
   const [tree, setTree] = useState<CurrentTree>();
   const [stats, setStats] = useState<Statistics>();
@@ -500,7 +500,18 @@ export function CollaborationDashboard() {
       setDeleteAccountAction(undefined);
     }
   };
-  if (!tree || !stats) return <DashboardPageSkeleton label={t("loading")} />;
+  if (!tree || !stats)
+    return (
+      <DashboardPageSkeleton
+        label={t("loading")}
+        role={tree?.role ?? session?.currentTree?.role}
+        familyName={
+          tree
+            ? local(tree.name_en, tree.name_ar)
+            : local(session?.currentTree?.nameEn, session?.currentTree?.nameAr)
+        }
+      />
+    );
   return (
     <main className="min-h-[calc(100vh-3.5rem)] bg-muted/25">
       <section className="border-b bg-card">

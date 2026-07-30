@@ -3,7 +3,7 @@ import { TriangleAlert } from "lucide-react";
 import { FamilyTree } from "@/features/trees";
 import { familyStore, useFamilyLoadState } from "@/features/trees";
 import { useI18n } from "@/shared/i18n";
-import { TreePageSkeleton } from "@/shared/ui/page-skeletons";
+import { TreeLoadingIndicator } from "@/shared/ui/page-skeletons";
 
 export function TreePage() {
   const { mode } = useSearch({ from: "/tree/$id" });
@@ -12,7 +12,7 @@ export function TreePage() {
   familyStore.activateTree(id, mode);
   const loadState = useFamilyLoadState();
   if (loadState === "loading" || loadState === "idle")
-    return <TreePageSkeleton label={t("loading_tree")} />;
+    return <TreeLoadingIndicator label={t("loading_tree")} />;
   if (loadState === "error")
     return (
       <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center p-6 text-center">

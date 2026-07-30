@@ -23,6 +23,12 @@ import { activityRequestLimit } from "../domain/policy";
 import { deleteContributorIdentity } from "./account-deletion";
 
 type Session = { id: string; user_id: string; email: string };
+export type CurrentTreeSummary = {
+  id: string;
+  name_en: string | null;
+  name_ar: string | null;
+  role: "owner" | "contributor";
+};
 type ActivityDatabaseRow = {
   id: string;
   action_type: string;
@@ -400,6 +406,34 @@ export async function validatePublicInvitation(request: Request) {
 }
 
 // Collaboration endpoints are kept behind this module boundary while legacy tree APIs are migrated.
+export function currentTreeForSession(
+  session: { id: string | null; user_id: string },
+  requestId: string,
+) {
+  return transaction(session.user_id, session.id, requestId, (client) =>
+    client.query<
+      CurrentTreeSummary & {
+        created_at: string;
+        affiliation_status: string;
+        family_member_id: string | null;
+        assigned_branch_id: string | null;
+      }
+    >(
+      `SELECT t.id,t.name_en,t.name_ar,t.created_at,
+        CASE WHEN m.role='owner' THEN 'owner'
+             WHEN g.id IS NOT NULL THEN 'contributor'
+             ELSE m.role::text END role,
+        m.affiliation_status,m.family_member_id,
+        g.root_subfamily_id assigned_branch_id
+      FROM app.tree_memberships m JOIN app.family_trees t ON t.id=m.tree_id
+      LEFT JOIN app.branch_grants g ON g.user_id=m.user_id AND g.tree_id=m.tree_id
+        AND g.role='branch_editor' AND g.revoked_at IS NULL
+      WHERE m.user_id=$1 AND t.deleted_at IS NULL`,
+      [session.user_id],
+    ),
+  );
+}
+
 // eslint-disable-next-line complexity, max-lines-per-function
 export async function handleCollaborationRequest(
   request: Request,
@@ -408,21 +442,7 @@ export async function handleCollaborationRequest(
 ): Promise<Response | undefined> {
   const url = new URL(request.url);
   if (url.pathname === "/api/tree/current" && request.method === "GET") {
-    const result = await transaction(session.user_id, session.id, requestId, (client) =>
-      client.query(
-        `SELECT t.id,t.name_en,t.name_ar,t.created_at,
-          CASE WHEN m.role='owner' THEN 'owner'
-               WHEN g.id IS NOT NULL THEN 'contributor'
-               ELSE m.role::text END role,
-          m.affiliation_status,m.family_member_id,
-          g.root_subfamily_id assigned_branch_id
-        FROM app.tree_memberships m JOIN app.family_trees t ON t.id=m.tree_id
-        LEFT JOIN app.branch_grants g ON g.user_id=m.user_id AND g.tree_id=m.tree_id
-          AND g.role='branch_editor' AND g.revoked_at IS NULL
-        WHERE m.user_id=$1 AND t.deleted_at IS NULL`,
-        [session.user_id],
-      ),
-    );
+    const result = await currentTreeForSession(session, requestId);
     return result.rowCount ? json(result.rows[0]) : json({ code: "TREE_UNAVAILABLE" }, 404);
   }
   const stats = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/statistics$/);
