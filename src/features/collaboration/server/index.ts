@@ -1,5 +1,6 @@
 export {
   acceptRegistrationInvitation,
+  currentTreeForSession,
   handleCollaborationRequest,
   provisionOwnedTree,
   validatePublicInvitation,

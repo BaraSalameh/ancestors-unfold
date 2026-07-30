@@ -12,6 +12,7 @@ import { useI18n, type Lang } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
+import { ActivityRowsSkeleton, LoadingStatus } from "@/shared/ui/page-skeletons";
 
 type CurrentTree = { id: string; name_en: string | null; name_ar: string | null };
 
@@ -35,7 +36,7 @@ export function ActivityPage() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [retryVersion, setRetryVersion] = useState(0);
   const requestGeneration = useRef(0);
@@ -45,10 +46,15 @@ export function ActivityPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    setLoading(true);
+    setError(false);
     void getJson<CurrentTree>("/api/tree/current", controller.signal)
       .then(setTree)
       .catch((requestError: unknown) => {
-        if ((requestError as { name?: string }).name !== "AbortError") setError(true);
+        if ((requestError as { name?: string }).name !== "AbortError") {
+          setError(true);
+          setLoading(false);
+        }
       });
     return () => controller.abort();
   }, [retryVersion]);
@@ -64,7 +70,6 @@ export function ActivityPage() {
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
-    setActivity([]);
     setNextCursor(null);
     loadingRequest.current = true;
     setLoading(true);
@@ -162,6 +167,7 @@ export function ActivityPage() {
           />
         </CardHeader>
         <CardContent className="space-y-3" aria-live="polite">
+          {loading && <LoadingStatus label={t("activity_loading")} />}
           {!loading && !error && activity.length === 0 && (
             <p className="text-sm text-muted-foreground">
               {debouncedQuery ? t("activity_no_search_results") : t("no_activity")}
@@ -178,7 +184,7 @@ export function ActivityPage() {
               </div>
             </div>
           ))}
-          {loading && <p className="text-sm text-muted-foreground">{t("activity_loading")}</p>}
+          {loading && <ActivityRowsSkeleton count={activity.length > 0 ? 3 : 5} />}
           {error && (
             <div className="flex items-center gap-3">
               <p className="text-sm text-destructive">{t("activity_load_failed")}</p>
