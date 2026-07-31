@@ -49,7 +49,7 @@ function anchoredDecadeBranch(route: DecadeBundleRoute, target: Point): Point[] 
 
 function anchoredSharedPaths(route: DecadeBundleRoute, source: Point): Point[][] | undefined {
   return route.sharedPaths?.map((path, pathIndex) =>
-    pathIndex === 0 && path.length
+    route.anchorSharedSource !== false && pathIndex === 0 && path.length
       ? [
           source,
           ...path
@@ -57,6 +57,57 @@ function anchoredSharedPaths(route: DecadeBundleRoute, source: Point): Point[][]
             .map((point, pointIndex) => (pointIndex === 0 ? { ...point, x: source.x } : point)),
         ]
       : path,
+  );
+}
+
+function anchoredHighlightPath(route: DecadeBundleRoute, source: Point, target: Point): Point[] {
+  if (route.highlightPath.length < 2) return [source, target];
+  return [source, ...route.highlightPath.slice(1, -1), target];
+}
+
+function SelectedDecadeHighlight({
+  selected,
+  route,
+  source,
+  target,
+  style,
+}: {
+  selected?: boolean;
+  route?: DecadeBundleRoute;
+  source: Point;
+  target: Point;
+  style: EdgeProps["style"];
+}) {
+  if (!selected || !route) return null;
+  return (
+    <path
+      d={roundedOrthogonalPath(anchoredHighlightPath(route, source, target))}
+      fill="none"
+      pointerEvents="none"
+      style={{ ...style, strokeWidth: 4, strokeOpacity: 1 }}
+    />
+  );
+}
+
+function SelectedRelationshipHighlight({
+  selected,
+  route,
+  path,
+  style,
+}: {
+  selected?: boolean;
+  route?: DecadeBundleRoute;
+  path: string;
+  style: EdgeProps["style"];
+}) {
+  if (!selected || route) return null;
+  return (
+    <path
+      d={path}
+      fill="none"
+      pointerEvents="none"
+      style={{ ...style, strokeWidth: 4, strokeOpacity: 1 }}
+    />
   );
 }
 
@@ -76,8 +127,9 @@ function RelationshipEdgeImpl(props: EdgeProps) {
 
   const relationship = props.data as
     { kind?: string; decadeBundle?: DecadeBundleRoute } | undefined;
-  const sharedPaths = relationship?.decadeBundle
-    ? anchoredSharedPaths(relationship.decadeBundle, { x: sourceX, y: sourceY })
+  const decadeBundle = relationship?.decadeBundle;
+  const sharedPaths = decadeBundle
+    ? anchoredSharedPaths(decadeBundle, { x: sourceX, y: sourceY })
     : undefined;
   const fallback = getSmoothStepPath({
     sourceX,
@@ -90,10 +142,8 @@ function RelationshipEdgeImpl(props: EdgeProps) {
   });
   const isParentConnector = relationship?.kind === "parent";
   const middleY = sourceY + (targetY - sourceY) / 2;
-  const path = relationship?.decadeBundle
-    ? roundedOrthogonalPath(
-        anchoredDecadeBranch(relationship.decadeBundle, { x: targetX, y: targetY }),
-      )
+  const path = decadeBundle
+    ? roundedOrthogonalPath(anchoredDecadeBranch(decadeBundle, { x: targetX, y: targetY }))
     : isParentConnector
       ? roundedOrthogonalPath([
           { x: sourceX, y: sourceY },
@@ -124,12 +174,26 @@ function RelationshipEdgeImpl(props: EdgeProps) {
             stroke="transparent"
             strokeWidth={22}
             className="react-flow__edge-interaction"
+            data-shared-scope={decadeBundle?.sharedPathScopes?.[index]}
             style={{ cursor: "pointer" }}
             onClick={setRemoveAtPointer}
           />
         </g>
       ))}
       <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />
+      <SelectedDecadeHighlight
+        selected={selected}
+        route={decadeBundle}
+        source={{ x: sourceX, y: sourceY }}
+        target={{ x: targetX, y: targetY }}
+        style={style}
+      />
+      <SelectedRelationshipHighlight
+        selected={selected}
+        route={decadeBundle}
+        path={path}
+        style={style}
+      />
       {/* wider invisible hit area for easier clicking */}
       <path
         d={path}

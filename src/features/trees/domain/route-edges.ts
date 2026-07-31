@@ -2,12 +2,16 @@ import type { Edge, Node } from "reactflow";
 import type { MemberNodeData } from "../ui/member-node";
 
 export type RoutePoint = { x: number; y: number };
+export type SharedRouteScope = "source" | "family";
 type CardRect = { id: string; left: number; right: number; top: number; bottom: number };
 
 export interface DecadeBundleRoute {
   branch: RoutePoint[];
+  highlightPath: RoutePoint[];
   junction?: RoutePoint;
   sharedPaths?: RoutePoint[][];
+  sharedPathScopes?: SharedRouteScope[];
+  anchorSharedSource?: boolean;
 }
 
 const NODE_WIDTH = 260;
@@ -18,6 +22,7 @@ const CARD_CLEARANCE = 32;
 const BUNDLE_GAP = 44;
 const BRANCH_GAP = 36;
 const APPROACH_GAP = 32;
+const ROW_NUDGE = 8;
 
 const dimension = (value: number | null | undefined, fallback: number) =>
   Number.isFinite(value) && value! > 0 ? value! : fallback;
@@ -25,6 +30,25 @@ const dimension = (value: number | null | undefined, fallback: number) =>
 const width = (node: Node<MemberNodeData>) => dimension(node.width, NODE_WIDTH);
 const height = (node: Node<MemberNodeData>) =>
   dimension(node.height, node.data.member.gender === "male" ? HUSBAND_HEIGHT : NODE_HEIGHT);
+
+export function sharedRouteSelectionIds(
+  edges: Edge[],
+  clickedEdge: Edge,
+  scope: SharedRouteScope,
+): Set<string> {
+  const clickedFamilyKey = (clickedEdge.data as { familyKey?: string } | undefined)?.familyKey;
+  return new Set(
+    edges
+      .filter((edge) => {
+        const data = edge.data as { familyKey?: string; kind?: string } | undefined;
+        if (data?.kind !== "parent") return false;
+        return scope === "source"
+          ? edge.source === clickedEdge.source
+          : Boolean(clickedFamilyKey && data.familyKey === clickedFamilyKey);
+      })
+      .map((edge) => edge.id),
+  );
+}
 
 function segmentHitsCard(first: RoutePoint, second: RoutePoint, card: CardRect) {
   const minX = Math.min(first.x, second.x);
@@ -99,6 +123,28 @@ function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[
 
   const rowBundleCount = new Map<number, number>();
   const usedVerticalLanes: Array<{ x: number; top: number; bottom: number }> = [];
+  const usedHorizontalRows = new Set<number>();
+  const reserveHorizontalRow = (preferredY: number, direction: -1 | 1) => {
+    let y = preferredY;
+    while (usedHorizontalRows.has(y)) y += direction * ROW_NUDGE;
+    usedHorizontalRows.add(y);
+    return y;
+  };
+  const reserveVerticalSegment = (x: number, firstY: number, secondY: number) => {
+    if (firstY === secondY) return;
+    usedVerticalLanes.push({
+      x,
+      top: Math.min(firstY, secondY),
+      bottom: Math.max(firstY, secondY),
+    });
+  };
+  const verticalLaneConflicts = (x: number, firstY: number, secondY: number) => {
+    const top = Math.min(firstY, secondY);
+    const bottom = Math.max(firstY, secondY);
+    return usedVerticalLanes.some(
+      (lane) => lane.x === x && Math.max(lane.top, top) < Math.min(lane.bottom, bottom),
+    );
+  };
   const targetApproachOrdinal = new Map<string, number>();
   const targetRows = new Map<number, Edge[]>();
   const sortedGroups = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
@@ -135,7 +181,6 @@ function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[
     const sourceGroupIndex = sourceGroupIndexes.get(source.id) ?? 0;
     sourceGroupIndexes.set(source.id, sourceGroupIndex + 1);
     const sourceGroupCount = sourceGroupCounts.get(source.id) ?? 1;
-    const trunkX = sourceX + (sourceGroupIndex - (sourceGroupCount - 1) / 2) * BUNDLE_GAP;
     const sourceRowBottom = Math.max(
       ...nodes
         .filter((node) => Math.abs(node.position.y - source.position.y) < 1)
@@ -143,7 +188,23 @@ function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[
     );
     const bundleIndex = rowBundleCount.get(source.position.y) ?? 0;
     rowBundleCount.set(source.position.y, bundleIndex + 1);
-    const busY = sourceRowBottom + STEM_CLEARANCE + bundleIndex * BUNDLE_GAP;
+    const busY = reserveHorizontalRow(
+      sourceRowBottom + STEM_CLEARANCE + bundleIndex * BUNDLE_GAP,
+      1,
+    );
+    const breakoutY = reserveHorizontalRow(
+      sourceRowBottom +
+        Math.max(ROW_NUDGE, STEM_CLEARANCE - (sourceGroupCount - sourceGroupIndex) * ROW_NUDGE),
+      -1,
+    );
+    let trunkX = sourceX + (sourceGroupIndex - (sourceGroupCount - 1) / 2) * BUNDLE_GAP;
+    let trunkOffset = 1;
+    while (verticalLaneConflicts(trunkX, breakoutY, busY)) {
+      trunkX += (trunkOffset % 2 === 1 ? 1 : -1) * trunkOffset * BRANCH_GAP;
+      trunkOffset += 1;
+    }
+    if (sourceGroupIndex === 0) reserveVerticalSegment(sourceX, sourceY, breakoutY);
+    reserveVerticalSegment(trunkX, breakoutY, busY);
 
     const routedChildren = familyEdges
       .map((edge) => ({ edge, target: nodeById.get(edge.target) }))
@@ -173,6 +234,18 @@ function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[
         ) {
           approachY -= APPROACH_GAP;
         }
+        const blockingTargetLanes = usedVerticalLanes.filter(
+          (lane) =>
+            lane.x === targetX &&
+            Math.max(lane.top, approachY) < Math.min(lane.bottom, target.position.y),
+        );
+        if (blockingTargetLanes.length) {
+          approachY = Math.min(
+            target.position.y,
+            Math.max(...blockingTargetLanes.map((lane) => lane.bottom)) + ROW_NUDGE,
+          );
+        }
+        approachY = reserveHorizontalRow(approachY, -1);
 
         const top = Math.min(busY, approachY);
         const bottom = Math.max(busY, approachY);
@@ -234,7 +307,7 @@ function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[
           [outerLeft, outerRight].sort(
             (first, second) => routeLength(first) - routeLength(second),
           )[0];
-        usedVerticalLanes.push({ x: laneX, top, bottom });
+        reserveVerticalSegment(laneX, busY, approachY);
         return {
           edge,
           laneX,
@@ -251,23 +324,43 @@ function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[
     const busLeft = Math.min(trunkX, ...routedChildren.map(({ laneX }) => laneX));
     const busRight = Math.max(trunkX, ...routedChildren.map(({ laneX }) => laneX));
     const junction = { x: trunkX, y: busY };
-    const breakoutY = sourceRowBottom + BUNDLE_GAP + sourceGroupIndex * APPROACH_GAP;
-    const sharedPaths = [
-      [
-        { x: sourceX, y: sourceY },
-        { x: sourceX, y: breakoutY },
-        { x: trunkX, y: breakoutY },
-        junction,
-      ],
-      [
-        { x: busLeft, y: busY },
-        { x: busRight, y: busY },
-      ],
+    const sourceStem = [
+      { x: sourceX, y: sourceY },
+      { x: sourceX, y: breakoutY },
     ];
-    routedChildren.forEach(({ edge, branch }, index) => {
+    const familyStem = [{ x: sourceX, y: breakoutY }, { x: trunkX, y: breakoutY }, junction];
+    const familyBus = [
+      { x: busLeft, y: busY },
+      { x: busRight, y: busY },
+    ];
+    const sharedPaths =
+      sourceGroupIndex === 0 ? [sourceStem, familyStem, familyBus] : [familyStem, familyBus];
+    const sharedPathScopes: SharedRouteScope[] =
+      sourceGroupIndex === 0 ? ["source", "family", "family"] : ["family", "family"];
+    routedChildren.forEach(({ branch }) => {
+      const approach = branch.at(-2)!;
+      const target = branch.at(-1)!;
+      reserveVerticalSegment(target.x, approach.y, target.y);
+    });
+    routedChildren.forEach(({ edge, branch, laneX }, index) => {
       routeById.set(edge.id, {
         branch,
-        ...(index === 0 ? { junction, sharedPaths } : {}),
+        highlightPath: [
+          { x: sourceX, y: sourceY },
+          { x: sourceX, y: breakoutY },
+          { x: trunkX, y: breakoutY },
+          junction,
+          { x: laneX, y: busY },
+          ...branch.slice(1),
+        ],
+        ...(index === 0
+          ? {
+              junction,
+              sharedPaths,
+              sharedPathScopes,
+              anchorSharedSource: sourceGroupIndex === 0,
+            }
+          : {}),
       });
     });
   }

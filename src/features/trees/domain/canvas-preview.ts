@@ -1,6 +1,37 @@
 import type { FamilyMember } from "@/features/members";
 
 export type TreePreviewType = "lineage" | "chronological";
+export const MIN_CHRONOLOGICAL_PERIOD = 1;
+export const MAX_CHRONOLOGICAL_PERIOD = 50;
+export const DEFAULT_CHRONOLOGICAL_PERIOD = 10;
+export type ChronologicalPeriod = number;
+
+export interface ChronologicalBand {
+  start: number;
+  end: number;
+}
+
+export function isChronologicalPeriod(value: unknown): value is ChronologicalPeriod {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= MIN_CHRONOLOGICAL_PERIOD &&
+    value <= MAX_CHRONOLOGICAL_PERIOD
+  );
+}
+
+export function chronologicalPeriodOrDefault(value: unknown): ChronologicalPeriod {
+  const numericValue = typeof value === "string" ? Number(value) : value;
+  return isChronologicalPeriod(numericValue) ? numericValue : DEFAULT_CHRONOLOGICAL_PERIOD;
+}
+
+export function chronologicalBandForYear(
+  year: number,
+  period: ChronologicalPeriod,
+): ChronologicalBand {
+  const start = Math.floor(year / period) * period;
+  return { start, end: start + period - 1 };
+}
 
 export interface CanvasCapabilities {
   canMutate: boolean;

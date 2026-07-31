@@ -62,8 +62,6 @@ const DECADE_CARD_GAP = 140;
 const nodeTypes = { member: MemberNode };
 const edgeTypes = { relationship: RelationshipEdge };
 
-type GenerationBand = { start: number; end: number };
-
 const isEmptyCanvasTarget = (target: EventTarget | null) =>
   target instanceof Element &&
   Boolean(target.closest(".react-flow__pane")) &&
@@ -76,20 +74,27 @@ const birthYear = (member: FamilyMember) => {
   return Number.isFinite(year) ? year : null;
 };
 
-const generationBandFor = (member: FamilyMember): GenerationBand | null => {
+const generationBandFor = (
+  member: FamilyMember,
+  period: ChronologicalPeriod,
+): ChronologicalBand | null => {
   const year = birthYear(member);
   if (year === null) return null;
-  const start = Math.floor(year / 10) * 10;
-  return { start, end: start + 9 };
+  return chronologicalBandForYear(year, period);
 };
 
-const generationKey = (band: GenerationBand) => `${band.start}-${band.end}`;
+const generationKey = (band: ChronologicalBand) => `${band.start}-${band.end}`;
 
 const DIVORCED_COLOR = "#94a3b8";
 
 import { SubfamilyPanel } from "@/features/subfamilies";
 import { descendantIds } from "@/features/members";
-import { alignDecadeSingleChildren, routeParentEdges } from "../domain/route-edges";
+import {
+  alignDecadeSingleChildren,
+  routeParentEdges,
+  sharedRouteSelectionIds,
+} from "../domain/route-edges";
+import { familyLevelSharedSelectionIds } from "../domain/edge-selection";
 import {
   canvasCapabilities,
   canvasRectBetween,
@@ -98,6 +103,13 @@ import {
   hasCanvasDragStarted,
   hierarchyPositions,
   isDoublePanePress,
+  DEFAULT_CHRONOLOGICAL_PERIOD,
+  MAX_CHRONOLOGICAL_PERIOD,
+  MIN_CHRONOLOGICAL_PERIOD,
+  chronologicalBandForYear,
+  isChronologicalPeriod,
+  type ChronologicalBand,
+  type ChronologicalPeriod,
   type CanvasPoint,
   type CanvasRect,
   type TreePreviewType,
@@ -114,6 +126,7 @@ function layout(
   highlightId: string | null,
   editable: boolean,
   chronological = false,
+  chronologicalPeriod: ChronologicalPeriod = DEFAULT_CHRONOLOGICAL_PERIOD,
   onToggleCollapsed?: (id: string) => void,
 ) {
   const memberById = new Map(members.map((m) => [m.id, m]));
@@ -285,16 +298,16 @@ function layout(
   const nodes: Node<MemberNodeData>[] = renderedIds.map((id) => {
     const m = memberById.get(id)!;
     const pos = g.node(id);
-    const band = generationBandFor(m);
+    const band = generationBandFor(m, chronologicalPeriod);
     const earliestBand = Math.min(
       ...members
-        .map(generationBandFor)
-        .filter((value): value is GenerationBand => value !== null)
+        .map((member) => generationBandFor(member, chronologicalPeriod))
+        .filter((value): value is ChronologicalBand => value !== null)
         .map((value) => value.start),
     );
     const autoY =
       chronological && band && Number.isFinite(earliestBand)
-        ? ((band.start - earliestBand) / 10) * DECADE_ROW_H
+        ? ((band.start - earliestBand) / chronologicalPeriod) * DECADE_ROW_H
         : genOf(id) * FAMILY_ROW_H;
     const hierarchyPosition = hierarchy.get(id);
     const autoX = chronological
@@ -419,11 +432,13 @@ function Inner({
   readOnly = false,
   overviewMode = false,
   preview,
+  chronologicalPeriod,
   accessMode,
 }: {
   readOnly?: boolean;
   overviewMode?: boolean;
   preview: TreePreviewType;
+  chronologicalPeriod: ChronologicalPeriod;
   accessMode: TreeAccessMode;
 }) {
   const members = useFamily();
@@ -443,6 +458,7 @@ function Inner({
   const [selectedSubfamilyId, setSelectedSubfamilyId] = useState<string | null>(null);
   const [subfamilyFilterEnabled, setSubfamilyFilterEnabled] = useState(false);
   const [generationYear, setGenerationYear] = useState("");
+  const [periodDraft, setPeriodDraft] = useState(String(chronologicalPeriod));
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const viewportRef = useRef(viewport);
   const previewType = preview;
@@ -459,6 +475,7 @@ function Inner({
   const { setCenter, fitView, setViewport: setFlowViewport, screenToFlowPosition } = useReactFlow();
   const didFit = useRef(false);
   const previousPreviewType = useRef<TreePreviewType>(previewType);
+  const previousChronologicalPeriod = useRef<ChronologicalPeriod>(chronologicalPeriod);
   const replacePositionsOnNextLayout = useRef(false);
   const edgeUpdateSuccessful = useRef(true);
   const visibleNodePositions = useRef(new Map<string, { x: number; y: number }>());
@@ -474,6 +491,23 @@ function Inner({
     dragging: boolean;
   } | null>(null);
   const [marqueeRect, setMarqueeRect] = useState<CanvasRect | null>(null);
+
+  useEffect(() => setPeriodDraft(String(chronologicalPeriod)), [chronologicalPeriod]);
+
+  useEffect(() => {
+    if (previewType !== "chronological") return;
+    const value = Number(periodDraft);
+    if (!isChronologicalPeriod(value) || value === chronologicalPeriod) return;
+    const timeout = window.setTimeout(() => {
+      void navigate({
+        to: "/tree/$id",
+        params: { id: familyStore.getActiveTreeId() },
+        search: { mode: "preview", preview: "chronological", period: value },
+        replace: true,
+      });
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [chronologicalPeriod, navigate, periodDraft, previewType]);
 
   useEffect(() => {
     if (readOnly || !persistence.error) return;
@@ -675,13 +709,13 @@ function Inner({
   );
 
   const generations = useMemo(() => {
-    const unique = new Map<string, GenerationBand>();
+    const unique = new Map<string, ChronologicalBand>();
     for (const member of members) {
-      const band = generationBandFor(member);
+      const band = generationBandFor(member, chronologicalPeriod);
       if (band) unique.set(generationKey(band), band);
     }
     return [...unique.values()].sort((a, b) => a.start - b.start);
-  }, [members]);
+  }, [members, chronologicalPeriod]);
 
   const visibleMembers = useMemo(() => {
     const result =
@@ -703,6 +737,7 @@ function Inner({
         highlightId,
         canvasCanEdit,
         previewType === "chronological",
+        chronologicalPeriod,
         onToggleCollapsed,
       ),
     [
@@ -715,6 +750,7 @@ function Inner({
       highlightId,
       canvasCanEdit,
       previewType,
+      chronologicalPeriod,
       onToggleCollapsed,
     ],
   );
@@ -725,20 +761,21 @@ function Inner({
     const graphCenterY =
       ((typeof window === "undefined" ? 800 : window.innerHeight) / 2 - viewport.y) / viewport.zoom;
     return generations.reduce((closest, band) => {
-      const bandY = ((band.start - earliestGeneration) / 10) * DECADE_ROW_H;
-      const closestY = ((closest.start - earliestGeneration) / 10) * DECADE_ROW_H;
+      const bandY = ((band.start - earliestGeneration) / chronologicalPeriod) * DECADE_ROW_H;
+      const closestY = ((closest.start - earliestGeneration) / chronologicalPeriod) * DECADE_ROW_H;
       return Math.abs(bandY - graphCenterY) < Math.abs(closestY - graphCenterY) ? band : closest;
     });
-  }, [generations, earliestGeneration, viewport]);
+  }, [generations, earliestGeneration, chronologicalPeriod, viewport]);
 
   const scrollToGeneration = () => {
     const year = Number.parseInt(generationYear, 10);
     if (!Number.isFinite(year) || !generations.length) return;
-    const requestedStart = Math.floor(year / 10) * 10;
+    const requestedStart = chronologicalBandForYear(year, chronologicalPeriod).start;
     const closest = generations.reduce((best, band) =>
       Math.abs(band.start - requestedStart) < Math.abs(best.start - requestedStart) ? band : best,
     );
-    const y = ((closest.start - earliestGeneration) / 10) * DECADE_ROW_H + NODE_H / 2;
+    const y =
+      ((closest.start - earliestGeneration) / chronologicalPeriod) * DECADE_ROW_H + NODE_H / 2;
     setCenter(0, y, { zoom: Math.max(viewport.zoom, 0.65), duration: 600 });
     setGenerationYear(String(year));
   };
@@ -881,8 +918,10 @@ function Inner({
 
   useEffect(() => {
     const previewChanged = previousPreviewType.current !== previewType;
+    const periodChanged = previousChronologicalPeriod.current !== chronologicalPeriod;
     previousPreviewType.current = previewType;
-    if (previewChanged) didFit.current = false;
+    previousChronologicalPeriod.current = chronologicalPeriod;
+    if (previewChanged || periodChanged) didFit.current = false;
     setNodes((current) => {
       const currentById = new Map(current.map((node) => [node.id, node]));
       const replacePositions = replacePositionsOnNextLayout.current;
@@ -925,7 +964,7 @@ function Inner({
       requestAnimationFrame(() => fitView({ padding: 0.2, duration: 300 }));
       didFit.current = true;
     }
-  }, [initialNodes, initialEdges, previewType, setNodes, setEdges, fitView]);
+  }, [initialNodes, initialEdges, previewType, chronologicalPeriod, setNodes, setEdges, fitView]);
 
   useEffect(() => {
     visibleNodePositions.current = new Map(
@@ -1207,6 +1246,7 @@ function Inner({
       highlightId,
       canvasCanEdit,
       previewType === "chronological",
+      chronologicalPeriod,
       onToggleCollapsed,
     );
     replacePositionsOnNextLayout.current = true;
@@ -1221,6 +1261,7 @@ function Inner({
   }, [
     canvasCanEdit,
     capabilities.canAutoLayout,
+    chronologicalPeriod,
     collapsed,
     fitView,
     highlightId,
@@ -1371,11 +1412,29 @@ function Inner({
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onEdgeClick={(_event, clickedEdge) =>
+        onEdgeClick={(event, clickedEdge) => {
+          const sharedScope =
+            event.target instanceof Element
+              ? event.target.closest<SVGPathElement>("[data-shared-scope]")?.dataset.sharedScope
+              : undefined;
+          const sharedSelection =
+            sharedScope === "source" || sharedScope === "family"
+              ? sharedRouteSelectionIds(edges, clickedEdge, sharedScope)
+              : previewType === "lineage"
+                ? familyLevelSharedSelectionIds(
+                    edges,
+                    nodes,
+                    clickedEdge,
+                    screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+                  )
+                : null;
           setEdges((current) =>
-            current.map((edge) => ({ ...edge, selected: edge.id === clickedEdge.id })),
-          )
-        }
+            current.map((edge) => ({
+              ...edge,
+              selected: sharedSelection?.has(edge.id) ?? edge.id === clickedEdge.id,
+            })),
+          );
+        }}
         onNodeClick={() =>
           setEdges((current) =>
             current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
@@ -1434,7 +1493,7 @@ function Inner({
           <div
             className="pointer-events-none absolute inset-x-0 z-0 border-t-2 border-dashed border-primary/25"
             style={{
-              top: `${((activeGeneration.start - earliestGeneration) / 10) * DECADE_ROW_H * viewport.zoom + viewport.y}px`,
+              top: `${((activeGeneration.start - earliestGeneration) / chronologicalPeriod) * DECADE_ROW_H * viewport.zoom + viewport.y}px`,
             }}
           >
             <span className="ms-3 rounded-b bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground">
@@ -1492,7 +1551,7 @@ function Inner({
                     navigate({
                       to: "/tree/$id",
                       params: { id: familyStore.getActiveTreeId() },
-                      search: { mode: "preview", preview: "lineage" },
+                      search: { mode: "preview", preview: "lineage", period: chronologicalPeriod },
                     })
                   }
                   className={`rounded px-2 py-1.5 ${previewType === "lineage" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
@@ -1504,7 +1563,11 @@ function Inner({
                     navigate({
                       to: "/tree/$id",
                       params: { id: familyStore.getActiveTreeId() },
-                      search: { mode: "preview", preview: "chronological" },
+                      search: {
+                        mode: "preview",
+                        preview: "chronological",
+                        period: chronologicalPeriod,
+                      },
                     })
                   }
                   className={`rounded px-2 py-1.5 ${previewType === "chronological" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
@@ -1532,6 +1595,34 @@ function Inner({
             </button>
             {!collapsedWidgets.generation && (
               <>
+                <label className="mb-1 block text-[10px] text-muted-foreground">
+                  {t("period_length")}
+                </label>
+                <Input
+                  value={periodDraft}
+                  onChange={(event) => setPeriodDraft(event.target.value)}
+                  inputMode="numeric"
+                  type="text"
+                  placeholder={t("period_placeholder")}
+                  aria-invalid={
+                    periodDraft.length > 0 && !isChronologicalPeriod(Number(periodDraft))
+                  }
+                  className="h-8 text-xs"
+                />
+                <p
+                  className={`mb-2 mt-1 text-[10px] ${
+                    periodDraft.length > 0 && !isChronologicalPeriod(Number(periodDraft))
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {periodDraft.length > 0 && !isChronologicalPeriod(Number(periodDraft))
+                    ? t("period_invalid")
+                    : t("period_range", {
+                        min: MIN_CHRONOLOGICAL_PERIOD,
+                        max: MAX_CHRONOLOGICAL_PERIOD,
+                      })}
+                </p>
                 <div className="flex gap-1">
                   <Input
                     value={generationYear}
@@ -1540,7 +1631,7 @@ function Inner({
                     }
                     onKeyDown={(event) => event.key === "Enter" && scrollToGeneration()}
                     inputMode="numeric"
-                    placeholder="1975"
+                    placeholder={t("generation_year_placeholder")}
                     className="h-8 text-xs"
                     disabled={generations.length === 0}
                   />
@@ -1777,11 +1868,13 @@ export function FamilyTree({
   readOnly = false,
   overviewMode = false,
   preview = "lineage",
+  chronologicalPeriod = DEFAULT_CHRONOLOGICAL_PERIOD,
   accessMode = "edit",
 }: {
   readOnly?: boolean;
   overviewMode?: boolean;
   preview?: TreePreviewType;
+  chronologicalPeriod?: ChronologicalPeriod;
   accessMode?: TreeAccessMode;
 }) {
   return (
@@ -1790,6 +1883,7 @@ export function FamilyTree({
         readOnly={readOnly}
         overviewMode={overviewMode}
         preview={preview}
+        chronologicalPeriod={chronologicalPeriod}
         accessMode={accessMode}
       />
     </ReactFlowProvider>

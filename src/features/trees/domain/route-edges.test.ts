@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { Edge, Node } from "reactflow";
 import type { FamilyMember } from "@/features/members";
 import type { MemberNodeData } from "../ui/member-node";
-import { alignDecadeSingleChildren, routeParentEdges, type DecadeBundleRoute } from "./route-edges";
+import {
+  alignDecadeSingleChildren,
+  routeParentEdges,
+  sharedRouteSelectionIds,
+  type DecadeBundleRoute,
+} from "./route-edges";
+import { familyLevelSharedSelectionIds } from "./edge-selection";
 
 const node = (id: string, x: number, y: number): Node<MemberNodeData> =>
   ({
@@ -21,6 +27,31 @@ const edge = (target: string, familyKey = "parent:family"): Edge => ({
 });
 
 const bundle = (item: Edge) => (item.data as { decadeBundle: DecadeBundleRoute }).decadeBundle;
+
+const segments = (item: Edge) => {
+  const route = bundle(item);
+  return [route.branch, ...(route.sharedPaths ?? [])].flatMap((path) =>
+    path.slice(1).map((point, index) => ({ first: path[index], second: point })),
+  );
+};
+
+const overlapLength = (first: number, second: number, third: number, fourth: number) =>
+  Math.min(Math.max(first, second), Math.max(third, fourth)) -
+  Math.max(Math.min(first, second), Math.min(third, fourth));
+
+const collinearOverlap = (
+  first: ReturnType<typeof segments>[number],
+  second: ReturnType<typeof segments>[number],
+) => {
+  const firstVertical = first.first.x === first.second.x;
+  const secondVertical = second.first.x === second.second.x;
+  if (firstVertical !== secondVertical) return false;
+  return firstVertical
+    ? first.first.x === second.first.x &&
+        overlapLength(first.first.y, first.second.y, second.first.y, second.second.y) > 0
+    : first.first.y === second.first.y &&
+        overlapLength(first.first.x, first.second.x, second.first.x, second.second.x) > 0;
+};
 
 describe("preview connector structure", () => {
   it("keeps Family Levels edges unchanged", () => {
@@ -44,7 +75,7 @@ describe("preview connector structure", () => {
 
     const owners = routed.filter((item) => bundle(item).sharedPaths);
     expect(owners).toHaveLength(1);
-    expect(bundle(owners[0]).sharedPaths).toHaveLength(2);
+    expect(bundle(owners[0]).sharedPaths).toHaveLength(3);
     expect(bundle(owners[0]).junction).toEqual({ x: 130, y: 170 });
   });
 
@@ -66,6 +97,30 @@ describe("preview connector structure", () => {
     expect(new Set(branchStarts.map(({ x, y }) => `${x}:${y}`)).size).toBe(3);
     expect(new Set(verticalLanes).size).toBe(3);
     expect(new Set(approachRows).size).toBe(3);
+    routed.forEach((item) => {
+      const highlight = bundle(item).highlightPath;
+      expect(highlight[0]).toEqual({ x: 130, y: 130 });
+      expect(highlight.at(-1)).toEqual(bundle(item).branch.at(-1));
+    });
+  });
+
+  it("selects every child represented by a clicked shared route", () => {
+    const edges = [
+      edge("first", "parent:first-family"),
+      edge("second", "parent:first-family"),
+      edge("third", "parent:second-family"),
+      { ...edge("other", "other:family"), source: "other-parent" },
+    ];
+
+    expect([...sharedRouteSelectionIds(edges, edges[0], "family")]).toEqual([
+      "parent:first",
+      "parent:second",
+    ]);
+    expect([...sharedRouteSelectionIds(edges, edges[0], "source")]).toEqual([
+      "parent:first",
+      "parent:second",
+      "parent:third",
+    ]);
   });
 
   it("uses a straight vertical branch when the target lane is clear", () => {
@@ -127,5 +182,80 @@ describe("preview connector structure", () => {
     const trunkXs = routed.map((item) => bundle(item).junction!.x);
     expect(new Set(trunkXs).size).toBe(2);
     expect(Math.abs(trunkXs[0] - trunkXs[1])).toBeGreaterThanOrEqual(20);
+  });
+});
+
+describe("Family Levels connector selection", () => {
+  it("selects every parent connector sharing the clicked collinear segment", () => {
+    const nodes = [node("parent", 0, 0), node("left", -320, 500), node("right", 320, 500)];
+    const edges = [edge("left"), edge("right")];
+
+    expect([...familyLevelSharedSelectionIds(edges, nodes, edges[0], { x: 130, y: 250 })]).toEqual([
+      "parent:left",
+      "parent:right",
+    ]);
+  });
+
+  it("selects only the clicked connector on its unique child approach", () => {
+    const nodes = [node("parent", 0, 0), node("left", -320, 500), node("right", 320, 500)];
+    const edges = [edge("left"), edge("right")];
+
+    expect([...familyLevelSharedSelectionIds(edges, nodes, edges[0], { x: -190, y: 450 })]).toEqual(
+      ["parent:left"],
+    );
+  });
+
+  it("does not combine connectors that only cross perpendicularly", () => {
+    const nodes = [
+      node("parent", 0, 0),
+      node("left", -320, 500),
+      node("other-parent", -130, 0),
+      node("other", -130, 500),
+    ];
+    const first = edge("left");
+    const crossing = { ...edge("other", "other:family"), source: "other-parent" };
+
+    expect([
+      ...familyLevelSharedSelectionIds([first, crossing], nodes, first, { x: 0, y: 315 }),
+    ]).toEqual(["parent:left"]);
+  });
+});
+
+describe("preview connector collision handling", () => {
+  it("does not overlap collinear segments from separate combinations", () => {
+    const routed = routeParentEdges(
+      [
+        node("parent", 0, 0),
+        node("other-parent", 0, 500),
+        node("first", -320, 1000),
+        node("second", 0, 1000),
+        node("third", 320, 1000),
+      ],
+      [
+        edge("first", "parent:first-family"),
+        { ...edge("second", "other:second-family"), source: "other-parent" },
+        { ...edge("third", "other:third-family"), source: "other-parent" },
+      ],
+      true,
+    );
+
+    routed.forEach((item, index) => {
+      for (const other of routed.slice(index + 1)) {
+        for (const firstSegment of segments(item)) {
+          for (const secondSegment of segments(other)) {
+            expect(
+              collinearOverlap(firstSegment, secondSegment),
+              `${item.id} ${JSON.stringify(firstSegment)} overlaps ${other.id} ${JSON.stringify(secondSegment)}`,
+            ).toBe(false);
+          }
+        }
+      }
+    });
+  });
+
+  it("allows perpendicular connector segments to cross", () => {
+    const vertical = { first: { x: 10, y: 0 }, second: { x: 10, y: 20 } };
+    const horizontal = { first: { x: 0, y: 10 }, second: { x: 20, y: 10 } };
+    expect(collinearOverlap(vertical, horizontal)).toBe(false);
   });
 });

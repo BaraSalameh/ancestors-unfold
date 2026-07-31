@@ -14,6 +14,15 @@ export {
   type ActivityPageResponse,
 } from "./domain/activity-label";
 export { isTreeEditorDestination } from "./domain/editor-navigation";
+export {
+  DEFAULT_CHRONOLOGICAL_PERIOD,
+  MAX_CHRONOLOGICAL_PERIOD,
+  MIN_CHRONOLOGICAL_PERIOD,
+  chronologicalBandForYear,
+  chronologicalPeriodOrDefault,
+  isChronologicalPeriod,
+  type ChronologicalPeriod,
+} from "./domain/canvas-preview";
 export { routeParentEdges } from "./domain/route-edges";
 export { computeWivesByHusband, wifeColorFor } from "./domain/wife-colors";
 export { CollaborationDashboard } from "./pages/collaboration-dashboard";

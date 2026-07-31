@@ -8,7 +8,7 @@ import {
   useFamily,
   useFamilyLoadState,
 } from "@/features/trees";
-import type { FamilyMember } from "@/features/members";
+import { ExpandableProfileImage, type FamilyMember } from "@/features/members";
 import { displayName, useI18n } from "@/shared/i18n";
 import { TreeLoadingIndicator } from "@/shared/ui/page-skeletons";
 import {
@@ -122,7 +122,11 @@ export function MemberPage() {
         <div className="flex flex-col items-start gap-6 sm:flex-row">
           <div className="h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-muted">
             {member.image_url ? (
-              <img src={member.image_url} alt="" className="h-full w-full object-cover" />
+              <ExpandableProfileImage
+                src={member.image_url}
+                name={displayName(member, lang)}
+                className="h-full w-full rounded-2xl"
+              />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-muted-foreground">
                 <User className="h-12 w-12" />

@@ -6,7 +6,7 @@ import { useI18n } from "@/shared/i18n";
 import { TreeLoadingIndicator } from "@/shared/ui/page-skeletons";
 
 export function TreePage() {
-  const { mode, preview } = useSearch({ from: "/tree/$id" });
+  const { mode, preview, period } = useSearch({ from: "/tree/$id" });
   const { id } = useParams({ from: "/tree/$id" });
   const { t } = useI18n();
   familyStore.activateTree(id, mode);
@@ -29,6 +29,7 @@ export function TreePage() {
         readOnly={mode !== "edit"}
         overviewMode={mode === "preview"}
         preview={mode === "preview" ? (preview ?? "lineage") : "lineage"}
+        chronologicalPeriod={period ?? 10}
         accessMode={mode}
       />
     </div>

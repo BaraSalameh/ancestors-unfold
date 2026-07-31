@@ -1,8 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { TreePage } from "@/features/trees";
+import { chronologicalPeriodOrDefault, TreePage } from "@/features/trees";
+
+interface TreeSearch {
+  mode: "edit" | "view" | "preview";
+  preview?: "lineage" | "chronological";
+  period?: number;
+}
 
 export const Route = createFileRoute("/tree/$id")({
-  validateSearch: (search: Record<string, unknown>) => {
+  validateSearch: (search: Record<string, unknown>): TreeSearch => {
     const mode =
       search.mode === "preview"
         ? ("preview" as const)
@@ -15,8 +21,10 @@ export const Route = createFileRoute("/tree/$id")({
         : search.preview === "lineage"
           ? ("lineage" as const)
           : undefined;
+    const period = chronologicalPeriodOrDefault(search.period);
     return {
       mode,
+      period,
       ...(preview ? { preview } : {}),
     };
   },

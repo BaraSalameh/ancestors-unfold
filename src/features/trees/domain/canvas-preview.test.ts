@@ -5,11 +5,39 @@ import {
   canvasRectBetween,
   canvasRectsIntersect,
   canvasWheelIntent,
+  chronologicalBandForYear,
+  chronologicalPeriodOrDefault,
+  isChronologicalPeriod,
   hasCanvasDragStarted,
   hierarchyPositions,
   isDoublePanePress,
   strictDecadeOrder,
 } from "./canvas-preview";
+
+describe("chronological periods", () => {
+  it("accepts custom URL periods and defaults missing or invalid values to ten years", () => {
+    expect(chronologicalPeriodOrDefault("1")).toBe(1);
+    expect(chronologicalPeriodOrDefault(37)).toBe(37);
+    expect(chronologicalPeriodOrDefault("50")).toBe(50);
+    expect(chronologicalPeriodOrDefault(undefined)).toBe(10);
+    expect(chronologicalPeriodOrDefault("0")).toBe(10);
+    expect(chronologicalPeriodOrDefault("51")).toBe(10);
+    expect(chronologicalPeriodOrDefault("2.5")).toBe(10);
+    expect(isChronologicalPeriod(12)).toBe(true);
+  });
+
+  it.each([
+    [1975, 5, { start: 1975, end: 1979 }],
+    [1979, 10, { start: 1970, end: 1979 }],
+    [1980, 10, { start: 1980, end: 1989 }],
+    [1979, 15, { start: 1965, end: 1979 }],
+    [1980, 15, { start: 1980, end: 1994 }],
+    [1999, 20, { start: 1980, end: 1999 }],
+    [1999, 7, { start: 1995, end: 2001 }],
+  ] as const)("groups %i into a %i-year fixed calendar band", (year, period, expected) => {
+    expect(chronologicalBandForYear(year, period)).toEqual(expected);
+  });
+});
 
 const member = (id: string, patch: Partial<FamilyMember> = {}): FamilyMember =>
   ({
