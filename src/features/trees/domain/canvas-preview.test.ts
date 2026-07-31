@@ -6,6 +6,7 @@ import {
   canvasRectsIntersect,
   canvasWheelIntent,
   chronologicalBandForYear,
+  chronologicalBandsForMembers,
   chronologicalPeriodOrDefault,
   isChronologicalPeriod,
   hasCanvasDragStarted,
@@ -36,6 +37,26 @@ describe("chronological periods", () => {
     [1999, 7, { start: 1995, end: 2001 }],
   ] as const)("groups %i into a %i-year fixed calendar band", (year, period, expected) => {
     expect(chronologicalBandForYear(year, period)).toEqual(expected);
+  });
+
+  it("derives bands from the supplied visible member scope", () => {
+    const wholeTree = [
+      { birth_date: "1924-01-01" },
+      { birth_date: "1978-06-15" },
+      { birth_date: "2003-09-20" },
+      { birth_date: undefined },
+    ];
+    const selectedBranch = wholeTree.slice(1, 3);
+
+    expect(chronologicalBandsForMembers(selectedBranch, 10)).toEqual([
+      { start: 1970, end: 1979 },
+      { start: 2000, end: 2009 },
+    ]);
+    expect(chronologicalBandsForMembers(wholeTree, 10)).toEqual([
+      { start: 1920, end: 1929 },
+      { start: 1970, end: 1979 },
+      { start: 2000, end: 2009 },
+    ]);
   });
 });
 

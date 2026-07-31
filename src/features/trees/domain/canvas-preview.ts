@@ -33,6 +33,20 @@ export function chronologicalBandForYear(
   return { start, end: start + period - 1 };
 }
 
+export function chronologicalBandsForMembers(
+  members: readonly Pick<FamilyMember, "birth_date">[],
+  period: ChronologicalPeriod,
+): ChronologicalBand[] {
+  const unique = new Map<string, ChronologicalBand>();
+  for (const member of members) {
+    const year = Number.parseInt(member.birth_date?.slice(0, 4) ?? "", 10);
+    if (!Number.isFinite(year)) continue;
+    const band = chronologicalBandForYear(year, period);
+    unique.set(`${band.start}-${band.end}`, band);
+  }
+  return [...unique.values()].sort((first, second) => first.start - second.start);
+}
+
 export interface CanvasCapabilities {
   canMutate: boolean;
   canDrag: boolean;

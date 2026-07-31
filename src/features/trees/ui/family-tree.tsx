@@ -83,8 +83,6 @@ const generationBandFor = (
   return chronologicalBandForYear(year, period);
 };
 
-const generationKey = (band: ChronologicalBand) => `${band.start}-${band.end}`;
-
 const DIVORCED_COLOR = "#94a3b8";
 
 import { SubfamilyPanel } from "@/features/subfamilies";
@@ -107,6 +105,7 @@ import {
   MAX_CHRONOLOGICAL_PERIOD,
   MIN_CHRONOLOGICAL_PERIOD,
   chronologicalBandForYear,
+  chronologicalBandsForMembers,
   isChronologicalPeriod,
   type ChronologicalBand,
   type ChronologicalPeriod,
@@ -708,15 +707,6 @@ function Inner({
     [previewType],
   );
 
-  const generations = useMemo(() => {
-    const unique = new Map<string, ChronologicalBand>();
-    for (const member of members) {
-      const band = generationBandFor(member, chronologicalPeriod);
-      if (band) unique.set(generationKey(band), band);
-    }
-    return [...unique.values()].sort((a, b) => a.start - b.start);
-  }, [members, chronologicalPeriod]);
-
   const visibleMembers = useMemo(() => {
     const result =
       !subfamilyFilterEnabled || !selectedSubfamilyId
@@ -724,6 +714,11 @@ function Inner({
         : familyStore.getSubfamilyMembers(selectedSubfamilyId);
     return result;
   }, [members, selectedSubfamilyId, subfamilyFilterEnabled]);
+
+  const generations = useMemo(
+    () => chronologicalBandsForMembers(visibleMembers, chronologicalPeriod),
+    [visibleMembers, chronologicalPeriod],
+  );
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
     () =>
