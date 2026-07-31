@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "reactflow";
 import { X } from "lucide-react";
 import type { DecadeBundleRoute } from "../domain/route-edges";
@@ -42,6 +42,24 @@ function roundedOrthogonalPath(points: Point[], radius = 10) {
   return `${path} L ${end.x} ${end.y}`;
 }
 
+function anchoredDecadeBranch(route: DecadeBundleRoute, target: Point): Point[] {
+  if (route.branch.length < 2) return [...route.branch, target];
+  return [...route.branch.slice(0, -2), { ...route.branch.at(-2)!, x: target.x }, target];
+}
+
+function anchoredSharedPaths(route: DecadeBundleRoute, source: Point): Point[][] | undefined {
+  return route.sharedPaths?.map((path, pathIndex) =>
+    pathIndex === 0 && path.length
+      ? [
+          source,
+          ...path
+            .slice(1)
+            .map((point, pointIndex) => (pointIndex === 0 ? { ...point, x: source.x } : point)),
+        ]
+      : path,
+  );
+}
+
 function RelationshipEdgeImpl(props: EdgeProps) {
   const {
     id,
@@ -58,6 +76,9 @@ function RelationshipEdgeImpl(props: EdgeProps) {
 
   const relationship = props.data as
     { kind?: string; decadeBundle?: DecadeBundleRoute } | undefined;
+  const sharedPaths = relationship?.decadeBundle
+    ? anchoredSharedPaths(relationship.decadeBundle, { x: sourceX, y: sourceY })
+    : undefined;
   const fallback = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -70,7 +91,9 @@ function RelationshipEdgeImpl(props: EdgeProps) {
   const isParentConnector = relationship?.kind === "parent";
   const middleY = sourceY + (targetY - sourceY) / 2;
   const path = relationship?.decadeBundle
-    ? roundedOrthogonalPath(relationship.decadeBundle.branch)
+    ? roundedOrthogonalPath(
+        anchoredDecadeBranch(relationship.decadeBundle, { x: targetX, y: targetY }),
+      )
     : isParentConnector
       ? roundedOrthogonalPath([
           { x: sourceX, y: sourceY },
@@ -83,6 +106,7 @@ function RelationshipEdgeImpl(props: EdgeProps) {
   const labelY = isParentConnector ? middleY : fallback[2];
 
   const [hovered, setHovered] = useState(false);
+  const [clickedPosition, setClickedPosition] = useState<Point | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const keepRemoveVisible = () => {
     clearTimeout(hoverTimer.current);
@@ -92,19 +116,34 @@ function RelationshipEdgeImpl(props: EdgeProps) {
     clearTimeout(hoverTimer.current);
     hoverTimer.current = setTimeout(() => setHovered(false), 120);
   };
+  const setRemoveAtPointer = (event: ReactMouseEvent<SVGPathElement>) => {
+    if (!relationship?.decadeBundle) return;
+    const matrix = event.currentTarget.getScreenCTM();
+    if (!matrix) return;
+    const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+    setClickedPosition({ x: point.x, y: point.y });
+  };
   const relationshipData = props.data as
     { canRemove?: boolean; onRequestRemove?: () => void } | undefined;
   const onRequestRemove = relationshipData?.onRequestRemove;
 
   return (
     <>
-      {relationship?.decadeBundle?.sharedPaths?.map((sharedPath, index) => (
-        <path
-          key={`${id}:shared:${index}`}
-          d={roundedOrthogonalPath(sharedPath)}
-          fill="none"
-          style={style}
-        />
+      {sharedPaths?.map((sharedPath, index) => (
+        <g key={`${id}:shared:${index}`}>
+          <path d={roundedOrthogonalPath(sharedPath)} fill="none" style={style} />
+          <path
+            d={roundedOrthogonalPath(sharedPath)}
+            fill="none"
+            stroke="transparent"
+            strokeWidth={22}
+            className="react-flow__edge-interaction"
+            style={{ cursor: "pointer" }}
+            onMouseEnter={keepRemoveVisible}
+            onMouseLeave={hideRemoveSoon}
+            onClick={setRemoveAtPointer}
+          />
+        </g>
       ))}
       <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />
       {/* wider invisible hit area for easier hover/click */}
@@ -117,32 +156,35 @@ function RelationshipEdgeImpl(props: EdgeProps) {
         style={{ cursor: "pointer" }}
         onMouseEnter={keepRemoveVisible}
         onMouseLeave={hideRemoveSoon}
+        onClick={setRemoveAtPointer}
       />
-      {relationshipData?.canRemove && onRequestRemove && (selected || hovered) && (
-        <EdgeLabelRenderer>
-          <div
-            className="nodrag nopan"
-            onMouseEnter={keepRemoveVisible}
-            onMouseLeave={hideRemoveSoon}
-            style={{
-              position: "absolute",
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-              pointerEvents: "all",
-            }}
-          >
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRequestRemove();
+      {relationshipData?.canRemove &&
+        onRequestRemove &&
+        (relationship?.decadeBundle ? clickedPosition : selected || hovered) && (
+          <EdgeLabelRenderer>
+            <div
+              className="nodrag nopan"
+              onMouseEnter={keepRemoveVisible}
+              onMouseLeave={hideRemoveSoon}
+              style={{
+                position: "absolute",
+                transform: `translate(-50%, -50%) translate(${clickedPosition?.x ?? labelX}px, ${clickedPosition?.y ?? labelY}px)`,
+                pointerEvents: "all",
               }}
-              title="Delete connection"
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-lg ring-2 ring-background transition hover:scale-110"
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </EdgeLabelRenderer>
-      )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRequestRemove();
+                }}
+                title="Delete connection"
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-lg ring-2 ring-background transition hover:scale-110"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </EdgeLabelRenderer>
+        )}
     </>
   );
 }
