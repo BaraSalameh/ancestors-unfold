@@ -9,6 +9,7 @@ export type {
 } from "./domain/types";
 export { getChildren, getGeneration, getSubfamilyMembers } from "./domain/queries";
 export { linkSpouses, descendantIds, removeMember, toggleDivorce } from "./domain/relationships";
+export { ancestorConnector, memberNameWithBirthYear } from "./domain/member-display";
 export {
   memberDetailsSearch,
   memberReturnDestination,

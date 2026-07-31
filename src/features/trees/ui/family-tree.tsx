@@ -47,7 +47,11 @@ import {
 } from "@/features/trees";
 import { displayName, ordinal, useI18n } from "@/shared/i18n";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { memberDetailsSearch, type FamilyMember } from "@/features/members";
+import {
+  memberDetailsSearch,
+  memberNameWithBirthYear,
+  type FamilyMember,
+} from "@/features/members";
 
 const NODE_W = 260;
 const NODE_H = 130;
@@ -1313,7 +1317,7 @@ function Inner({
                     onClick={() => focusMember(m.id)}
                     className="block w-full p-2 text-start text-sm hover:bg-accent"
                   >
-                    <div className="font-medium">{displayName(m, lang)}</div>
+                    <div className="font-medium">{memberNameWithBirthYear(m, lang)}</div>
                     <div className="text-xs text-muted-foreground">
                       {lang === "ar" ? m.name_en : m.name_ar}
                     </div>

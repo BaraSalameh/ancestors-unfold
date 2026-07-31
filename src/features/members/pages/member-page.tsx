@@ -16,6 +16,7 @@ import {
   memberReturnDestination,
   type MemberNavigationContext,
 } from "../domain/member-navigation";
+import { ancestorConnector } from "../domain/member-display";
 
 export function MemberPage() {
   const { id } = useParams({ from: "/member/$id" });
@@ -29,7 +30,7 @@ export function MemberPage() {
   if (requestedTreeId) familyStore.activateTree(requestedTreeId, returnMode);
   const loadState = useFamilyLoadState();
   const members = useFamily();
-  const { t, lang } = useI18n();
+  const { t, lang, dir } = useI18n();
 
   const member = members.find((m) => m.id === id);
   const treeId = requestedTreeId ?? familyStore.getActiveTreeId();
@@ -226,7 +227,9 @@ export function MemberPage() {
                   >
                     {displayName(a, lang)}
                   </Link>
-                  {i < ancestors.length - 1 && <span className="text-muted-foreground">←</span>}
+                  {i < ancestors.length - 1 && (
+                    <span className="text-muted-foreground">{ancestorConnector(dir)}</span>
+                  )}
                 </span>
               ))}
             </div>
