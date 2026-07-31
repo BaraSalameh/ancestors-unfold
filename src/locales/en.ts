@@ -101,6 +101,7 @@ export const en = {
   generations_count: "generations",
   preview: "Preview",
   copy_preview_link: "Copy preview link",
+  open_preview: "Open preview",
   preview_link_copied: "Preview link copied",
   preview_link_copy_failed: "Could not copy the preview link",
   no_trees_found: "No family trees found",

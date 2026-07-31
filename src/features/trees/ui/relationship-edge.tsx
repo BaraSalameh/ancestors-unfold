@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { memo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "reactflow";
 import { X } from "lucide-react";
 import type { DecadeBundleRoute } from "../domain/route-edges";
@@ -102,22 +102,8 @@ function RelationshipEdgeImpl(props: EdgeProps) {
           { x: targetX, y: targetY },
         ])
       : fallback[0];
-  const labelX = isParentConnector ? (sourceX + targetX) / 2 : fallback[1];
-  const labelY = isParentConnector ? middleY : fallback[2];
-
-  const [hovered, setHovered] = useState(false);
   const [clickedPosition, setClickedPosition] = useState<Point | null>(null);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const keepRemoveVisible = () => {
-    clearTimeout(hoverTimer.current);
-    setHovered(true);
-  };
-  const hideRemoveSoon = () => {
-    clearTimeout(hoverTimer.current);
-    hoverTimer.current = setTimeout(() => setHovered(false), 120);
-  };
   const setRemoveAtPointer = (event: ReactMouseEvent<SVGPathElement>) => {
-    if (!relationship?.decadeBundle) return;
     const matrix = event.currentTarget.getScreenCTM();
     if (!matrix) return;
     const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
@@ -139,14 +125,12 @@ function RelationshipEdgeImpl(props: EdgeProps) {
             strokeWidth={22}
             className="react-flow__edge-interaction"
             style={{ cursor: "pointer" }}
-            onMouseEnter={keepRemoveVisible}
-            onMouseLeave={hideRemoveSoon}
             onClick={setRemoveAtPointer}
           />
         </g>
       ))}
       <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />
-      {/* wider invisible hit area for easier hover/click */}
+      {/* wider invisible hit area for easier clicking */}
       <path
         d={path}
         fill="none"
@@ -154,37 +138,31 @@ function RelationshipEdgeImpl(props: EdgeProps) {
         strokeWidth={22}
         className="react-flow__edge-interaction"
         style={{ cursor: "pointer" }}
-        onMouseEnter={keepRemoveVisible}
-        onMouseLeave={hideRemoveSoon}
         onClick={setRemoveAtPointer}
       />
-      {relationshipData?.canRemove &&
-        onRequestRemove &&
-        (relationship?.decadeBundle ? clickedPosition : selected || hovered) && (
-          <EdgeLabelRenderer>
-            <div
-              className="nodrag nopan"
-              onMouseEnter={keepRemoveVisible}
-              onMouseLeave={hideRemoveSoon}
-              style={{
-                position: "absolute",
-                transform: `translate(-50%, -50%) translate(${clickedPosition?.x ?? labelX}px, ${clickedPosition?.y ?? labelY}px)`,
-                pointerEvents: "all",
+      {relationshipData?.canRemove && onRequestRemove && selected && clickedPosition && (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan"
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${clickedPosition.x}px, ${clickedPosition.y}px)`,
+              pointerEvents: "all",
+            }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRequestRemove();
               }}
+              title="Delete connection"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-lg ring-2 ring-background transition hover:scale-110"
             >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRequestRemove();
-                }}
-                title="Delete connection"
-                className="flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-lg ring-2 ring-background transition hover:scale-110"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </EdgeLabelRenderer>
-        )}
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </EdgeLabelRenderer>
+      )}
     </>
   );
 }

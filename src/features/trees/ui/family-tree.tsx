@@ -393,7 +393,15 @@ function isDescendant(members: FamilyMember[], ancestorId: string, targetId: str
   return false;
 }
 
-function Inner({ readOnly = false, preview }: { readOnly?: boolean; preview: TreePreviewType }) {
+function Inner({
+  readOnly = false,
+  overviewMode = false,
+  preview,
+}: {
+  readOnly?: boolean;
+  overviewMode?: boolean;
+  preview: TreePreviewType;
+}) {
   const members = useFamily();
   const persistence = useFamilyPersistence();
   const canEdit = !readOnly && familyStore.canEditActiveTree();
@@ -1125,6 +1133,21 @@ function Inner({ readOnly = false, preview }: { readOnly?: boolean; preview: Tre
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onEdgeClick={(_event, clickedEdge) =>
+          setEdges((current) =>
+            current.map((edge) => ({ ...edge, selected: edge.id === clickedEdge.id })),
+          )
+        }
+        onNodeClick={() =>
+          setEdges((current) =>
+            current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+          )
+        }
+        onPaneClick={() =>
+          setEdges((current) =>
+            current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+          )
+        }
         onConnect={capabilities.canConnect ? onConnect : undefined}
         onEdgesDelete={canvasCanEdit ? onEdgesDelete : undefined}
         onEdgeUpdate={canvasCanEdit ? onEdgeUpdate : undefined}
@@ -1196,46 +1219,48 @@ function Inner({ readOnly = false, preview }: { readOnly?: boolean; preview: Tre
       </ReactFlow>
 
       <div className="absolute top-24 right-4 z-10 flex max-h-[calc(100%-8rem)] w-72 max-w-[calc(100%-2rem)] flex-col gap-2 overflow-y-auto">
-        <div className="rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
-          <button
-            type="button"
-            onClick={() => toggleWidget("preview")}
-            className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.preview ? "" : "mb-2"}`}
-          >
-            {t("preview_type")}
-            <ChevronDown
-              className={`h-4 w-4 transition-transform ${collapsedWidgets.preview ? "-rotate-90" : ""}`}
-            />
-          </button>
-          {!collapsedWidgets.preview && (
-            <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
-              <button
-                onClick={() =>
-                  navigate({
-                    to: "/tree/$id",
-                    params: { id: familyStore.getActiveTreeId() },
-                    search: { mode: readOnly ? "view" : "edit", preview: "lineage" },
-                  })
-                }
-                className={`rounded px-2 py-1.5 ${previewType === "lineage" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                {t("lineage_view")}
-              </button>
-              <button
-                onClick={() =>
-                  navigate({
-                    to: "/tree/$id",
-                    params: { id: familyStore.getActiveTreeId() },
-                    search: { mode: readOnly ? "view" : "edit", preview: "chronological" },
-                  })
-                }
-                className={`rounded px-2 py-1.5 ${previewType === "chronological" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                {t("generation_view")}
-              </button>
-            </div>
-          )}
-        </div>
+        {overviewMode && (
+          <div className="rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
+            <button
+              type="button"
+              onClick={() => toggleWidget("preview")}
+              className={`flex w-full items-center justify-between font-semibold ${collapsedWidgets.preview ? "" : "mb-2"}`}
+            >
+              {t("preview_type")}
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${collapsedWidgets.preview ? "-rotate-90" : ""}`}
+              />
+            </button>
+            {!collapsedWidgets.preview && (
+              <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+                <button
+                  onClick={() =>
+                    navigate({
+                      to: "/tree/$id",
+                      params: { id: familyStore.getActiveTreeId() },
+                      search: { mode: "preview", preview: "lineage" },
+                    })
+                  }
+                  className={`rounded px-2 py-1.5 ${previewType === "lineage" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {t("lineage_view")}
+                </button>
+                <button
+                  onClick={() =>
+                    navigate({
+                      to: "/tree/$id",
+                      params: { id: familyStore.getActiveTreeId() },
+                      search: { mode: "preview", preview: "chronological" },
+                    })
+                  }
+                  className={`rounded px-2 py-1.5 ${previewType === "chronological" ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {t("generation_view")}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {previewType === "chronological" && (
           <div className="rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
             <button
@@ -1287,7 +1312,7 @@ function Inner({ readOnly = false, preview }: { readOnly?: boolean; preview: Tre
             )}
           </div>
         )}
-        {canManageSubfamilies && (
+        {(overviewMode || canManageSubfamilies) && (
           <div className="rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
             <button
               type="button"
@@ -1303,6 +1328,7 @@ function Inner({ readOnly = false, preview }: { readOnly?: boolean; preview: Tre
               <div className="max-h-[calc(100vh-260px)] overflow-y-auto overscroll-contain pr-1">
                 <SubfamilyPanel
                   mode="home"
+                  readOnly={overviewMode || !canManageSubfamilies}
                   selectedSubfamilyId={selectedSubfamilyId}
                   onSelectSubfamily={setSelectedSubfamilyId}
                   filterEnabled={subfamilyFilterEnabled}
@@ -1495,14 +1521,16 @@ function Inner({ readOnly = false, preview }: { readOnly?: boolean; preview: Tre
 
 export function FamilyTree({
   readOnly = false,
+  overviewMode = false,
   preview = "lineage",
 }: {
   readOnly?: boolean;
+  overviewMode?: boolean;
   preview?: TreePreviewType;
 }) {
   return (
     <ReactFlowProvider>
-      <Inner readOnly={readOnly} preview={preview} />
+      <Inner readOnly={readOnly} overviewMode={overviewMode} preview={preview} />
     </ReactFlowProvider>
   );
 }

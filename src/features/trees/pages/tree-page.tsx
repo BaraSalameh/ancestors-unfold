@@ -25,7 +25,11 @@ export function TreePage() {
     );
   return (
     <div className="h-[calc(100vh-3.5rem)] w-full">
-      <FamilyTree readOnly={mode !== "edit"} preview={preview ?? "lineage"} />
+      <FamilyTree
+        readOnly={mode !== "edit"}
+        overviewMode={mode === "preview"}
+        preview={mode === "preview" ? (preview ?? "lineage") : "lineage"}
+      />
     </div>
   );
 }

@@ -3,19 +3,20 @@ import { TreePage } from "@/features/trees";
 
 export const Route = createFileRoute("/tree/$id")({
   validateSearch: (search: Record<string, unknown>) => {
+    const mode =
+      search.mode === "preview"
+        ? ("preview" as const)
+        : search.mode === "view"
+          ? ("view" as const)
+          : ("edit" as const);
     const preview =
-      search.preview === "chronological"
+      mode === "preview" && search.preview === "chronological"
         ? ("chronological" as const)
         : search.preview === "lineage"
           ? ("lineage" as const)
           : undefined;
     return {
-      mode:
-        search.mode === "preview"
-          ? ("preview" as const)
-          : search.mode === "view"
-            ? ("view" as const)
-            : ("edit" as const),
+      mode,
       ...(preview ? { preview } : {}),
     };
   },

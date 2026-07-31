@@ -14,17 +14,17 @@ const member = (id: string, patch: Partial<FamilyMember> = {}): FamilyMember =>
   }) as FamilyMember;
 
 describe("canvas preview capabilities", () => {
-  it("allows managing the chronological preview with edit access", () => {
+  it("keeps the chronological preview read-only even with edit access", () => {
     expect(canvasCapabilities(true, "chronological")).toEqual({
-      canMutate: true,
-      canDrag: true,
-      canConnect: true,
-      canSelect: true,
-      canAutoLayout: true,
+      canMutate: false,
+      canDrag: false,
+      canConnect: false,
+      canSelect: false,
+      canAutoLayout: false,
     });
   });
 
-  it("allows mutations in either preview only with tree edit access", () => {
+  it("allows mutations only in the editable lineage canvas", () => {
     expect(canvasCapabilities(true, "lineage").canMutate).toBe(true);
     expect(canvasCapabilities(false, "chronological").canMutate).toBe(false);
     expect(canvasCapabilities(false, "lineage").canMutate).toBe(false);
