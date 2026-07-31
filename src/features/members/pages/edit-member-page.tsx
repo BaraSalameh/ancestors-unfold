@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import { memberDeleteDestination } from "../domain/member-navigation";
 
 export function EditPage() {
   const { id } = useParams({ from: "/edit/$id" });
+  const { returnPreview } = useSearch({ from: "/edit/$id" });
   const navigate = useNavigate();
   const members = useFamily();
   const { t } = useI18n();
@@ -40,7 +41,7 @@ export function EditPage() {
   const handleDelete = () => {
     familyStore.remove(member.id);
     toast.success(t("deleted"));
-    navigate(memberDeleteDestination(treeId));
+    navigate(memberDeleteDestination(treeId, returnPreview));
   };
 
   return (
@@ -60,12 +61,20 @@ export function EditPage() {
           submitLabel={t("save")}
           onCancel={() => {
             if (checkpoint.current) familyStore.restoreDraftCheckpoint(checkpoint.current);
-            navigate({ to: "/tree/$id", params: { id: treeId }, search: { mode: "edit" } });
+            navigate({
+              to: "/tree/$id",
+              params: { id: treeId },
+              search: { mode: "edit", preview: returnPreview },
+            });
           }}
           onSubmit={(data) => {
             familyStore.update(id, data);
             toast.success(t("updated"));
-            navigate({ to: "/member/$id", params: { id } });
+            navigate({
+              to: "/member/$id",
+              params: { id },
+              search: { returnPreview },
+            });
           }}
         />
       </div>

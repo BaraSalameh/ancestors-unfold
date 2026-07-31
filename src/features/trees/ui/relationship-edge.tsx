@@ -1,6 +1,7 @@
-import { memo, useRef, useState } from "react";
+import { memo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "reactflow";
 import { X } from "lucide-react";
+import type { DecadeBundleRoute } from "../domain/route-edges";
 
 type Point = { x: number; y: number };
 
@@ -41,6 +42,24 @@ function roundedOrthogonalPath(points: Point[], radius = 10) {
   return `${path} L ${end.x} ${end.y}`;
 }
 
+function anchoredDecadeBranch(route: DecadeBundleRoute, target: Point): Point[] {
+  if (route.branch.length < 2) return [...route.branch, target];
+  return [...route.branch.slice(0, -2), { ...route.branch.at(-2)!, x: target.x }, target];
+}
+
+function anchoredSharedPaths(route: DecadeBundleRoute, source: Point): Point[][] | undefined {
+  return route.sharedPaths?.map((path, pathIndex) =>
+    pathIndex === 0 && path.length
+      ? [
+          source,
+          ...path
+            .slice(1)
+            .map((point, pointIndex) => (pointIndex === 0 ? { ...point, x: source.x } : point)),
+        ]
+      : path,
+  );
+}
+
 function RelationshipEdgeImpl(props: EdgeProps) {
   const {
     id,
@@ -55,17 +74,11 @@ function RelationshipEdgeImpl(props: EdgeProps) {
     selected,
   } = props;
 
-  const routing = props.data as
-    | {
-        routeX?: number;
-        sourceLane?: number;
-        targetLane?: number;
-        branchY?: number;
-        drawTrunk?: boolean;
-        trunkEndY?: number;
-        generationBreakpoints?: number[];
-      }
-    | undefined;
+  const relationship = props.data as
+    { kind?: string; decadeBundle?: DecadeBundleRoute } | undefined;
+  const sharedPaths = relationship?.decadeBundle
+    ? anchoredSharedPaths(relationship.decadeBundle, { x: sourceX, y: sourceY })
+    : undefined;
   const fallback = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -75,43 +88,26 @@ function RelationshipEdgeImpl(props: EdgeProps) {
     targetPosition,
     borderRadius: 12,
   });
-  const sourceLaneY = sourceY + (routing?.sourceLane ?? 0);
-  const targetLaneY = routing?.branchY ?? targetY - (routing?.targetLane ?? 0);
-  // Treat nearly aligned coordinates as identical. Sub-pixel/layout rounding
-  // must not create a visible hook in an otherwise straight connector.
-  const routeX =
-    routing?.routeX !== undefined && Math.abs(routing.routeX - sourceX) < 16
-      ? sourceX
-      : routing?.routeX;
-  const path =
-    routing?.routeX === undefined
-      ? fallback[0]
-      : roundedOrthogonalPath([
-          { x: routeX!, y: targetLaneY },
-          { x: targetX, y: targetLaneY },
-          { x: targetX, y: targetY },
-        ]);
-  const trunkPath =
-    routing?.drawTrunk && routeX !== undefined
+  const isParentConnector = relationship?.kind === "parent";
+  const middleY = sourceY + (targetY - sourceY) / 2;
+  const path = relationship?.decadeBundle
+    ? roundedOrthogonalPath(
+        anchoredDecadeBranch(relationship.decadeBundle, { x: targetX, y: targetY }),
+      )
+    : isParentConnector
       ? roundedOrthogonalPath([
           { x: sourceX, y: sourceY },
-          { x: sourceX, y: sourceLaneY },
-          { x: routeX, y: sourceLaneY },
-          { x: routeX, y: routing.trunkEndY ?? targetLaneY },
+          { x: sourceX, y: middleY },
+          { x: targetX, y: middleY },
+          { x: targetX, y: targetY },
         ])
-      : null;
-  const labelX = routeX ?? fallback[1];
-  const labelY = routing?.routeX === undefined ? fallback[2] : (sourceY + targetLaneY) / 2;
-
-  const [hovered, setHovered] = useState(false);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const keepRemoveVisible = () => {
-    clearTimeout(hoverTimer.current);
-    setHovered(true);
-  };
-  const hideRemoveSoon = () => {
-    clearTimeout(hoverTimer.current);
-    hoverTimer.current = setTimeout(() => setHovered(false), 120);
+      : fallback[0];
+  const [clickedPosition, setClickedPosition] = useState<Point | null>(null);
+  const setRemoveAtPointer = (event: ReactMouseEvent<SVGPathElement>) => {
+    const matrix = event.currentTarget.getScreenCTM();
+    if (!matrix) return;
+    const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+    setClickedPosition({ x: point.x, y: point.y });
   };
   const relationshipData = props.data as
     { canRemove?: boolean; onRequestRemove?: () => void } | undefined;
@@ -119,9 +115,22 @@ function RelationshipEdgeImpl(props: EdgeProps) {
 
   return (
     <>
-      {trunkPath && <BaseEdge id={`${id}:trunk`} path={trunkPath} style={style} />}
+      {sharedPaths?.map((sharedPath, index) => (
+        <g key={`${id}:shared:${index}`}>
+          <path d={roundedOrthogonalPath(sharedPath)} fill="none" style={style} />
+          <path
+            d={roundedOrthogonalPath(sharedPath)}
+            fill="none"
+            stroke="transparent"
+            strokeWidth={22}
+            className="react-flow__edge-interaction"
+            style={{ cursor: "pointer" }}
+            onClick={setRemoveAtPointer}
+          />
+        </g>
+      ))}
       <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />
-      {/* wider invisible hit area for easier hover/click */}
+      {/* wider invisible hit area for easier clicking */}
       <path
         d={path}
         fill="none"
@@ -129,18 +138,15 @@ function RelationshipEdgeImpl(props: EdgeProps) {
         strokeWidth={22}
         className="react-flow__edge-interaction"
         style={{ cursor: "pointer" }}
-        onMouseEnter={keepRemoveVisible}
-        onMouseLeave={hideRemoveSoon}
+        onClick={setRemoveAtPointer}
       />
-      {relationshipData?.canRemove && onRequestRemove && (selected || hovered) && (
+      {relationshipData?.canRemove && onRequestRemove && selected && clickedPosition && (
         <EdgeLabelRenderer>
           <div
             className="nodrag nopan"
-            onMouseEnter={keepRemoveVisible}
-            onMouseLeave={hideRemoveSoon}
             style={{
               position: "absolute",
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              transform: `translate(-50%, -50%) translate(${clickedPosition.x}px, ${clickedPosition.y}px)`,
               pointerEvents: "all",
             }}
           >

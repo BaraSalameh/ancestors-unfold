@@ -26,7 +26,7 @@ const genderTheme = (g: Gender) =>
         strip: "from-sky-500 via-sky-400 to-cyan-400",
         chip: "bg-sky-500/10 text-sky-600 dark:text-sky-300",
         avatarBg: "bg-gradient-to-br from-sky-500 to-cyan-400",
-        handle: "!bg-sky-500",
+        handle: "!border-sky-500 !bg-card",
         border: "border-sky-200/70 dark:border-sky-500/30",
       }
     : g === "female"
@@ -35,7 +35,7 @@ const genderTheme = (g: Gender) =>
           strip: "from-pink-500 via-rose-400 to-fuchsia-400",
           chip: "bg-pink-500/10 text-pink-600 dark:text-pink-300",
           avatarBg: "bg-gradient-to-br from-pink-500 to-fuchsia-400",
-          handle: "!bg-pink-500",
+          handle: "!border-pink-500 !bg-card",
           border: "border-pink-200/70 dark:border-pink-500/30",
         }
       : {
@@ -43,11 +43,11 @@ const genderTheme = (g: Gender) =>
           strip: "from-slate-500 via-slate-400 to-zinc-400",
           chip: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
           avatarBg: "bg-gradient-to-br from-slate-500 to-zinc-400",
-          handle: "!bg-slate-500",
+          handle: "!border-slate-500 !bg-card",
           border: "border-slate-200/70 dark:border-slate-500/30",
         };
 
-function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
+function MemberNodeImpl({ data, selected }: NodeProps<MemberNodeData>) {
   const {
     member,
     highlighted,
@@ -81,7 +81,7 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
   };
 
   return (
-    <div className="relative">
+    <div className="group/node relative">
       {hasDescendants && (
         <button
           type="button"
@@ -89,7 +89,7 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
             event.stopPropagation();
             onToggleCollapsed?.(member.id);
           }}
-          className="nodrag nopan pointer-events-auto absolute -end-2 -top-2 z-20 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground"
+          className="nodrag nopan pointer-events-auto absolute -end-2.5 -top-2.5 z-20 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border bg-card text-muted-foreground shadow-md transition hover:border-primary/40 hover:bg-accent hover:text-foreground"
           title={collapsed ? t("expand_descendants") : t("collapse_descendants")}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -102,8 +102,12 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
         isConnectable={canConnect}
         onPointerDown={canConnect ? startConnectorClick : undefined}
         onPointerUp={canConnect ? (event) => finishConnectorClick(event, onAddParent) : undefined}
-        className={`!h-5 !w-5 !border-2 !border-background ${th.handle} ${
-          canConnect ? "" : "!pointer-events-none !opacity-40"
+        className={`!-top-[18px] !h-7 !w-7 !border-2 shadow-md transition-all duration-150 hover:!scale-110 ${th.handle} ${
+          canConnect
+            ? selected
+              ? "!opacity-100"
+              : "!opacity-0 group-hover/node:!opacity-100"
+            : "!pointer-events-none !opacity-0"
         }`}
       />
       <Handle
@@ -113,8 +117,12 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
         isConnectable={canConnect}
         onPointerDown={canConnect ? startConnectorClick : undefined}
         onPointerUp={canConnect ? (event) => finishConnectorClick(event, onAddChild) : undefined}
-        className={`!h-5 !w-5 !border-2 !border-background ${th.handle} ${
-          canConnect ? "" : "!pointer-events-none !opacity-40"
+        className={`!-bottom-[18px] !h-7 !w-7 !border-2 shadow-md transition-all duration-150 hover:!scale-110 ${th.handle} ${
+          canConnect
+            ? selected
+              ? "!opacity-100"
+              : "!opacity-0 group-hover/node:!opacity-100"
+            : "!pointer-events-none !opacity-0"
         }`}
       />
       <Handle
@@ -133,22 +141,24 @@ function MemberNodeImpl({ data }: NodeProps<MemberNodeData>) {
       />
       <button
         onClick={() => onOpen(member.id)}
-        className={`group relative flex w-64 flex-col overflow-hidden rounded-2xl border ${th.border} bg-card text-start shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.15)] transition-all hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_36px_-14px_rgba(0,0,0,0.25)] ${
-          highlighted ? `ring-2 ring-offset-2 ring-offset-background ${th.ring}` : ""
+        className={`group relative flex w-64 flex-col overflow-hidden rounded-xl border ${th.border} bg-card text-start shadow-[0_1px_2px_rgba(0,0,0,0.06),0_6px_18px_-8px_rgba(15,23,42,0.16)] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-primary/35 hover:shadow-[0_2px_4px_rgba(0,0,0,0.08),0_12px_28px_-10px_rgba(15,23,42,0.22)] ${
+          highlighted || selected
+            ? `ring-2 ring-offset-2 ring-offset-background ${selected ? "ring-primary/70" : th.ring}`
+            : ""
         }`}
       >
-        <div className={`h-1.5 w-full bg-gradient-to-r ${th.strip}`} />
+        <div className={`h-1 w-full bg-gradient-to-r ${th.strip}`} />
         <div className="flex items-center gap-3 p-3">
           <div className="relative shrink-0">
             {member.image_url ? (
               <img
                 src={member.image_url}
                 alt=""
-                className="h-12 w-12 rounded-full object-cover ring-2 ring-white dark:ring-slate-800"
+                className="h-11 w-11 rounded-lg object-cover ring-1 ring-border"
               />
             ) : (
               <div
-                className={`h-12 w-12 flex items-center justify-center rounded-full ${th.avatarBg} text-white ring-2 ring-white dark:ring-slate-800`}
+                className={`flex h-11 w-11 items-center justify-center rounded-lg ${th.avatarBg} text-white shadow-sm`}
               >
                 <User className="h-6 w-6" />
               </div>

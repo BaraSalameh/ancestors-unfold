@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Check,
   Circle,
+  ExternalLink,
   GitBranch,
   MailPlus,
   Pencil,
@@ -530,6 +531,18 @@ export function CollaborationDashboard() {
                   <Button variant="outline" onClick={openRename}>
                     <Pencil className="me-2 h-4 w-4" />
                     {t("rename")}
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link
+                      to="/tree/$id"
+                      params={{ id: tree.id }}
+                      search={{ mode: "preview", preview: "lineage" }}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="me-2 h-4 w-4" />
+                      {t("open_preview")}
+                    </Link>
                   </Button>
                   <Button variant="outline" onClick={() => void copyPreview()}>
                     <Share2 className="me-2 h-4 w-4" />

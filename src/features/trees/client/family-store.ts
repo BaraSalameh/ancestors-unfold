@@ -442,9 +442,28 @@ export const familyStore = {
       });
     });
   },
+  setDecadePositions(positions: ReadonlyMap<string, { x: number; y: number }>): void {
+    commit(() => {
+      state = state.map((member) => {
+        const position = positions.get(member.id);
+        return !position
+          ? member
+          : { ...member, decade_pos_x: position.x, decade_pos_y: position.y };
+      });
+    });
+  },
   clearPositions(): void {
     commit(() => {
       state = state.map((m) => ({ ...m, pos_x: undefined, pos_y: undefined }));
+    });
+  },
+  clearDecadePositions(): void {
+    commit(() => {
+      state = state.map((m) => ({
+        ...m,
+        decade_pos_x: undefined,
+        decade_pos_y: undefined,
+      }));
     });
   },
   update(id: string, patch: Partial<MemberInput>): void {

@@ -173,6 +173,44 @@
 .react-flow__controls button:hover {
   background-color: var(--color-accent) !important;
 }
+.canvas-controls {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 2px;
+}
+.canvas-controls button {
+  height: 32px !important;
+  width: 32px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+}
+.canvas-minimap svg {
+  border-radius: 10px;
+}
+.react-flow__node {
+  transition:
+    filter 150ms ease,
+    opacity 150ms ease;
+}
+.react-flow__node.dragging {
+  filter: drop-shadow(0 12px 18px rgb(15 23 42 / 0.18));
+  z-index: 50 !important;
+}
+.react-flow__edge-path {
+  transition:
+    stroke-width 120ms ease,
+    stroke-opacity 120ms ease;
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3px !important;
+  stroke-opacity: 1 !important;
+}
+.react-flow__selection,
+.react-flow__nodesselection-rect {
+  border: 1px solid color-mix(in oklab, var(--color-primary) 65%, transparent) !important;
+  background: color-mix(in oklab, var(--color-primary) 8%, transparent) !important;
+  border-radius: 10px;
+}
 .react-flow__attribution {
   display: none;
 }

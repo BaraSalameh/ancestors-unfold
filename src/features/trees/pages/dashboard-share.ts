@@ -1,6 +1,7 @@
 export function treePreviewUrl(treeId: string, origin: string): string {
   const url = new URL(`/tree/${encodeURIComponent(treeId)}`, origin);
   url.searchParams.set("mode", "preview");
+  url.searchParams.set("preview", "lineage");
   return url.toString();
 }
 
