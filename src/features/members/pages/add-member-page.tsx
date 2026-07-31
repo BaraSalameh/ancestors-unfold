@@ -5,6 +5,7 @@ import { MemberForm } from "@/features/members";
 import { familyStore, useFamily } from "@/features/trees";
 import { useI18n } from "@/shared/i18n";
 import { addMemberTitleKey } from "../domain/add-member-title";
+import { memberDetailsSearch } from "../domain/member-navigation";
 
 export const addMemberSearchSchema = z
   .object({
@@ -129,7 +130,11 @@ export function AddMemberPage({
               navigate({
                 to: "/member/$id",
                 params: { id: m.id },
-                search: { returnPreview },
+                search: memberDetailsSearch({
+                  treeId,
+                  returnMode: "edit",
+                  returnPreview,
+                }),
               });
           }}
         />

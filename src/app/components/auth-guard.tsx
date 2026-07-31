@@ -3,6 +3,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/features/auth";
 import { useI18n } from "@/shared/i18n";
 import { RoutePageSkeleton } from "@/shared/ui/page-skeletons";
+import { isPublicPreviewRoute } from "@/app/domain/public-route";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading, session } = useAuth();
@@ -12,8 +13,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   const isAuthPage = location.pathname === "/auth";
   const isPasswordReset = location.pathname === "/reset-password";
   const isInvitation = location.pathname.startsWith("/invitation/");
-  const isPublicPreview =
-    location.pathname.startsWith("/tree/") && location.search.mode === "preview";
+  const isPublicPreview = isPublicPreviewRoute(location.pathname, location.search);
   const mayView =
     isAuthPage || isPasswordReset || isInvitation || isPublicPreview || isAuthenticated;
 

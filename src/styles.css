@@ -196,6 +196,25 @@
   filter: drop-shadow(0 12px 18px rgb(15 23 42 / 0.18));
   z-index: 50 !important;
 }
+.family-canvas .react-flow__pane {
+  cursor: grab;
+}
+.family-canvas .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+.family-canvas .react-flow__node.selectable {
+  cursor: pointer;
+}
+.family-canvas .react-flow__node.draggable {
+  cursor: grab;
+}
+.family-canvas .react-flow__node.dragging {
+  cursor: grabbing;
+}
+.family-canvas.is-marquee-selecting,
+.family-canvas.is-marquee-selecting .react-flow__pane {
+  cursor: crosshair;
+}
 .react-flow__edge-path {
   transition:
     stroke-width 120ms ease,

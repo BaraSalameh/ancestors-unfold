@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/shared/ui/alert-dialog";
-import { memberDeleteDestination } from "../domain/member-navigation";
+import { memberDeleteDestination, memberDetailsSearch } from "../domain/member-navigation";
 
 export function EditPage() {
   const { id } = useParams({ from: "/edit/$id" });
@@ -73,7 +73,11 @@ export function EditPage() {
             navigate({
               to: "/member/$id",
               params: { id },
-              search: { returnPreview },
+              search: memberDetailsSearch({
+                treeId,
+                returnMode: "edit",
+                returnPreview,
+              }),
             });
           }}
         />

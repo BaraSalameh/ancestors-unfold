@@ -9,6 +9,14 @@ export type {
 } from "./domain/types";
 export { getChildren, getGeneration, getSubfamilyMembers } from "./domain/queries";
 export { linkSpouses, descendantIds, removeMember, toggleDivorce } from "./domain/relationships";
+export {
+  memberDetailsSearch,
+  memberReturnDestination,
+  parseMemberNavigationSearch,
+  type MemberNavigationContext,
+  type MemberReturnMode,
+  type MemberReturnPreview,
+} from "./domain/member-navigation";
 export { MemberForm } from "./ui/member-form";
 export { AddMemberPage, AddPage, addMemberSearchSchema } from "./pages/add-member-page";
 export { EditPage } from "./pages/edit-member-page";

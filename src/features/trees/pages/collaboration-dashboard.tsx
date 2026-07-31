@@ -6,12 +6,13 @@ import {
   AlertTriangle,
   Check,
   Circle,
+  Copy,
   ExternalLink,
   GitBranch,
   MailPlus,
   Pencil,
   RotateCw,
-  Share2,
+  TextCursorInput,
   ShieldCheck,
   Trash2,
   UserRoundCog,
@@ -34,6 +35,7 @@ import {
 } from "@/shared/ui/alert-dialog";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/shared/ui/tooltip";
 import {
   activityDescription,
   type ActivityItem,
@@ -525,50 +527,99 @@ export function CollaborationDashboard() {
                 <p className="mt-2 text-muted-foreground">{t("contributor_dashboard_intro")}</p>
               )}
             </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              {canUseOwnerTreeControls(tree.role) && (
-                <>
-                  <Button variant="outline" onClick={openRename}>
-                    <Pencil className="me-2 h-4 w-4" />
-                    {t("rename")}
-                  </Button>
-                  <Button asChild variant="outline">
+            <TooltipProvider delayDuration={350}>
+              <div className="flex flex-wrap justify-end gap-2">
+                {canUseOwnerTreeControls(tree.role) && (
+                  <>
+                    <DashboardActionTooltip
+                      title={t("rename")}
+                      description={t("rename_tooltip_description")}
+                    >
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={openRename}
+                        aria-label={t("rename")}
+                      >
+                        <TextCursorInput aria-hidden="true" />
+                      </Button>
+                    </DashboardActionTooltip>
+                    <DashboardActionTooltip
+                      title={t("open_preview")}
+                      description={t("open_preview_tooltip_description")}
+                    >
+                      <Button asChild size="icon" variant="outline">
+                        <Link
+                          to="/tree/$id"
+                          params={{ id: tree.id }}
+                          search={{ mode: "preview", preview: "lineage" }}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={t("open_preview")}
+                        >
+                          <ExternalLink aria-hidden="true" />
+                        </Link>
+                      </Button>
+                    </DashboardActionTooltip>
+                    <DashboardActionTooltip
+                      title={t("copy_preview_link")}
+                      description={t("copy_preview_link_tooltip_description")}
+                    >
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => void copyPreview()}
+                        aria-label={t("copy_preview_link")}
+                      >
+                        <Copy aria-hidden="true" />
+                      </Button>
+                    </DashboardActionTooltip>
+                  </>
+                )}
+                <DashboardActionTooltip
+                  title={t("edit")}
+                  description={t("edit_tooltip_description")}
+                >
+                  <Button
+                    asChild
+                    size="icon"
+                    className="ring-2 ring-primary/20 ring-offset-2 ring-offset-background"
+                  >
                     <Link
                       to="/tree/$id"
                       params={{ id: tree.id }}
-                      search={{ mode: "preview", preview: "lineage" }}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      search={{ mode: "edit" }}
+                      aria-label={t("edit")}
                     >
-                      <ExternalLink className="me-2 h-4 w-4" />
-                      {t("open_preview")}
+                      <Pencil aria-hidden="true" />
                     </Link>
                   </Button>
-                  <Button variant="outline" onClick={() => void copyPreview()}>
-                    <Share2 className="me-2 h-4 w-4" />
-                    {t("copy_preview_link")}
-                  </Button>
-                </>
-              )}
-              <Button asChild>
-                <Link to="/tree/$id" params={{ id: tree.id }} search={{ mode: "edit" }}>
-                  {t("edit")}
-                </Link>
-              </Button>
-              {tree.role === "contributor" && (
-                <>
-                  <Button asChild variant="outline">
-                    <Link to="/tree/$id" params={{ id: tree.id }} search={{ mode: "preview" }}>
-                      {t("preview")}
-                    </Link>
-                  </Button>
-                  <Button variant="destructive" onClick={() => setDeleteAccountOpen(true)}>
-                    <Trash2 className="me-2 h-4 w-4" />
-                    {t("cancel_contribution")}
-                  </Button>
-                </>
-              )}
-            </div>
+                </DashboardActionTooltip>
+                {tree.role === "contributor" && (
+                  <>
+                    <DashboardActionTooltip
+                      title={t("preview")}
+                      description={t("preview_tooltip_description")}
+                    >
+                      <Button asChild size="icon" variant="outline">
+                        <Link
+                          to="/tree/$id"
+                          params={{ id: tree.id }}
+                          search={{ mode: "preview" }}
+                          aria-label={t("preview")}
+                        >
+                          <ExternalLink aria-hidden="true" />
+                        </Link>
+                      </Button>
+                    </DashboardActionTooltip>
+                    <Button variant="destructive" onClick={() => setDeleteAccountOpen(true)}>
+                      <Trash2 className="me-2 h-4 w-4" />
+                      {t("cancel_contribution")}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </TooltipProvider>
           </div>
           <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat icon={<Users />} label={t("people_recorded")} value={stats.total_members} />
@@ -1173,6 +1224,26 @@ export function CollaborationDashboard() {
         </AlertDialogContent>
       </AlertDialog>
     </main>
+  );
+}
+
+function DashboardActionTooltip({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent className="space-y-0.5">
+        <p className="font-medium">{title}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

@@ -10,6 +10,71 @@ export interface CanvasCapabilities {
   canAutoLayout: boolean;
 }
 
+export type CanvasWheelIntent = "pan" | "zoom";
+
+export interface CanvasWheelInput {
+  deltaX: number;
+  deltaY: number;
+  deltaMode: number;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+}
+
+export interface CanvasPoint {
+  x: number;
+  y: number;
+}
+
+export interface CanvasRect extends CanvasPoint {
+  width: number;
+  height: number;
+}
+
+export function canvasWheelIntent(input: CanvasWheelInput): CanvasWheelIntent {
+  if (input.ctrlKey || input.metaKey) return "zoom";
+  if (input.deltaMode !== 0) return "zoom";
+  const hasHorizontalMotion = Math.abs(input.deltaX) > 0.5;
+  const fineVerticalMotion = Math.abs(input.deltaY) < 40;
+  return hasHorizontalMotion || fineVerticalMotion ? "pan" : "zoom";
+}
+
+export function isDoublePanePress(
+  previous: (CanvasPoint & { at: number }) | null,
+  current: CanvasPoint & { at: number },
+  maxDelay = 350,
+  maxDistance = 6,
+): boolean {
+  if (!previous || current.at - previous.at < 0 || current.at - previous.at > maxDelay)
+    return false;
+  return Math.hypot(current.x - previous.x, current.y - previous.y) <= maxDistance;
+}
+
+export function canvasRectBetween(start: CanvasPoint, end: CanvasPoint): CanvasRect {
+  return {
+    x: Math.min(start.x, end.x),
+    y: Math.min(start.y, end.y),
+    width: Math.abs(end.x - start.x),
+    height: Math.abs(end.y - start.y),
+  };
+}
+
+export function hasCanvasDragStarted(
+  start: CanvasPoint,
+  current: CanvasPoint,
+  minimumDistance = 4,
+): boolean {
+  return Math.hypot(current.x - start.x, current.y - start.y) >= minimumDistance;
+}
+
+export function canvasRectsIntersect(first: CanvasRect, second: CanvasRect): boolean {
+  return (
+    first.x <= second.x + second.width &&
+    first.x + first.width >= second.x &&
+    first.y <= second.y + second.height &&
+    first.y + first.height >= second.y
+  );
+}
+
 export function canvasCapabilities(
   hasTreeEditAccess: boolean,
   previewType: TreePreviewType,
@@ -19,7 +84,7 @@ export function canvasCapabilities(
     canMutate,
     canDrag: canMutate,
     canConnect: canMutate,
-    canSelect: canMutate,
+    canSelect: true,
     canAutoLayout: canMutate,
   };
 }

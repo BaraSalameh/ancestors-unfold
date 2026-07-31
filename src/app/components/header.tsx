@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
+import { isPublicPreviewRoute } from "@/app/domain/public-route";
 
 export function Header() {
   const { t, lang, setLang } = useI18n();
@@ -32,8 +33,7 @@ export function Header() {
   const location = useRouterState({ select: (state) => state.location });
   const persistence = useFamilyPersistence();
   const isTreeEdit = location.pathname.startsWith("/tree/") && location.search.mode === "edit";
-  const isTreePreview =
-    location.pathname.startsWith("/tree/") && location.search.mode === "preview";
+  const isTreePreview = isPublicPreviewRoute(location.pathname, location.search);
   const activeTreeId = location.pathname.match(/^\/tree\/([^/]+)/)?.[1];
   const isAuthPage = location.pathname === "/auth";
   const isTreeWorkspace =

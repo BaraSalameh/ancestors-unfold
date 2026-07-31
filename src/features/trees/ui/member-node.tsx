@@ -140,7 +140,16 @@ function MemberNodeImpl({ data, selected }: NodeProps<MemberNodeData>) {
         className="!pointer-events-none !h-0 !w-0 !border-0 !opacity-0"
       />
       <button
-        onClick={() => onOpen(member.id)}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          onOpen(member.id);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          event.stopPropagation();
+          onOpen(member.id);
+        }}
         className={`group relative flex w-64 flex-col overflow-hidden rounded-xl border ${th.border} bg-card text-start shadow-[0_1px_2px_rgba(0,0,0,0.06),0_6px_18px_-8px_rgba(15,23,42,0.16)] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-primary/35 hover:shadow-[0_2px_4px_rgba(0,0,0,0.08),0_12px_28px_-10px_rgba(15,23,42,0.22)] ${
           highlighted || selected
             ? `ring-2 ring-offset-2 ring-offset-background ${selected ? "ring-primary/70" : th.ring}`

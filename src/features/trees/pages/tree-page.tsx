@@ -29,6 +29,7 @@ export function TreePage() {
         readOnly={mode !== "edit"}
         overviewMode={mode === "preview"}
         preview={mode === "preview" ? (preview ?? "lineage") : "lineage"}
+        accessMode={mode}
       />
     </div>
   );

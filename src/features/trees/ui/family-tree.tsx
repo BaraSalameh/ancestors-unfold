@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -39,7 +47,7 @@ import {
 } from "@/features/trees";
 import { displayName, ordinal, useI18n } from "@/shared/i18n";
 import { Link, useNavigate } from "@tanstack/react-router";
-import type { FamilyMember } from "@/features/members";
+import { memberDetailsSearch, type FamilyMember } from "@/features/members";
 
 const NODE_W = 260;
 const NODE_H = 130;
@@ -51,6 +59,13 @@ const nodeTypes = { member: MemberNode };
 const edgeTypes = { relationship: RelationshipEdge };
 
 type GenerationBand = { start: number; end: number };
+
+const isEmptyCanvasTarget = (target: EventTarget | null) =>
+  target instanceof Element &&
+  Boolean(target.closest(".react-flow__pane")) &&
+  !target.closest(
+    ".react-flow__node, .react-flow__edge, .react-flow__controls, .react-flow__minimap",
+  );
 
 const birthYear = (member: FamilyMember) => {
   const year = Number.parseInt(member.birth_date?.slice(0, 4) ?? "", 10);
@@ -73,9 +88,17 @@ import { descendantIds } from "@/features/members";
 import { alignDecadeSingleChildren, routeParentEdges } from "../domain/route-edges";
 import {
   canvasCapabilities,
+  canvasRectBetween,
+  canvasRectsIntersect,
+  canvasWheelIntent,
+  hasCanvasDragStarted,
   hierarchyPositions,
+  isDoublePanePress,
+  type CanvasPoint,
+  type CanvasRect,
   type TreePreviewType,
 } from "../domain/canvas-preview";
+import type { TreeAccessMode } from "../domain/access-policy";
 export { SubfamilyPanel };
 function layout(
   members: FamilyMember[],
@@ -397,10 +420,12 @@ function Inner({
   readOnly = false,
   overviewMode = false,
   preview,
+  accessMode,
 }: {
   readOnly?: boolean;
   overviewMode?: boolean;
   preview: TreePreviewType;
+  accessMode: TreeAccessMode;
 }) {
   const members = useFamily();
   const persistence = useFamilyPersistence();
@@ -420,6 +445,7 @@ function Inner({
   const [subfamilyFilterEnabled, setSubfamilyFilterEnabled] = useState(false);
   const [generationYear, setGenerationYear] = useState("");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
+  const viewportRef = useRef(viewport);
   const previewType = preview;
   const capabilities = canvasCapabilities(canEdit, previewType);
   const canvasCanEdit = capabilities.canMutate;
@@ -431,13 +457,24 @@ function Inner({
   });
   const toggleWidget = (widget: keyof typeof collapsedWidgets) =>
     setCollapsedWidgets((current) => ({ ...current, [widget]: !current[widget] }));
-  const { setCenter, fitView } = useReactFlow();
+  const { setCenter, fitView, setViewport: setFlowViewport, screenToFlowPosition } = useReactFlow();
   const didFit = useRef(false);
   const previousPreviewType = useRef<TreePreviewType>(previewType);
   const replacePositionsOnNextLayout = useRef(false);
   const edgeUpdateSuccessful = useRef(true);
   const visibleNodePositions = useRef(new Map<string, { x: number; y: number }>());
   const nodeDragStartPositions = useRef(new Map<string, { x: number; y: number }>());
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const firstPanePress = useRef<
+    (CanvasPoint & { pointerId: number; moved: boolean; at: number }) | null
+  >(null);
+  const previousPaneClick = useRef<(CanvasPoint & { at: number }) | null>(null);
+  const marqueePointer = useRef<{
+    pointerId: number;
+    start: CanvasPoint;
+    dragging: boolean;
+  } | null>(null);
+  const [marqueeRect, setMarqueeRect] = useState<CanvasRect | null>(null);
 
   useEffect(() => {
     if (readOnly || !persistence.error) return;
@@ -475,14 +512,59 @@ function Inner({
 
   const onOpen = useCallback(
     (id: string) => {
-      if (!canvasCanEdit) return;
       navigate({
         to: "/member/$id",
         params: { id },
-        search: { returnPreview: previewType },
+        search: memberDetailsSearch({
+          treeId: familyStore.getActiveTreeId(),
+          returnMode: accessMode,
+          returnPreview: previewType,
+        }),
       });
     },
-    [canvasCanEdit, navigate, previewType],
+    [accessMode, navigate, previewType],
+  );
+
+  const onCanvasWheel = useCallback(
+    (event: ReactWheelEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, button, [role='dialog']")) return;
+      event.preventDefault();
+      const intent = canvasWheelIntent(event);
+      const currentViewport = viewportRef.current;
+      if (intent === "pan") {
+        const horizontal =
+          event.shiftKey && Math.abs(event.deltaX) < 0.5 ? event.deltaY : event.deltaX;
+        const vertical = event.shiftKey ? 0 : event.deltaY;
+        const nextViewport = {
+          x: currentViewport.x - horizontal,
+          y: currentViewport.y - vertical,
+          zoom: currentViewport.zoom,
+        };
+        viewportRef.current = nextViewport;
+        void setFlowViewport(nextViewport);
+        return;
+      }
+
+      const bounds = canvasRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      const deltaScale = event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? 0.002 : 0.08;
+      const nextZoom = Math.min(
+        2,
+        Math.max(0.1, currentViewport.zoom * Math.exp(-event.deltaY * deltaScale)),
+      );
+      const pointerX = event.clientX - bounds.left;
+      const pointerY = event.clientY - bounds.top;
+      const ratio = nextZoom / currentViewport.zoom;
+      const nextViewport = {
+        x: pointerX - (pointerX - currentViewport.x) * ratio,
+        y: pointerY - (pointerY - currentViewport.y) * ratio,
+        zoom: nextZoom,
+      };
+      viewportRef.current = nextViewport;
+      void setFlowViewport(nextViewport);
+    },
+    [setFlowViewport],
   );
   const navigateToAdd = useCallback(
     (search: {
@@ -664,6 +746,139 @@ function Inner({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  const clearCanvasSelection = useCallback(() => {
+    setNodes((current) =>
+      current.map((node) => (node.selected ? { ...node, selected: false } : node)),
+    );
+    setEdges((current) =>
+      current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+    );
+  }, [setEdges, setNodes]);
+
+  const cancelMarquee = useCallback(() => {
+    marqueePointer.current = null;
+    firstPanePress.current = null;
+    previousPaneClick.current = null;
+    setMarqueeRect(null);
+  }, []);
+
+  const onCanvasPointerDownCapture = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !isEmptyCanvasTarget(event.target)) {
+      previousPaneClick.current = null;
+      firstPanePress.current = null;
+      return;
+    }
+    const point = { x: event.clientX, y: event.clientY, at: event.timeStamp };
+    if (isDoublePanePress(previousPaneClick.current, point)) {
+      previousPaneClick.current = null;
+      firstPanePress.current = null;
+      marqueePointer.current = {
+        pointerId: event.pointerId,
+        start: point,
+        dragging: false,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    firstPanePress.current = {
+      ...point,
+      pointerId: event.pointerId,
+      moved: false,
+    };
+  }, []);
+
+  const onCanvasPointerMoveCapture = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const marquee = marqueePointer.current;
+    if (marquee?.pointerId === event.pointerId) {
+      event.preventDefault();
+      event.stopPropagation();
+      const end = { x: event.clientX, y: event.clientY };
+      if (!marquee.dragging && hasCanvasDragStarted(marquee.start, end)) {
+        marquee.dragging = true;
+      }
+      if (marquee.dragging) {
+        const bounds = canvasRef.current?.getBoundingClientRect();
+        if (bounds) {
+          setMarqueeRect(
+            canvasRectBetween(
+              { x: marquee.start.x - bounds.left, y: marquee.start.y - bounds.top },
+              { x: end.x - bounds.left, y: end.y - bounds.top },
+            ),
+          );
+        }
+      }
+      return;
+    }
+
+    const first = firstPanePress.current;
+    if (
+      first?.pointerId === event.pointerId &&
+      hasCanvasDragStarted(first, { x: event.clientX, y: event.clientY })
+    ) {
+      first.moved = true;
+    }
+  }, []);
+
+  const onCanvasPointerUpCapture = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const marquee = marqueePointer.current;
+      if (marquee?.pointerId === event.pointerId) {
+        event.preventDefault();
+        event.stopPropagation();
+        clearCanvasSelection();
+        if (marquee.dragging) {
+          const start = screenToFlowPosition(marquee.start);
+          const end = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+          const selection = canvasRectBetween(start, end);
+          setNodes((current) =>
+            current.map((node) => {
+              const nodeRect = {
+                x: node.position.x,
+                y: node.position.y,
+                width: node.width ?? NODE_W,
+                height: node.height ?? NODE_H,
+              };
+              return {
+                ...node,
+                selected: node.type === "member" && canvasRectsIntersect(selection, nodeRect),
+              };
+            }),
+          );
+        }
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        marqueePointer.current = null;
+        setMarqueeRect(null);
+        return;
+      }
+
+      const first = firstPanePress.current;
+      if (first?.pointerId !== event.pointerId) return;
+      if (!first.moved && isEmptyCanvasTarget(event.target)) {
+        previousPaneClick.current = { x: first.x, y: first.y, at: event.timeStamp };
+      } else {
+        previousPaneClick.current = null;
+      }
+      firstPanePress.current = null;
+    },
+    [clearCanvasSelection, screenToFlowPosition, setNodes],
+  );
+
+  const onCanvasPointerCancelCapture = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        marqueePointer.current?.pointerId === event.pointerId ||
+        firstPanePress.current?.pointerId === event.pointerId
+      ) {
+        cancelMarquee();
+      }
+    },
+    [cancelMarquee],
+  );
+
   useEffect(() => {
     const previewChanged = previousPreviewType.current !== previewType;
     previousPreviewType.current = previewType;
@@ -730,6 +945,11 @@ function Inner({
       }
 
       const isMeta = event.ctrlKey || event.metaKey;
+      if (event.key === "Escape") {
+        cancelMarquee();
+        clearCanvasSelection();
+        return;
+      }
       if (!isMeta || !canvasCanEdit) return;
 
       const key = event.key.toLowerCase();
@@ -744,7 +964,12 @@ function Inner({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canvasCanEdit]);
+  }, [cancelMarquee, canvasCanEdit, clearCanvasSelection]);
+
+  useEffect(() => {
+    cancelMarquee();
+    return cancelMarquee;
+  }, [cancelMarquee, previewType]);
 
   const onConnect = useCallback(
     (conn: Connection) => {
@@ -1048,7 +1273,16 @@ function Inner({
   };
 
   return (
-    <div className="relative h-full w-full">
+    <div
+      ref={canvasRef}
+      className={`family-canvas relative h-full w-full ${marqueeRect ? "is-marquee-selecting" : ""}`}
+      onWheel={onCanvasWheel}
+      onPointerDownCapture={onCanvasPointerDownCapture}
+      onPointerMoveCapture={onCanvasPointerMoveCapture}
+      onPointerUpCapture={onCanvasPointerUpCapture}
+      onPointerCancelCapture={onCanvasPointerCancelCapture}
+      onLostPointerCapture={onCanvasPointerCancelCapture}
+    >
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-3 p-4">
         <div className="pointer-events-auto w-full max-w-sm">
           <div className="relative">
@@ -1143,11 +1377,7 @@ function Inner({
             current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
           )
         }
-        onPaneClick={() =>
-          setEdges((current) =>
-            current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
-          )
-        }
+        onPaneClick={clearCanvasSelection}
         onConnect={capabilities.canConnect ? onConnect : undefined}
         onEdgesDelete={canvasCanEdit ? onEdgesDelete : undefined}
         onEdgeUpdate={canvasCanEdit ? onEdgeUpdate : undefined}
@@ -1165,10 +1395,14 @@ function Inner({
         edgesFocusable={capabilities.canSelect}
         minZoom={0.1}
         maxZoom={2}
-        selectionOnDrag={capabilities.canSelect}
-        panOnDrag={[1, 2]}
+        selectionOnDrag={false}
+        panOnDrag={[0, 1]}
+        panActivationKeyCode={null}
         multiSelectionKeyCode={["Meta", "Control"]}
-        selectionKeyCode="Shift"
+        selectionKeyCode={null}
+        zoomOnScroll={false}
+        panOnScroll={false}
+        zoomOnPinch={false}
         zoomOnDoubleClick={false}
         proOptions={{ hideAttribution: true }}
         connectionLineStyle={{ stroke: "#0ea5e9", strokeWidth: 2, strokeDasharray: "6 4" }}
@@ -1180,7 +1414,10 @@ function Inner({
         }}
         deleteKeyCode={null}
         fitView
-        onMove={(_event, nextViewport) => setViewport(nextViewport)}
+        onMove={(_event, nextViewport) => {
+          viewportRef.current = nextViewport;
+          setViewport(nextViewport);
+        }}
       >
         <Background
           variant={BackgroundVariant.Dots}
@@ -1217,6 +1454,19 @@ function Inner({
           className="canvas-controls! overflow-hidden! rounded-xl! border! border-border/80! bg-card/95! p-1! shadow-lg!"
         />
       </ReactFlow>
+
+      {marqueeRect && (
+        <div
+          className="pointer-events-none absolute z-[5] border border-primary bg-primary/10"
+          style={{
+            left: marqueeRect.x,
+            top: marqueeRect.y,
+            width: marqueeRect.width,
+            height: marqueeRect.height,
+          }}
+          aria-hidden="true"
+        />
+      )}
 
       <div className="absolute top-24 right-4 z-10 flex max-h-[calc(100%-8rem)] w-72 max-w-[calc(100%-2rem)] flex-col gap-2 overflow-y-auto">
         {overviewMode && (
@@ -1523,14 +1773,21 @@ export function FamilyTree({
   readOnly = false,
   overviewMode = false,
   preview = "lineage",
+  accessMode = "edit",
 }: {
   readOnly?: boolean;
   overviewMode?: boolean;
   preview?: TreePreviewType;
+  accessMode?: TreeAccessMode;
 }) {
   return (
     <ReactFlowProvider>
-      <Inner readOnly={readOnly} overviewMode={overviewMode} preview={preview} />
+      <Inner
+        readOnly={readOnly}
+        overviewMode={overviewMode}
+        preview={preview}
+        accessMode={accessMode}
+      />
     </ReactFlowProvider>
   );
 }

@@ -1,19 +1,52 @@
 import { Link, useParams, useSearch } from "@tanstack/react-router";
-import { ArrowLeft, Edit, User } from "lucide-react";
+import { ArrowLeft, Edit, TriangleAlert, User } from "lucide-react";
 import { Button } from "@/shared/ui/button";
-import { familyStore, getChildren, getGeneration, useFamily } from "@/features/trees";
+import {
+  familyStore,
+  getChildren,
+  getGeneration,
+  useFamily,
+  useFamilyLoadState,
+} from "@/features/trees";
 import type { FamilyMember } from "@/features/members";
 import { displayName, useI18n } from "@/shared/i18n";
+import { TreeLoadingIndicator } from "@/shared/ui/page-skeletons";
+import {
+  memberDetailsSearch,
+  memberReturnDestination,
+  type MemberNavigationContext,
+} from "../domain/member-navigation";
 
 export function MemberPage() {
   const { id } = useParams({ from: "/member/$id" });
-  const { returnPreview } = useSearch({ from: "/member/$id" });
+  const {
+    treeId: requestedTreeId,
+    returnMode,
+    returnPreview,
+  } = useSearch({
+    from: "/member/$id",
+  });
+  if (requestedTreeId) familyStore.activateTree(requestedTreeId, returnMode);
+  const loadState = useFamilyLoadState();
   const members = useFamily();
   const { t, lang } = useI18n();
 
   const member = members.find((m) => m.id === id);
-  const treeId = familyStore.getActiveTreeId();
+  const treeId = requestedTreeId ?? familyStore.getActiveTreeId();
+  const navigationContext: MemberNavigationContext = { treeId, returnMode, returnPreview };
   const canEdit = familyStore.canEditActiveTree();
+  if (requestedTreeId && (loadState === "loading" || loadState === "idle"))
+    return <TreeLoadingIndicator label={t("loading_tree")} />;
+  if (requestedTreeId && loadState === "error")
+    return (
+      <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center p-6 text-center">
+        <div>
+          <TriangleAlert className="mx-auto h-8 w-8 text-muted-foreground" />
+          <h1 className="mt-3 text-lg font-semibold">{t("tree_unavailable")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t("tree_unavailable_hint")}</p>
+        </div>
+      </div>
+    );
   if (!member) return <div className="p-8 text-center text-muted-foreground">{t("not_found")}</div>;
 
   const father = member.father_id ? members.find((m) => m.id === member.father_id) : undefined;
@@ -69,11 +102,7 @@ export function MemberPage() {
     <div className="mx-auto max-w-4xl px-4 py-6">
       <div className="mb-4 flex items-center justify-between">
         <Button asChild variant="ghost" size="sm">
-          <Link
-            to="/tree/$id"
-            params={{ id: treeId }}
-            search={{ mode: "edit", preview: returnPreview }}
-          >
+          <Link {...memberReturnDestination(navigationContext)}>
             <ArrowLeft className="ltr:mr-2 rtl:ml-2 h-4 w-4" />
             {t("back")}
           </Link>
@@ -136,8 +165,8 @@ export function MemberPage() {
 
         <Section title={t("father") + " / " + t("mother")}>
           <div className="grid gap-3 sm:grid-cols-2">
-            <RelCard label={t("father")} m={father} returnPreview={returnPreview} />
-            <RelCard label={t("mother")} m={mother} returnPreview={returnPreview} />
+            <RelCard label={t("father")} m={father} navigation={navigationContext} />
+            <RelCard label={t("mother")} m={mother} navigation={navigationContext} />
           </div>
         </Section>
 
@@ -150,7 +179,7 @@ export function MemberPage() {
                 const divorced = (member.divorced_from ?? []).includes(s.id);
                 return (
                   <div key={s.id} className="relative">
-                    <RelCard label="" m={s} returnPreview={returnPreview} />
+                    <RelCard label="" m={s} navigation={navigationContext} />
                     <div className="mt-1 flex gap-1 text-[10px]">
                       {s.is_unknown && (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
@@ -176,7 +205,7 @@ export function MemberPage() {
           ) : (
             <div className="grid gap-2 sm:grid-cols-2">
               {children.map((c) => (
-                <RelCard key={c.id} label="" m={c} returnPreview={returnPreview} />
+                <RelCard key={c.id} label="" m={c} navigation={navigationContext} />
               ))}
             </div>
           )}
@@ -192,7 +221,7 @@ export function MemberPage() {
                   <Link
                     to="/member/$id"
                     params={{ id: a.id }}
-                    search={{ returnPreview }}
+                    search={memberDetailsSearch(navigationContext)}
                     className="rounded-md border px-2 py-1 hover:bg-accent"
                   >
                     {displayName(a, lang)}
@@ -214,7 +243,7 @@ export function MemberPage() {
                   <Link
                     to="/member/$id"
                     params={{ id: m.id }}
-                    search={{ returnPreview }}
+                    search={memberDetailsSearch(navigationContext)}
                     className="hover:underline"
                   >
                     {"• "}
@@ -263,11 +292,11 @@ function Field({ label, value }: { label: string; value: string }) {
 function RelCard({
   label,
   m,
-  returnPreview,
+  navigation,
 }: {
   label: string;
   m?: FamilyMember;
-  returnPreview: "lineage" | "chronological";
+  navigation: MemberNavigationContext;
 }) {
   const { t, lang } = useI18n();
   if (!m) {
@@ -282,7 +311,7 @@ function RelCard({
     <Link
       to="/member/$id"
       params={{ id: m.id }}
-      search={{ returnPreview }}
+      search={memberDetailsSearch(navigation)}
       className="block rounded-lg border bg-background p-3 text-sm hover:bg-accent"
     >
       {label && <div className="text-xs text-muted-foreground">{label}</div>}
