@@ -231,7 +231,7 @@ export const en = {
   father_label: "Father",
   mother_label: "Mother",
   link_updated: "Relationship updated",
-  connection_success: "{parent} connected to {child}",
+  connection_success: "{child} connected to {parent}",
   link_removed: "Relationship removed",
   cannot_link_self: "A member cannot be their own parent",
   cannot_link_cycle: "This would create a cycle in the tree",

@@ -221,7 +221,7 @@ export const ar = {
   father_label: "الأب",
   mother_label: "الأم",
   link_updated: "تم تحديث العلاقة",
-  connection_success: "تم ربط {parent} بـ {child}",
+  connection_success: "تم ربط {child} بـ {parent}",
   link_removed: "تم إزالة العلاقة",
   cannot_link_self: "لا يمكن أن يكون الفرد والد نفسه",
   cannot_link_cycle: "سيؤدي هذا إلى حلقة في الشجرة",

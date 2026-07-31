@@ -20,10 +20,10 @@ describe("translations", () => {
 
   it("renders readable localized connection messages without mojibake", () => {
     expect(translate("en", "connection_success", { parent: "Anas", child: "Jehad" })).toBe(
-      "Anas connected to Jehad",
+      "Jehad connected to Anas",
     );
     expect(translate("ar", "connection_success", { parent: "أنس", child: "جهاد" })).toBe(
-      "تم ربط أنس بـ جهاد",
+      "تم ربط جهاد بـ أنس",
     );
   });
 
