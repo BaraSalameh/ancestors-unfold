@@ -302,17 +302,13 @@ function layout(
       : (hierarchyPosition?.x ?? pos.x - pos.width / 2);
     const hierarchyY = hierarchyPosition?.y ?? genOf(id) * FAMILY_ROW_H;
     const hasCustom = typeof m.pos_x === "number" && typeof m.pos_y === "number";
-    const hasDecadeCustom =
-      typeof m.decade_pos_x === "number" && typeof m.decade_pos_y === "number";
     return {
       id,
       type: "member",
       position:
-        chronological && hasDecadeCustom
-          ? { x: m.decade_pos_x!, y: m.decade_pos_y! }
-          : hasCustom && !chronological
-            ? { x: m.pos_x!, y: m.pos_y! }
-            : { x: autoX, y: chronological ? autoY : hierarchyY },
+        hasCustom && !chronological
+          ? { x: m.pos_x!, y: m.pos_y! }
+          : { x: autoX, y: chronological ? autoY : hierarchyY },
       data: {
         member: m,
         highlighted: highlightId === id,
@@ -335,10 +331,9 @@ function layout(
   const VGAP = 40;
   const fixedIds = new Set(
     members
-      .filter((member) =>
-        chronological
-          ? typeof member.decade_pos_x === "number" && typeof member.decade_pos_y === "number"
-          : typeof member.pos_x === "number" && typeof member.pos_y === "number",
+      .filter(
+        (member) =>
+          !chronological && typeof member.pos_x === "number" && typeof member.pos_y === "number",
       )
       .map((member) => member.id),
   );
@@ -532,7 +527,8 @@ function Inner({
   const onCanvasWheel = useCallback(
     (event: ReactWheelEvent<HTMLDivElement>) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, button, [role='dialog']")) return;
+      const interactiveTarget = target?.closest("input, textarea, select, button, [role='dialog']");
+      if (interactiveTarget && !interactiveTarget.closest("[data-member-card]")) return;
       event.preventDefault();
       const intent = canvasWheelIntent(event);
       const currentViewport = viewportRef.current;
@@ -891,16 +887,17 @@ function Inner({
       const currentById = new Map(current.map((node) => [node.id, node]));
       const replacePositions = replacePositionsOnNextLayout.current;
       replacePositionsOnNextLayout.current = false;
-      if (previewChanged) return initialNodes;
+      if (previewChanged || previewType === "chronological") {
+        return initialNodes.map((node) => ({
+          ...node,
+          selected: currentById.get(node.id)?.selected ?? false,
+        }));
+      }
       const merged = initialNodes.map((node) => {
         const existing = currentById.get(node.id);
         if (!existing || replacePositions) return node;
         const hasPersistedPosition =
-          previewType === "chronological"
-            ? typeof node.data.member.decade_pos_x === "number" &&
-              typeof node.data.member.decade_pos_y === "number"
-            : typeof node.data.member.pos_x === "number" &&
-              typeof node.data.member.pos_y === "number";
+          typeof node.data.member.pos_x === "number" && typeof node.data.member.pos_y === "number";
         return {
           ...node,
           position: hasPersistedPosition ? node.position : existing.position,
@@ -909,7 +906,10 @@ function Inner({
       return merged;
     });
     setEdges((current) => {
-      if (previewChanged) return initialEdges;
+      if (previewChanged || previewType === "chronological") {
+        const selectedIds = new Set(current.filter((edge) => edge.selected).map((edge) => edge.id));
+        return initialEdges.map((edge) => ({ ...edge, selected: selectedIds.has(edge.id) }));
+      }
       const currentById = new Map(current.map((edge) => [edge.id, edge]));
       return initialEdges.map((edge) => {
         const existing = currentById.get(edge.id);

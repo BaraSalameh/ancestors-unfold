@@ -2,6 +2,7 @@ import { memo, useRef, useState, type PointerEvent as ReactPointerEvent } from "
 import { Handle, Position, type NodeProps } from "reactflow";
 import { User, Cake, Heart, UserPlus, HelpCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
+import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import type { FamilyMember, Gender } from "@/features/members";
 import { displayName, ordinal, useI18n } from "@/shared/i18n";
 import { familyStore, wifeColorFor } from "@/features/trees";
@@ -63,6 +64,7 @@ function MemberNodeImpl({ data, selected }: NodeProps<MemberNodeData>) {
   const th = genderTheme(member.gender);
   const { lang, t } = useI18n();
   const [subfamilyOpen, setSubfamilyOpen] = useState(false);
+  const [profileImageOpen, setProfileImageOpen] = useState(false);
   const connectorStart = useRef<{ x: number; y: number } | null>(null);
   const subfamilies = familyStore.getSubfamilies();
   const currentSubfamily = familyStore.getClosestSubfamily(member.id) ?? null;
@@ -139,7 +141,11 @@ function MemberNodeImpl({ data, selected }: NodeProps<MemberNodeData>) {
         isConnectable={false}
         className="!pointer-events-none !h-0 !w-0 !border-0 !opacity-0"
       />
-      <button
+      <div
+        role="button"
+        tabIndex={0}
+        data-member-card
+        dir={lang === "ar" ? "rtl" : "ltr"}
         onDoubleClick={(event) => {
           event.stopPropagation();
           onOpen(member.id);
@@ -160,11 +166,23 @@ function MemberNodeImpl({ data, selected }: NodeProps<MemberNodeData>) {
         <div className="flex items-center gap-3 p-3">
           <div className="relative shrink-0">
             {member.image_url ? (
-              <img
-                src={member.image_url}
-                alt=""
-                className="h-11 w-11 rounded-lg object-cover ring-1 ring-border"
-              />
+              <button
+                type="button"
+                className="nodrag nopan block cursor-zoom-in rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setProfileImageOpen(true);
+                }}
+                onDoubleClick={(event) => event.stopPropagation()}
+                aria-label={displayName(member, lang)}
+                aria-haspopup="dialog"
+              >
+                <img
+                  src={member.image_url}
+                  alt=""
+                  className="h-11 w-11 rounded-lg object-cover ring-1 ring-border"
+                />
+              </button>
             ) : (
               <div
                 className={`flex h-11 w-11 items-center justify-center rounded-lg ${th.avatarBg} text-white shadow-sm`}
@@ -177,7 +195,7 @@ function MemberNodeImpl({ data, selected }: NodeProps<MemberNodeData>) {
             <div className="truncate text-sm font-bold text-card-foreground">
               {displayName(member, lang)}
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 rtl:justify-end">
               <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:text-emerald-300">
                 {member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}
               </span>
@@ -310,7 +328,19 @@ function MemberNodeImpl({ data, selected }: NodeProps<MemberNodeData>) {
             </div>
           </div>
         )}
-      </button>
+      </div>
+      {member.image_url && (
+        <Dialog open={profileImageOpen} onOpenChange={setProfileImageOpen}>
+          <DialogContent className="w-[min(92vw,56rem)] max-w-[56rem] border-0 bg-black/95 p-3 text-white shadow-2xl">
+            <DialogTitle className="sr-only">{displayName(member, lang)}</DialogTitle>
+            <img
+              src={member.image_url}
+              alt={displayName(member, lang)}
+              className="max-h-[82vh] w-full rounded-lg object-contain"
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
