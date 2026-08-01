@@ -113,11 +113,11 @@ export function AddMemberPage({
                 search: { mode: "edit", preview: returnPreview },
               });
           }}
-          onSubmit={(data) => {
+          onSubmit={(data, imageFile) => {
             const m =
               child && parentRole === "mother"
-                ? familyStore.addMotherForChild(data, child.id)
-                : familyStore.add(data);
+                ? familyStore.addMotherForChild(data, child.id, imageFile)
+                : familyStore.add(data, imageFile);
             if (child && parentRole === "father") familyStore.update(child.id, { father_id: m.id });
             toast.success(t("created"));
             if (spouseTo)

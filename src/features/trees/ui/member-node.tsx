@@ -60,6 +60,7 @@ function MemberNodeImpl({ data, selected }: NodeProps<MemberNodeData>) {
     onToggleCollapsed,
     editable,
   } = data;
+  const imageSrc = familyStore.getMemberImageSrc(member.id);
   const th = genderTheme(member.gender);
   const { lang, t } = useI18n();
   const [subfamilyOpen, setSubfamilyOpen] = useState(false);
@@ -163,9 +164,9 @@ function MemberNodeImpl({ data, selected }: NodeProps<MemberNodeData>) {
         <div className={`h-1 w-full bg-gradient-to-r ${th.strip}`} />
         <div className="flex items-center gap-3 p-3">
           <div className="relative shrink-0">
-            {member.image_url ? (
+            {imageSrc ? (
               <ExpandableProfileImage
-                src={member.image_url}
+                src={imageSrc}
                 name={displayName(member, lang)}
                 className="nodrag nopan h-11 w-11 rounded-lg ring-1 ring-border"
               />

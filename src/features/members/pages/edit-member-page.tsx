@@ -56,6 +56,7 @@ export function EditPage() {
       <div className="rounded-xl border bg-card p-6 shadow-sm">
         <MemberForm
           initial={member}
+          initialImageFile={familyStore.getStagedMemberImage(id)}
           memberId={id}
           members={members}
           submitLabel={t("save")}
@@ -67,8 +68,8 @@ export function EditPage() {
               search: { mode: "edit", preview: returnPreview },
             });
           }}
-          onSubmit={(data) => {
-            familyStore.update(id, data);
+          onSubmit={(data, imageFile) => {
+            familyStore.update(id, data, imageFile ?? null);
             toast.success(t("updated"));
             navigate({
               to: "/member/$id",

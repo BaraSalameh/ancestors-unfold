@@ -33,6 +33,7 @@ export function MemberPage() {
   const { t, lang, dir } = useI18n();
 
   const member = members.find((m) => m.id === id);
+  const draftImageSrc = familyStore.getMemberImageSrc(id);
   const treeId = requestedTreeId ?? familyStore.getActiveTreeId();
   const navigationContext: MemberNavigationContext = { treeId, returnMode, returnPreview };
   const canEdit = familyStore.canEditActiveTree();
@@ -121,9 +122,9 @@ export function MemberPage() {
       <div className="rounded-2xl border bg-card p-6 shadow-sm">
         <div className="flex flex-col items-start gap-6 sm:flex-row">
           <div className="h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-muted">
-            {member.image_url ? (
+            {draftImageSrc ? (
               <ExpandableProfileImage
-                src={member.image_url}
+                src={draftImageSrc}
                 name={displayName(member, lang)}
                 className="h-full w-full rounded-2xl"
               />

@@ -15,6 +15,8 @@ function runner() {
             name_ar: "",
             gender: "male",
             image_url: "https://example.com/profile.jpg",
+            image_public_id: "member-image",
+            image_asset_id: "asset-id",
             notes: "private member note",
             created_at: now,
             updated_at: now,
@@ -88,6 +90,8 @@ describe("tree snapshot projection", () => {
     const snapshot = await loadRenderableSnapshot(runner(), "tree", 7, true);
 
     expect(snapshot.members[0].image_url).toBe("https://example.com/profile.jpg");
+    expect(snapshot.members[0].image_public_id).toBe("member-image");
+    expect(snapshot.members[0].image_asset_id).toBe("asset-id");
     expect(snapshot.members[0].notes).toBe("private member note");
     expect(snapshot.members[1].external_children).toEqual([
       expect.objectContaining({ id: "external", notes: "private external note" }),

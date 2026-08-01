@@ -61,6 +61,16 @@ describe("snapshot trust boundary", () => {
       }),
     ).toThrow();
   });
+
+  it("accepts HTTPS member images and rejects insecure URLs", () => {
+    const snapshot = (image_url: string) => ({
+      expectedVersion: 1,
+      members: [{ ...member, image_url }],
+      subfamilies: [],
+    });
+    expect(schemas.snapshot.parse(snapshot("https://example.com/profile.jpg"))).toBeTruthy();
+    expect(() => schemas.snapshot.parse(snapshot("http://example.com/profile.jpg"))).toThrow();
+  });
 });
 
 describe("HTTP security checks", () => {

@@ -2,6 +2,26 @@ import { useState, type MouseEvent } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { cn } from "@/shared/utils/cn";
 
+export function profileThumbnailUrl(src: string) {
+  try {
+    const url = new URL(src);
+    if (url.hostname !== "res.cloudinary.com") return src;
+    return src.replace("/image/upload/", "/image/upload/f_auto,q_auto,c_fill,g_auto,w_256,h_256/");
+  } catch {
+    return src;
+  }
+}
+
+function profileDisplayUrl(src: string) {
+  try {
+    const url = new URL(src);
+    if (url.hostname !== "res.cloudinary.com") return src;
+    return src.replace("/image/upload/", "/image/upload/f_auto,q_auto,c_limit,w_1600,h_1600/");
+  } catch {
+    return src;
+  }
+}
+
 export function ExpandableProfileImage({
   src,
   name,
@@ -32,12 +52,20 @@ export function ExpandableProfileImage({
         aria-label={name}
         aria-haspopup="dialog"
       >
-        <img src={src} alt="" className={cn("h-full w-full object-cover", imageClassName)} />
+        <img
+          src={profileThumbnailUrl(src)}
+          alt=""
+          className={cn("h-full w-full object-cover", imageClassName)}
+        />
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[min(92vw,56rem)] max-w-[56rem] border-0 bg-black/95 p-3 text-white shadow-2xl">
           <DialogTitle className="sr-only">{name}</DialogTitle>
-          <img src={src} alt={name} className="max-h-[82vh] w-full rounded-lg object-contain" />
+          <img
+            src={profileDisplayUrl(src)}
+            alt={name}
+            className="max-h-[82vh] w-full rounded-lg object-contain"
+          />
         </DialogContent>
       </Dialog>
     </>

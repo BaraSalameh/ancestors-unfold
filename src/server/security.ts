@@ -97,6 +97,18 @@ export const schemas = {
       gender: z.enum(["male", "female", "unspecified"]).optional(),
     })
     .strict(),
+  memberImageSign: z.object({ memberId: z.string().uuid().optional() }).strict(),
+  memberImageRegister: z
+    .object({
+      assetId: z.string().min(1).max(255),
+      publicId: z.string().min(1).max(255),
+      secureUrl: z.string().url().max(2048),
+      version: z.number().int().positive(),
+      signature: z.string().regex(/^[a-f0-9]{40}$/i),
+      memberId: z.string().uuid().optional(),
+    })
+    .strict(),
+  memberImageDiscard: z.object({ assetId: z.string().min(1).max(255) }).strict(),
   deleteContributorAccountRequest: z.object({ confirmation: z.literal("DELETE") }).strict(),
   deleteContributorAccount: z
     .object({ confirmation: z.literal("DELETE"), code: z.string().regex(/^\d{6}$/) })
@@ -235,7 +247,15 @@ export const schemas = {
               birth_date: z.string().max(50).optional(),
               death_date: z.string().max(50).optional(),
               citizen_status: z.enum(["resident", "non_resident"]).optional(),
-              image_url: z.string().max(2048).optional(),
+              image_url: z
+                .string()
+                .trim()
+                .url()
+                .max(2048)
+                .refine((value) => new URL(value).protocol === "https:")
+                .optional(),
+              image_public_id: z.string().min(1).max(255).optional(),
+              image_asset_id: z.string().min(1).max(255).optional(),
               notes: z.string().max(10_000).optional(),
               father_id: z.string().max(200).optional(),
               mother_id: z.string().max(200).optional(),

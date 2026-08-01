@@ -18,6 +18,8 @@ export interface FamilyMember {
   death_date?: string;
   citizen_status?: CitizenStatus;
   image_url?: string;
+  image_public_id?: string;
+  image_asset_id?: string;
   notes?: string;
   father_id?: string;
   mother_id?: string;

@@ -2,6 +2,8 @@ import { useSyncExternalStore } from "react";
 import type { FamilyMember, MemberInput, SubFamily } from "@/features/members/domain";
 import { ApiClientError } from "@/shared/api/client";
 import { treeClient } from "../api/tree-client";
+// eslint-disable-next-line no-restricted-imports -- tree persistence coordinates staged member-image uploads.
+import { memberImageClient } from "@/features/members/api";
 import {
   detachParentRelationship,
   getChildren as queryChildren,
@@ -96,8 +98,11 @@ let state: FamilyMember[] = [];
 let subfamilies: SubFamily[] = [];
 let accessScope: TreeAccessScope = "preview";
 const listeners = new Set<() => void>();
-let past: FamilyMember[][] = [];
-let future: FamilyMember[][] = [];
+type DraftSnapshot = { members: FamilyMember[]; stagedImages: Map<string, File> };
+let past: DraftSnapshot[] = [];
+let future: DraftSnapshot[] = [];
+let stagedImages = new Map<string, File>();
+let stagedImageUrls = new Map<string, string>();
 let baselineMembers: FamilyMember[] = [];
 let baselineSubfamilies: SubFamily[] = [];
 let remoteVersion = 1;
@@ -116,6 +121,7 @@ type PersistenceState = {
 type DraftCheckpoint = {
   members: FamilyMember[];
   subfamilies: SubFamily[];
+  stagedImages: Map<string, File>;
 };
 
 let cachedPersistenceState: PersistenceState = {
@@ -148,6 +154,7 @@ async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
     baselineSubfamilies = cloneSubfamilies(subfamilies);
     past = [];
     future = [];
+    replaceStagedImages(new Map());
     pendingBatchId = null;
     persistenceError = null;
     loadState = "ready";
@@ -164,13 +171,25 @@ async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
 async function updateRemoteSnapshot() {
   if (saveInFlight || !isDirty() || persistenceError === "VERSION_CONFLICT") return;
   const treeId = activeTreeId;
-  const members = cloneMembers(state);
-  const currentSubfamilies = cloneSubfamilies(subfamilies);
   const batchId = pendingBatchId ?? crypto.randomUUID();
   pendingBatchId = batchId;
   saveInFlight = true;
   emit();
   try {
+    for (const [memberId, file] of [...stagedImages]) {
+      const uploaded = await memberImageClient.upload(treeId, memberId, file, () => undefined);
+      state = state.map((member) =>
+        member.id === memberId
+          ? { ...member, ...uploaded, updated_at: new Date().toISOString() }
+          : member,
+      );
+      const previewUrl = stagedImageUrls.get(memberId);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      stagedImages.delete(memberId);
+      stagedImageUrls.delete(memberId);
+    }
+    const members = cloneMembers(state);
+    const currentSubfamilies = cloneSubfamilies(subfamilies);
     const result = await treeClient.saveSnapshot(treeId, {
       batchId,
       expectedVersion: remoteVersion,
@@ -187,7 +206,12 @@ async function updateRemoteSnapshot() {
       persistenceError = null;
     }
   } catch (error) {
-    persistenceError = error instanceof ApiClientError ? error.code : "NETWORK_ERROR";
+    persistenceError =
+      error instanceof ApiClientError
+        ? error.code
+        : stagedImages.size
+          ? "IMAGE_UPLOAD_FAILED"
+          : "NETWORK_ERROR";
   } finally {
     saveInFlight = false;
     emit();
@@ -214,6 +238,7 @@ function load() {
 
 function isDirty() {
   return (
+    stagedImages.size > 0 ||
     JSON.stringify(baselineMembers) !== JSON.stringify(state) ||
     JSON.stringify(baselineSubfamilies) !== JSON.stringify(subfamilies)
   );
@@ -252,24 +277,53 @@ function loadSubfamilies() {
   subfamilies = [];
 }
 
-function snapshot(): FamilyMember[] {
-  return cloneMembers(state);
+function snapshot(): DraftSnapshot {
+  return { members: cloneMembers(state), stagedImages: new Map(stagedImages) };
+}
+
+function replaceStagedImages(next: ReadonlyMap<string, File>) {
+  for (const url of stagedImageUrls.values()) URL.revokeObjectURL(url);
+  stagedImages = new Map(next);
+  stagedImageUrls = new Map(
+    [...stagedImages].map(([memberId, file]) => [memberId, URL.createObjectURL(file)]),
+  );
+}
+
+function discardUploadedDraftAssets() {
+  for (const member of state) {
+    const baseline = baselineMembers.find(({ id }) => id === member.id);
+    if (member.image_asset_id && member.image_asset_id !== baseline?.image_asset_id)
+      void memberImageClient.discard(activeTreeId, member.image_asset_id).catch(() => undefined);
+  }
 }
 
 function commit(mutator: () => void) {
   if (!canEditActiveTree()) return;
   const before = snapshot();
   mutator();
-  if (JSON.stringify(before) === JSON.stringify(state)) return;
+  if (
+    JSON.stringify(before.members) === JSON.stringify(state) &&
+    before.stagedImages.size === stagedImages.size
+  )
+    return;
   past = [...past, before];
   future = [];
   markDraftChanged();
   emit();
 }
 
-function applySnapshot(next: FamilyMember[]) {
+function applySnapshot(next: DraftSnapshot) {
   if (!canEditActiveTree()) return;
-  state = cloneMembers(next);
+  for (const member of state) {
+    if (
+      member.image_asset_id &&
+      !next.members.some((candidate) => candidate.image_asset_id === member.image_asset_id) &&
+      !baselineMembers.some((candidate) => candidate.image_asset_id === member.image_asset_id)
+    )
+      void memberImageClient.discard(activeTreeId, member.image_asset_id).catch(() => undefined);
+  }
+  state = cloneMembers(next.members);
+  replaceStagedImages(next.stagedImages);
   markDraftChanged();
   emit();
 }
@@ -288,6 +342,8 @@ export const familyStore = {
     return loadState;
   },
   reloadAfterConflict(): void {
+    discardUploadedDraftAssets();
+    replaceStagedImages(new Map());
     persistenceError = null;
     pendingBatchId = null;
     loadState = "loading";
@@ -296,6 +352,8 @@ export const familyStore = {
   },
   activateTree(treeId: string, accessMode: TreeAccessMode = "edit"): void {
     if (!treeId || (activeTreeId === treeId && activeAccessMode === accessMode)) return;
+    discardUploadedDraftAssets();
+    replaceStagedImages(new Map());
     activeTreeId = treeId;
     activeAccessMode = accessMode;
     accessScope = "preview";
@@ -318,6 +376,8 @@ export const familyStore = {
   },
   discardDraft(): void {
     if (saveInFlight) return;
+    discardUploadedDraftAssets();
+    replaceStagedImages(new Map());
     state = cloneMembers(baselineMembers);
     subfamilies = cloneSubfamilies(baselineSubfamilies);
     past = [];
@@ -331,12 +391,14 @@ export const familyStore = {
     return {
       members: cloneMembers(state),
       subfamilies: cloneSubfamilies(subfamilies),
+      stagedImages: new Map(stagedImages),
     };
   },
   restoreDraftCheckpoint(checkpoint: DraftCheckpoint): void {
     if (saveInFlight || !canEditActiveTree()) return;
     state = cloneMembers(checkpoint.members);
     subfamilies = cloneSubfamilies(checkpoint.subfamilies);
+    replaceStagedImages(checkpoint.stagedImages);
     past = [];
     future = [];
     markDraftChanged();
@@ -360,7 +422,13 @@ export const familyStore = {
   get(id: string): FamilyMember | undefined {
     return state.find((m) => m.id === id);
   },
-  add(input: MemberInput): FamilyMember {
+  getStagedMemberImage(id: string): File | undefined {
+    return stagedImages.get(id);
+  },
+  getMemberImageSrc(id: string): string | undefined {
+    return stagedImageUrls.get(id) ?? state.find((member) => member.id === id)?.image_url;
+  },
+  add(input: MemberInput, imageFile?: File): FamilyMember {
     const now = new Date().toISOString();
     let member: FamilyMember | undefined;
     commit(() => {
@@ -404,10 +472,15 @@ export const familyStore = {
         });
       }
       state = ensureParentsAreSpouses(state, created.id, now);
+      if (imageFile) stagedImages.set(created.id, imageFile);
     });
+    if (imageFile) {
+      replaceStagedImages(stagedImages);
+      emit();
+    }
     return member!;
   },
-  addMotherForChild(input: MemberInput, childId: string): FamilyMember {
+  addMotherForChild(input: MemberInput, childId: string, imageFile?: File): FamilyMember {
     const now = new Date().toISOString();
     let mother: FamilyMember | undefined;
     commit(() => {
@@ -426,7 +499,12 @@ export const familyStore = {
         member.id === childId ? { ...member, mother_id: created.id, updated_at: now } : member,
       );
       state = ensureParentsAreSpouses(state, childId, now);
+      if (imageFile) stagedImages.set(created.id, imageFile);
     });
+    if (imageFile) {
+      replaceStagedImages(stagedImages);
+      emit();
+    }
     return mother!;
   },
   setPosition(id: string, pos: { x: number; y: number } | null): void {
@@ -466,7 +544,7 @@ export const familyStore = {
       }));
     });
   },
-  update(id: string, patch: Partial<MemberInput>): void {
+  update(id: string, patch: Partial<MemberInput>, imageFile?: File | null): void {
     const now = new Date().toISOString();
     commit(() => {
       state = state.map((m) => (m.id === id ? { ...m, ...patch, updated_at: now } : m));
@@ -502,7 +580,13 @@ export const familyStore = {
         });
       }
       state = ensureParentsAreSpouses(state, id, now);
+      if (imageFile instanceof File) stagedImages.set(id, imageFile);
+      else if (imageFile === null) stagedImages.delete(id);
     });
+    if (imageFile !== undefined) {
+      replaceStagedImages(stagedImages);
+      emit();
+    }
   },
   detachParent(id: string, role: "father_id" | "mother_id"): void {
     const now = new Date().toISOString();
@@ -598,7 +682,10 @@ export const familyStore = {
   remove(id: string): void {
     commit(() => {
       state = removeMember(state, id);
+      stagedImages.delete(id);
     });
+    replaceStagedImages(stagedImages);
+    emit();
   },
 
   undo(): void {

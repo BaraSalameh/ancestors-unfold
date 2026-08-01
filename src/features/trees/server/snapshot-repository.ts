@@ -30,7 +30,7 @@ export async function loadRenderableSnapshot(
   const members = await runner.query<MemberRow>(
     `SELECT m.id,coalesce(m.name_en, '') name_en,coalesce(m.name_ar, '') name_ar,
       m.gender,m.birth_date::text birth_date,m.death_date::text death_date,
-      m.citizen_status,m.image_url,m.notes,m.is_unknown,m.subfamily_id,
+      m.citizen_status,m.image_url,m.image_public_id,m.image_asset_id,m.notes,m.is_unknown,m.subfamily_id,
       m.pos_x,m.pos_y,m.decade_pos_x,m.decade_pos_y,m.created_at,m.updated_at,
       f.parent_id father_id,mo.parent_id mother_id FROM app.family_members m
     LEFT JOIN app.parent_child_relationships f ON f.child_id=m.id AND f.parent_role='father' AND f.deleted_at IS NULL
@@ -90,6 +90,12 @@ export async function loadRenderableSnapshot(
       death_date: member.death_date ?? undefined,
       citizen_status: member.citizen_status ?? undefined,
       image_url: member.image_url ?? undefined,
+      ...(includePrivate
+        ? {
+            image_public_id: member.image_public_id ?? undefined,
+            image_asset_id: member.image_asset_id ?? undefined,
+          }
+        : {}),
       ...(includePrivate ? { notes: member.notes ?? undefined } : {}),
       father_id: member.father_id ?? undefined,
       mother_id: member.mother_id ?? undefined,
@@ -286,6 +292,38 @@ export async function importSnapshot(
           (member) => mutableMembers.has(member.id) || !existingMemberIds.has(member.id),
         )
       : (b.members ?? []);
+    const uploadedImages = editablePayloadMembers.filter(
+      (member) => member.image_asset_id || member.image_public_id,
+    );
+    if (
+      uploadedImages.some(
+        (member) => !member.image_asset_id || !member.image_public_id || !member.image_url,
+      )
+    )
+      throw new ApiError("INVALID_MEMBER_IMAGE", 400);
+    if (uploadedImages.length) {
+      const owned = await c.query<{
+        asset_id: string;
+        public_id: string;
+        secure_url: string;
+      }>(
+        `SELECT asset_id,public_id,secure_url FROM app.cloudinary_assets
+         WHERE tree_id=$1 AND asset_id=ANY($2::text[])`,
+        [treeId, uploadedImages.map((member) => member.image_asset_id)],
+      );
+      const valid = new Map(owned.rows.map((asset) => [asset.asset_id, asset]));
+      if (
+        uploadedImages.some((member) => {
+          const asset = valid.get(member.image_asset_id!);
+          return (
+            !asset ||
+            asset.public_id !== member.image_public_id ||
+            asset.secure_url !== member.image_url
+          );
+        })
+      )
+        throw new ApiError("INVALID_MEMBER_IMAGE", 400);
+    }
     const editableIds = new Set(editablePayloadMembers.map(({ id }) => id));
     if (isBranchEditor) {
       const existingRelations = await c.query<{
@@ -402,6 +440,8 @@ export async function importSnapshot(
         m.death_date || null,
         m.citizen_status || null,
         m.image_url || null,
+        m.image_public_id || null,
+        m.image_asset_id || null,
         m.notes || null,
         !!m.is_unknown,
         m.pos_x ?? null,
@@ -418,15 +458,16 @@ export async function importSnapshot(
       if (isBranchEditor && existingMemberIds.has(m.id))
         await c.query(
           `UPDATE app.family_members SET name_en=$3,name_ar=$4,gender=$5,birth_date=$6,
-            death_date=$7,citizen_status=$8,image_url=$9,notes=$10,is_unknown=$11,pos_x=$12,pos_y=$13,
-            decade_pos_x=$14,decade_pos_y=$15,updated_by=$16,updated_at=now(),version=version+1
+            death_date=$7,citizen_status=$8,image_url=$9,image_public_id=$10,image_asset_id=$11,
+            notes=$12,is_unknown=$13,pos_x=$14,pos_y=$15,decade_pos_x=$16,decade_pos_y=$17,
+            updated_by=$18,updated_at=now(),version=version+1
            WHERE id=$1 AND tree_id=$2 AND deleted_at IS NULL`,
-          [...values.slice(0, 15), s.user_id],
+          [...values.slice(0, 17), s.user_id],
         );
       else
         await c.query(
-          `INSERT INTO app.family_members(id,tree_id,name_en,name_ar,gender,birth_date,death_date,citizen_status,image_url,notes,is_unknown,pos_x,pos_y,decade_pos_x,decade_pos_y,subfamily_id,created_by,updated_by)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17) ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,gender=excluded.gender,birth_date=excluded.birth_date,death_date=excluded.death_date,citizen_status=excluded.citizen_status,image_url=excluded.image_url,notes=excluded.notes,is_unknown=excluded.is_unknown,pos_x=excluded.pos_x,pos_y=excluded.pos_y,decade_pos_x=excluded.decade_pos_x,decade_pos_y=excluded.decade_pos_y,updated_by=excluded.updated_by,updated_at=now(),version=app.family_members.version+1,deleted_at=NULL`,
+          `INSERT INTO app.family_members(id,tree_id,name_en,name_ar,gender,birth_date,death_date,citizen_status,image_url,image_public_id,image_asset_id,notes,is_unknown,pos_x,pos_y,decade_pos_x,decade_pos_y,subfamily_id,created_by,updated_by)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$19) ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,gender=excluded.gender,birth_date=excluded.birth_date,death_date=excluded.death_date,citizen_status=excluded.citizen_status,image_url=excluded.image_url,image_public_id=excluded.image_public_id,image_asset_id=excluded.image_asset_id,notes=excluded.notes,is_unknown=excluded.is_unknown,pos_x=excluded.pos_x,pos_y=excluded.pos_y,decade_pos_x=excluded.decade_pos_x,decade_pos_y=excluded.decade_pos_y,updated_by=excluded.updated_by,updated_at=now(),version=app.family_members.version+1,deleted_at=NULL`,
           values,
         );
       await c.query(

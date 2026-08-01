@@ -25,6 +25,7 @@ import {
   RelationSearch,
   SpousesEditor,
 } from "../components/member-form-editors";
+import { MemberImageField } from "./member-image-field";
 export function MemberForm({
   initial,
   memberId,
@@ -33,15 +34,17 @@ export function MemberForm({
   onCancel,
   submitLabel,
   lockedGender,
+  initialImageFile,
 }: {
   initial?: Partial<MemberInput>;
   /** When editing, id of the member being edited. Enables spouse editor. */
   memberId?: string;
   members: FamilyMember[];
-  onSubmit: (data: MemberInput) => void;
+  onSubmit: (data: MemberInput, imageFile?: File) => void;
   onCancel: () => void;
   submitLabel: string;
   lockedGender?: Gender;
+  initialImageFile?: File;
 }) {
   const { t, lang } = useI18n();
   const [name_en, setNameEn] = useState(initial?.name_en ?? "");
@@ -53,6 +56,9 @@ export function MemberForm({
   const [birth_date, setBirth] = useState(initial?.birth_date ?? "");
   const [death_date, setDeath] = useState(initial?.death_date ?? "");
   const [image_url, setImage] = useState(initial?.image_url ?? "");
+  const [image_public_id, setImagePublicId] = useState(initial?.image_public_id);
+  const [image_asset_id, setImageAssetId] = useState(initial?.image_asset_id);
+  const [imageFile, setImageFile] = useState<File | undefined>(initialImageFile);
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [father_id, setFather] = useState(initial?.father_id ?? "");
   const [mother_id, setMother] = useState(initial?.mother_id ?? "");
@@ -114,6 +120,20 @@ export function MemberForm({
       setError(t("name_required"));
       return;
     }
+    const trimmedImageUrl = image_url.trim();
+    if (trimmedImageUrl) {
+      try {
+        if (new URL(trimmedImageUrl).protocol !== "https:") throw new Error();
+      } catch {
+        setError(t("image_url_invalid"));
+        return;
+      }
+    }
+    const submittedImage = {
+      image_url: trimmedImageUrl || undefined,
+      image_public_id: trimmedImageUrl ? image_public_id : undefined,
+      image_asset_id: trimmedImageUrl ? image_asset_id : undefined,
+    };
     const payload: MemberInput = {
       name_en: name_en.trim(),
       name_ar: name_ar.trim(),
@@ -121,7 +141,7 @@ export function MemberForm({
       citizen_status,
       birth_date: birth_date || undefined,
       death_date: death_date || undefined,
-      image_url: image_url.trim() || undefined,
+      ...submittedImage,
       notes: notes.trim() || undefined,
       father_id: father_id || undefined,
       mother_id: mother_id || undefined,
@@ -132,7 +152,7 @@ export function MemberForm({
       payload.spouse_id = spouse_id || undefined;
     }
 
-    onSubmit(payload);
+    onSubmit(payload, imageFile);
   };
 
   const showSpouseEditor = gender === "male" && !!memberId;
@@ -213,15 +233,19 @@ export function MemberForm({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="img">{t("image_url")}</Label>
-        <Input
-          id="img"
-          value={image_url}
-          onChange={(e) => setImage(e.target.value)}
-          placeholder="https://…"
-        />
-      </div>
+      <MemberImageField
+        initialFile={initialImageFile}
+        value={{ image_url, image_public_id, image_asset_id }}
+        onChange={(image) => {
+          setImage(image.image_url);
+          setImagePublicId(image.image_public_id);
+          setImageAssetId(image.image_asset_id);
+          setError(null);
+        }}
+        onFileChange={(file) => {
+          setImageFile(file);
+        }}
+      />
 
       <div>
         {memberId && (

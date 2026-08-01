@@ -31,6 +31,13 @@ import {
   canUpdateTreeMetadata,
   descriptionPatchValue,
 } from "@/features/trees/server";
+import {
+  cleanupStaleMemberImages,
+  discardPendingMemberImage,
+  reconcileMemberImages,
+  registerMemberImage,
+  signMemberImageUpload,
+} from "@/features/members/server";
 
 const COOKIE = "ancestors_session";
 const OAUTH_COOKIE = "ancestors_google_oauth";
@@ -193,6 +200,12 @@ export async function handleApi(request: Request): Promise<Response | null> {
     if (operationsResponse) return operationsResponse;
     const publicInvitationResponse = await validatePublicInvitation(request);
     if (publicInvitationResponse) return publicInvitationResponse;
+    if (url.pathname === "/api/cron/cloudinary-cleanup" && request.method === "GET") {
+      const secret = process.env.CRON_SECRET;
+      if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
+        return json({ code: "UNAUTHENTICATED" }, 401);
+      return json(await cleanupStaleMemberImages());
+    }
     if (url.pathname === "/api/auth/google" && request.method === "GET") {
       const { client } = googleConfig(request);
       const state = randomBytes(32).toString("base64url"),
@@ -782,15 +795,32 @@ export async function handleApi(request: Request): Promise<Response | null> {
     const snapshotMatch = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/snapshot$/);
     if (snapshotMatch && request.method === "GET")
       return json(await readSnapshot(session, requestId, snapshotMatch[1]));
-    if (snapshotMatch && request.method === "PUT")
-      return json(
-        await importSnapshot(
-          session,
-          requestId,
-          snapshotMatch[1],
-          await parseBody(request, schemas.snapshot),
-        ),
+    if (snapshotMatch && request.method === "PUT") {
+      const result = await importSnapshot(
+        session,
+        requestId,
+        snapshotMatch[1],
+        await parseBody(request, schemas.snapshot),
       );
+      await reconcileMemberImages(session, requestId, snapshotMatch[1]);
+      return json(result);
+    }
+    const imageMatch = url.pathname.match(
+      /^\/api\/trees\/([0-9a-f-]+)\/member-images\/(sign|register|discard)$/,
+    );
+    if (imageMatch && request.method === "POST") {
+      const treeId = imageMatch[1];
+      if (imageMatch[2] === "sign") {
+        const body = await parseBody(request, schemas.memberImageSign);
+        return json(await signMemberImageUpload(session, requestId, treeId, body.memberId));
+      }
+      if (imageMatch[2] === "register") {
+        const body = await parseBody(request, schemas.memberImageRegister);
+        return json(await registerMemberImage(session, requestId, treeId, body));
+      }
+      const body = await parseBody(request, schemas.memberImageDiscard);
+      return json(await discardPendingMemberImage(session, requestId, treeId, body.assetId));
+    }
     const grantsMatch = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/branch-grants$/);
     if (grantsMatch && request.method === "GET") {
       const r = await transaction(session.user_id, session.id, requestId, async (c) => {
