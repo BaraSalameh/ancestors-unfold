@@ -39,7 +39,8 @@ export async function handleApi(request: Request): Promise<Response | null> {
     );
     if (currentSessionResponse) return currentSessionResponse;
     if (!session) return json({ code: "UNAUTHENTICATED" }, 401);
-    return handleAuthenticatedApi(request, url, session, requestId);
+    const authenticatedResponse = await handleAuthenticatedApi(request, url, session, requestId);
+    return authenticatedResponse;
   } catch (error) {
     logError("API request failed", error, {
       requestId,
