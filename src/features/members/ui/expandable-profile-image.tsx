@@ -1,26 +1,7 @@
 import { useState, type MouseEvent } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { cn } from "@/shared/utils/cn";
-
-export function profileThumbnailUrl(src: string) {
-  try {
-    const url = new URL(src);
-    if (url.hostname !== "res.cloudinary.com") return src;
-    return src.replace("/image/upload/", "/image/upload/f_auto,q_auto,c_fill,g_auto,w_256,h_256/");
-  } catch {
-    return src;
-  }
-}
-
-function profileDisplayUrl(src: string) {
-  try {
-    const url = new URL(src);
-    if (url.hostname !== "res.cloudinary.com") return src;
-    return src.replace("/image/upload/", "/image/upload/f_auto,q_auto,c_limit,w_1600,h_1600/");
-  } catch {
-    return src;
-  }
-}
+import { profileDisplayUrl, profileThumbnailUrl } from "../domain/member-image-url";
 
 export function ExpandableProfileImage({
   src,

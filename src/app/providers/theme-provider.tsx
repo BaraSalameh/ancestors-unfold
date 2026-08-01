@@ -1,18 +1,6 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { resolveTheme, THEME_STORAGE_KEY, type Theme } from "./theme";
-
-const Ctx = createContext<{
-  theme: Theme;
-  setTheme: (t: Theme) => void;
-  toggle: () => void;
-} | null>(null);
+import { ThemeContext } from "./theme-context";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("light");
@@ -41,16 +29,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <Ctx.Provider
+    <ThemeContext.Provider
       value={{ theme, setTheme, toggle: () => setTheme(theme === "dark" ? "light" : "dark") }}
     >
       {children}
-    </Ctx.Provider>
+    </ThemeContext.Provider>
   );
-}
-
-export function useTheme() {
-  const c = useContext(Ctx);
-  if (!c) throw new Error("useTheme outside provider");
-  return c;
 }

@@ -7,10 +7,8 @@
     "src/routes/**/*.{ts,tsx}",
     "src/features/*/index.ts",
     "src/features/*/{client,domain,server}/index.ts",
-    "vite.config.ts",
     "scripts/*.mjs"
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/*.mjs"],
-  "ignore": ["src/routeTree.gen.ts", "db/migrations/**"],
   "ignoreDependencies": ["tailwindcss", "tw-animate-css"]
 }

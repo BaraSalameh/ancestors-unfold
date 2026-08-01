@@ -20,6 +20,7 @@ export {
 } from "./domain/member-navigation";
 export { MemberForm } from "./ui/member-form";
 export { ExpandableProfileImage } from "./ui/expandable-profile-image";
-export { AddMemberPage, AddPage, addMemberSearchSchema } from "./pages/add-member-page";
+export { AddMemberPage, AddPage } from "./pages/add-member-page";
+export { addMemberSearchSchema } from "./domain/add-member-search";
 export { EditPage } from "./pages/edit-member-page";
 export { MemberPage } from "./pages/member-page";

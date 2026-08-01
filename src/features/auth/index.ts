@@ -1,4 +1,5 @@
-export { AuthProvider, useAuth } from "./components/auth-provider";
+export { AuthProvider } from "./components/auth-provider";
+export { useAuth } from "./components/auth-context";
 export { apiAuthService } from "./api/auth-api-client";
 export {
   AuthError,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectActivity, projectActivityPage } from "./handler";
+import { projectActivity, projectActivityPage } from "./activity-projection";
 
 const activityRow = (version: number, createdAt: string) => ({
   id: `activity-${version}`,

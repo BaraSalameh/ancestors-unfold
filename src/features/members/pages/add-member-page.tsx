@@ -1,22 +1,10 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { z } from "zod";
 import { MemberForm } from "@/features/members";
 import { familyStore, useFamily } from "@/features/trees";
 import { useI18n } from "@/shared/i18n";
 import { addMemberTitleKey } from "../domain/add-member-title";
 import { memberDetailsSearch } from "../domain/member-navigation";
-
-export const addMemberSearchSchema = z
-  .object({
-    fatherId: z.string().optional(),
-    motherId: z.string().optional(),
-    childId: z.string().optional(),
-    spouseId: z.string().optional(),
-    parentRole: z.enum(["father", "mother"]).optional(),
-    returnPreview: z.enum(["lineage", "chronological"]).optional(),
-  })
-  .strict();
 
 export function AddPage() {
   const { fatherId, motherId, childId, spouseId, parentRole, returnPreview } = useSearch({

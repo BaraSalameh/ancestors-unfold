@@ -1,4 +1,4 @@
-import type { Lang } from "@/shared/i18n/provider";
+import type { Lang } from "@/shared/i18n";
 
 type AccountNames = {
   fullNameEn: string;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { profileThumbnailUrl } from "./expandable-profile-image";
+import { profileThumbnailUrl } from "../domain/member-image-url";
 
 describe("profileThumbnailUrl", () => {
   it("adds a square optimized delivery transformation to Cloudinary images", () => {

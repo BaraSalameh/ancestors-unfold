@@ -47,7 +47,7 @@ export function chronologicalBandsForMembers(
   return [...unique.values()].sort((first, second) => first.start - second.start);
 }
 
-export interface CanvasCapabilities {
+interface CanvasCapabilities {
   canMutate: boolean;
   canDrag: boolean;
   canConnect: boolean;
@@ -55,9 +55,9 @@ export interface CanvasCapabilities {
   canAutoLayout: boolean;
 }
 
-export type CanvasWheelIntent = "pan" | "zoom";
+type CanvasWheelIntent = "pan" | "zoom";
 
-export interface CanvasWheelInput {
+interface CanvasWheelInput {
   deltaX: number;
   deltaY: number;
   deltaMode: number;

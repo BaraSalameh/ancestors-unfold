@@ -1,4 +1,5 @@
 import { Skeleton } from "@/shared/ui/skeleton";
+import { pageSkeletonKind } from "./page-skeleton-kind";
 
 export function LoadingStatus({ label }: { label: string }) {
   return (
@@ -25,7 +26,7 @@ function FormFieldsSkeleton({ rows = 4 }: { rows?: number }) {
   );
 }
 
-export function AuthPageSkeleton({ label }: { label: string }) {
+function AuthPageSkeleton({ label }: { label: string }) {
   return (
     <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-muted/25 px-4 py-8">
       <LoadingStatus label={label} />
@@ -48,7 +49,7 @@ export function InvitationPageSkeleton({ label }: { label: string }) {
   return <AuthPageSkeleton label={label} />;
 }
 
-export function ResetPasswordPageSkeleton({ label }: { label: string }) {
+function ResetPasswordPageSkeleton({ label }: { label: string }) {
   return (
     <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-muted/25 px-4">
       <LoadingStatus label={label} />
@@ -200,7 +201,7 @@ export function SubfamiliesPageSkeleton({ label }: { label: string }) {
   );
 }
 
-export function ActivityPageSkeleton({ label }: { label: string }) {
+function ActivityPageSkeleton({ label }: { label: string }) {
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <LoadingStatus label={label} />
@@ -218,7 +219,7 @@ export function ActivityPageSkeleton({ label }: { label: string }) {
   );
 }
 
-export function SettingsPageSkeleton({ label }: { label: string }) {
+function SettingsPageSkeleton({ label }: { label: string }) {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
       <LoadingStatus label={label} />
@@ -238,13 +239,7 @@ export function SettingsPageSkeleton({ label }: { label: string }) {
   );
 }
 
-export function MemberFormPageSkeleton({
-  label,
-  editing = false,
-}: {
-  label: string;
-  editing?: boolean;
-}) {
+function MemberFormPageSkeleton({ label, editing = false }: { label: string; editing?: boolean }) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <LoadingStatus label={label} />
@@ -259,7 +254,7 @@ export function MemberFormPageSkeleton({
   );
 }
 
-export function MemberPageSkeleton({ label }: { label: string }) {
+function MemberPageSkeleton({ label }: { label: string }) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       <LoadingStatus label={label} />
@@ -294,7 +289,7 @@ export function MemberPageSkeleton({ label }: { label: string }) {
   );
 }
 
-export function ProfilePageSkeleton({ label }: { label: string }) {
+function ProfilePageSkeleton({ label }: { label: string }) {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <LoadingStatus label={label} />
@@ -314,36 +309,6 @@ export function ProfilePageSkeleton({ label }: { label: string }) {
       </div>
     </main>
   );
-}
-
-export type PageSkeletonKind =
-  | "dashboard"
-  | "activity"
-  | "profile"
-  | "settings"
-  | "subfamilies"
-  | "add-member"
-  | "edit-member"
-  | "member"
-  | "tree"
-  | "auth"
-  | "reset-password"
-  | "invitation";
-
-export function pageSkeletonKind(pathname: string): PageSkeletonKind {
-  if (pathname === "/") return "dashboard";
-  if (pathname === "/activity") return "activity";
-  if (pathname === "/profile") return "profile";
-  if (pathname === "/settings") return "settings";
-  if (pathname === "/subfamilies") return "subfamilies";
-  if (pathname === "/auth") return "auth";
-  if (pathname === "/reset-password") return "reset-password";
-  if (/^\/invitation\/[^/]+$/.test(pathname)) return "invitation";
-  if (pathname === "/add" || /^\/tree\/[^/]+\/add$/.test(pathname)) return "add-member";
-  if (/^\/edit\/[^/]+$/.test(pathname)) return "edit-member";
-  if (/^\/member\/[^/]+$/.test(pathname)) return "member";
-  if (/^\/tree\/[^/]+$/.test(pathname)) return "tree";
-  return "auth";
 }
 
 export function RoutePageSkeleton({

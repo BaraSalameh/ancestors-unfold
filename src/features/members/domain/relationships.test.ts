@@ -94,7 +94,9 @@ describe("family relationships", () => {
 
     expect(ensureParentsAreSpouses(members, "child", "later")).toBe(members);
   });
+});
 
+describe("spouse relationship mutations", () => {
   it("deletes an unanchored spouse and clears all references to her", () => {
     const result = removeSpouseAttachment(
       [
@@ -176,7 +178,9 @@ describe("family relationships", () => {
       [],
     ]);
   });
+});
 
+describe("relationship graph cleanup", () => {
   it("removes all references when deleting a member", () => {
     const result = removeMember(
       [

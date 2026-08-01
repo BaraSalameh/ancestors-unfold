@@ -1,12 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import {
-  DashboardPageSkeleton,
-  pageSkeletonKind,
-  RoutePageSkeleton,
-  TreeLoadingIndicator,
-} from "./page-skeletons";
+import { DashboardPageSkeleton, RoutePageSkeleton, TreeLoadingIndicator } from "./page-skeletons";
+import { pageSkeletonKind } from "./page-skeleton-kind";
 
 describe("page skeleton routing", () => {
   it.each([

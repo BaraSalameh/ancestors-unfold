@@ -112,6 +112,9 @@ describe("family store activation", () => {
     expect(upload).toHaveBeenCalledTimes(3);
     expect(saveSnapshot).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("family store loading and rejected updates", () => {
   it("does not load a snapshot until a real tree is activated and deduplicates activation", async () => {
     const readSnapshot = vi.fn(
       () =>
@@ -192,7 +195,9 @@ describe("family store activation", () => {
     expect(readSnapshot).toHaveBeenCalledTimes(1);
     expect(familyStore.getPersistenceState().dirty).toBe(true);
   });
+});
 
+describe("family store draft persistence", () => {
   it("uses a stable batch for retries and marks a successful draft saved", async () => {
     const { ApiClientError } = await import("@/shared/api/client");
     const member = {
@@ -275,7 +280,9 @@ describe("family store activation", () => {
     expect(familyStore.getPersistenceState().dirty).toBe(false);
     expect(saveSnapshot).not.toHaveBeenCalled();
   });
+});
 
+describe("family store draft restoration", () => {
   it("restores card-level relationship edits from a draft checkpoint", async () => {
     const members = [
       {

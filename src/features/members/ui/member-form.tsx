@@ -1,43 +1,15 @@
-import { useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/shared/ui/button";
-import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Textarea } from "@/shared/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
 import { useI18n } from "@/shared/i18n";
-import { computeWivesByHusband } from "@/features/trees/domain";
-import type {
-  CitizenStatus,
-  ExternalChild,
-  FamilyMember,
-  Gender,
-  MemberInput,
-} from "../domain/types";
-import { descendantIds } from "../domain/relationships";
-import {
-  eligibleParentCandidates,
-  invalidFatherIdsForFemale,
-  reconcileMotherForFather,
-} from "../domain/parent-selection";
-
-import {
-  ExternalChildrenEditor,
-  RelationSearch,
-  SpousesEditor,
-} from "../components/member-form-editors";
+import { useMemberForm } from "../client/use-member-form";
+import { MemberDemographicFields, MemberNameFields } from "../components/member-form-fields";
+import { MemberRelationshipFields } from "../components/member-relationship-fields";
+import type { FamilyMember, Gender, MemberInput } from "../domain/types";
 import { MemberImageField } from "./member-image-field";
-export function MemberForm({
-  initial,
-  memberId,
-  members,
-  onSubmit,
-  onCancel,
-  submitLabel,
-  lockedGender,
-  initialImageFile,
-}: {
+
+interface MemberFormProps {
   initial?: Partial<MemberInput>;
-  /** When editing, id of the member being edited. Enables spouse editor. */
   memberId?: string;
   members: FamilyMember[];
   onSubmit: (data: MemberInput, imageFile?: File) => void;
@@ -45,265 +17,46 @@ export function MemberForm({
   submitLabel: string;
   lockedGender?: Gender;
   initialImageFile?: File;
-}) {
-  const { t, lang } = useI18n();
-  const [name_en, setNameEn] = useState(initial?.name_en ?? "");
-  const [name_ar, setNameAr] = useState(initial?.name_ar ?? "");
-  const [gender, setGender] = useState<Gender>(initial?.gender ?? "male");
-  const [citizen_status, setCitizenStatus] = useState<CitizenStatus>(
-    initial?.citizen_status ?? "resident",
-  );
-  const [birth_date, setBirth] = useState(initial?.birth_date ?? "");
-  const [death_date, setDeath] = useState(initial?.death_date ?? "");
-  const [image_url, setImage] = useState(initial?.image_url ?? "");
-  const [image_public_id, setImagePublicId] = useState(initial?.image_public_id);
-  const [image_asset_id, setImageAssetId] = useState(initial?.image_asset_id);
-  const [imageFile, setImageFile] = useState<File | undefined>(initialImageFile);
-  const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [father_id, setFather] = useState(initial?.father_id ?? "");
-  const [mother_id, setMother] = useState(initial?.mother_id ?? "");
-  const [spouse_id, setSpouse] = useState(initial?.spouse_id ?? "");
-  const [external_children, setExternalChildren] = useState<ExternalChild[]>(
-    initial?.external_children ?? [],
-  );
-  const [error, setError] = useState<string | null>(null);
+}
 
-  const males = members.filter((m) => m.gender === "male" && !m.is_unknown);
-  const females = members.filter((m) => m.gender === "female" && !m.is_unknown);
-  const excludedParentIds = useMemo(() => {
-    const excluded = new Set(memberId ? descendantIds(members, memberId) : []);
-    if (memberId && gender === "female") {
-      for (const id of invalidFatherIdsForFemale(members, memberId)) excluded.add(id);
-    }
-    return excluded;
-  }, [gender, memberId, members]);
-  const eligibleFathers = useMemo(
-    () =>
-      eligibleParentCandidates({
-        members,
-        memberId,
-        birthDate: birth_date || undefined,
-        gender: "male",
-        excludedIds: excludedParentIds,
-      }),
-    [birth_date, excludedParentIds, memberId, members],
-  );
-  const eligibleMothers = useMemo(
-    () =>
-      eligibleParentCandidates({
-        members,
-        memberId,
-        birthDate: birth_date || undefined,
-        gender: "female",
-        excludedIds: excludedParentIds,
-      }),
-    [birth_date, excludedParentIds, memberId, members],
-  );
-  const wivesByHusband = useMemo(() => computeWivesByHusband(members), [members]);
-  const fatherWives = father_id ? (wivesByHusband.get(father_id) ?? []) : [];
-  const selectedFather = members.find((member) => member.id === father_id);
-  const selectedMother = members.find((member) => member.id === mother_id);
-
-  const changeFather = (nextFatherId: string) => {
-    const spouseIds = new Set(
-      nextFatherId ? (wivesByHusband.get(nextFatherId) ?? []).map(({ id }) => id) : [],
-    );
-    setFather(nextFatherId);
-    setMother((currentMotherId) =>
-      reconcileMotherForFather(currentMotherId, nextFatherId, spouseIds),
-    );
-  };
-
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!name_en.trim() && !name_ar.trim()) {
-      setError(t("name_required"));
-      return;
-    }
-    const trimmedImageUrl = image_url.trim();
-    if (trimmedImageUrl) {
-      try {
-        if (new URL(trimmedImageUrl).protocol !== "https:") throw new Error();
-      } catch {
-        setError(t("image_url_invalid"));
-        return;
-      }
-    }
-    const submittedImage = {
-      image_url: trimmedImageUrl || undefined,
-      image_public_id: trimmedImageUrl ? image_public_id : undefined,
-      image_asset_id: trimmedImageUrl ? image_asset_id : undefined,
-    };
-    const payload: MemberInput = {
-      name_en: name_en.trim(),
-      name_ar: name_ar.trim(),
-      gender,
-      citizen_status,
-      birth_date: birth_date || undefined,
-      death_date: death_date || undefined,
-      ...submittedImage,
-      notes: notes.trim() || undefined,
-      father_id: father_id || undefined,
-      mother_id: mother_id || undefined,
-      external_children: external_children.length ? external_children : undefined,
-    };
-
-    if (!showSpouseEditor) {
-      payload.spouse_id = spouse_id || undefined;
-    }
-
-    onSubmit(payload, imageFile);
-  };
-
-  const showSpouseEditor = gender === "male" && !!memberId;
-
+export function MemberForm(props: MemberFormProps) {
+  const { t } = useI18n();
+  const form = useMemberForm(props);
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="name_en">{t("name_en")}</Label>
-          <Input
-            id="name_en"
-            value={name_en}
-            onChange={(e) => setNameEn(e.target.value)}
-            dir="ltr"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="name_ar">{t("name_ar")}</Label>
-          <Input
-            id="name_ar"
-            value={name_ar}
-            onChange={(e) => setNameAr(e.target.value)}
-            dir="rtl"
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-4">
-        <div className="space-y-2">
-          <Label>{t("gender")}</Label>
-          <Select
-            value={gender}
-            disabled={Boolean(lockedGender)}
-            onValueChange={(v) => setGender(v as Gender)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="unspecified">{t("gender_unspecified")}</SelectItem>
-              <SelectItem value="male">{t("male")}</SelectItem>
-              <SelectItem value="female">{t("female")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>{t("citizen_status")}</Label>
-          <Select
-            value={citizen_status}
-            onValueChange={(v) => setCitizenStatus(v as CitizenStatus)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="resident">{t("resident")}</SelectItem>
-              <SelectItem value="non_resident">{t("non_resident")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="birth">{t("birth_date")}</Label>
-          <Input
-            id="birth"
-            type="date"
-            value={birth_date}
-            onChange={(e) => setBirth(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="death">{t("death_date")}</Label>
-          <Input
-            id="death"
-            type="date"
-            value={death_date}
-            onChange={(e) => setDeath(e.target.value)}
-          />
-        </div>
-      </div>
-
+    <form onSubmit={form.submit} className="space-y-5">
+      <MemberNameFields form={form} />
+      <MemberDemographicFields form={form} lockedGender={props.lockedGender} />
       <MemberImageField
-        initialFile={initialImageFile}
-        value={{ image_url, image_public_id, image_asset_id }}
+        initialFile={props.initialImageFile}
+        value={{
+          image_url: form.draft.image_url,
+          image_public_id: form.draft.image_public_id,
+          image_asset_id: form.draft.image_asset_id,
+        }}
         onChange={(image) => {
-          setImage(image.image_url);
-          setImagePublicId(image.image_public_id);
-          setImageAssetId(image.image_asset_id);
-          setError(null);
+          form.patch("image_url", image.image_url);
+          form.patch("image_public_id", image.image_public_id);
+          form.patch("image_asset_id", image.image_asset_id);
+          form.clearError();
         }}
-        onFileChange={(file) => {
-          setImageFile(file);
-        }}
+        onFileChange={form.setImageFile}
       />
-
-      <div>
-        {memberId && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <RelationSearch
-              label={t("father")}
-              value={father_id}
-              onChange={changeFather}
-              options={eligibleFathers}
-              selectedOption={selectedFather}
-              lang={lang}
-              searchFirst
-              showBirthYear
-            />
-            <RelationSearch
-              label={t("mother")}
-              value={mother_id}
-              onChange={setMother}
-              options={father_id ? fatherWives : eligibleMothers}
-              selectedOption={selectedMother}
-              lang={lang}
-              searchFirst={!father_id}
-              showBirthYear
-            />
-          </div>
-        )}
-      </div>
-
-      <div>
-        {!showSpouseEditor && (
-          <RelationSearch
-            label={t("spouse")}
-            value={spouse_id}
-            onChange={setSpouse}
-            options={gender === "male" ? females : males}
-            lang={lang}
-          />
-        )}
-      </div>
-
-      {showSpouseEditor && memberId && <SpousesEditor maleId={memberId} allMembers={members} />}
-
-      {gender === "female" && (
-        <ExternalChildrenEditor value={external_children} onChange={setExternalChildren} />
-      )}
-
+      <MemberRelationshipFields form={form} memberId={props.memberId} members={props.members} />
       <div className="space-y-2">
         <Label htmlFor="notes">{t("notes")}</Label>
-        <Textarea id="notes" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <Textarea
+          id="notes"
+          rows={4}
+          value={form.draft.notes}
+          onChange={(event) => form.patch("notes", event.target.value)}
+        />
       </div>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
+      {form.error && <p className="text-sm text-destructive">{t(form.error)}</p>}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        <Button type="button" variant="ghost" onClick={props.onCancel}>
           {t("cancel")}
         </Button>
-        <Button type="submit">{submitLabel}</Button>
+        <Button type="submit">{props.submitLabel}</Button>
       </div>
     </form>
   );

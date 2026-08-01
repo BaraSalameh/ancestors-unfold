@@ -1,12 +1,7 @@
 export { treeClient, type SaveTreeSnapshot, type TreeSnapshot } from "./api/tree-client";
-export {
-  familyStore,
-  getChildren,
-  getGeneration,
-  useFamily,
-  useFamilyLoadState,
-  useFamilyPersistence,
-} from "./client/family-store";
+export { familyStore } from "./client/family-store";
+export { useFamily, useFamilyLoadState, useFamilyPersistence } from "./client/family-hooks";
+export { getChildren, getGeneration } from "@/features/members/domain";
 export {
   activityDescription,
   activityLabel,
