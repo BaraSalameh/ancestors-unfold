@@ -89,6 +89,44 @@ describe("HTTP security checks", () => {
   });
 });
 
+describe("registration input", () => {
+  const registration = {
+    email: "person@example.test",
+    password: "long-password",
+    fullNameEn: "English Name",
+    fullNameAr: "Arabic Name",
+    gender: "female" as const,
+  };
+
+  it("mirrors either supplied full name into the missing database field", () => {
+    expect(schemas.register.parse({ ...registration, fullNameAr: "" })).toMatchObject({
+      fullNameEn: "English Name",
+      fullNameAr: "English Name",
+    });
+    expect(schemas.register.parse({ ...registration, fullNameEn: "" })).toMatchObject({
+      fullNameEn: "Arabic Name",
+      fullNameAr: "Arabic Name",
+    });
+  });
+
+  it("rejects registration without either full name", () => {
+    expect(() =>
+      schemas.register.parse({ ...registration, fullNameEn: "", fullNameAr: "" }),
+    ).toThrow();
+  });
+});
+
+describe("login input", () => {
+  it("requires at least 12 password characters", () => {
+    expect(() =>
+      schemas.login.parse({ email: "person@example.test", password: "12345678901" }),
+    ).toThrow();
+    expect(schemas.login.parse({ email: "person@example.test", password: "123456789012" })).toEqual(
+      { email: "person@example.test", password: "123456789012" },
+    );
+  });
+});
+
 describe("contributor invitation input", () => {
   const invitation = {
     email: "new.contributor@example.test",

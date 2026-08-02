@@ -5,14 +5,22 @@ export const schemas = {
     .object({
       email: z.string().trim().email().max(320),
       password: z.string().min(12).max(256),
-      fullNameEn: z.string().trim().min(1).max(200),
-      fullNameAr: z.string().trim().min(1).max(200),
+      fullNameEn: z.string().trim().max(200),
+      fullNameAr: z.string().trim().max(200),
       gender: z.enum(["male", "female"]),
       invitationToken: z.string().min(32).max(512).optional(),
     })
-    .strict(),
+    .strict()
+    .refine((value) => Boolean(value.fullNameEn || value.fullNameAr), {
+      message: "At least one full name is required",
+    })
+    .transform((value) => ({
+      ...value,
+      fullNameEn: value.fullNameEn || value.fullNameAr,
+      fullNameAr: value.fullNameAr || value.fullNameEn,
+    })),
   login: z
-    .object({ email: z.string().trim().email().max(320), password: z.string().min(1).max(256) })
+    .object({ email: z.string().trim().email().max(320), password: z.string().min(12).max(256) })
     .strict(),
   emailCode: z
     .object({ email: z.string().trim().email().max(320), code: z.string().regex(/^\d{6}$/) })

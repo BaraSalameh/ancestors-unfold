@@ -1,13 +1,49 @@
 import { z } from "zod";
 
-export const authFormSchema = z.object({
-  email: z.string().trim().min(1, "email_required").email("email_invalid"),
-  password: z.string(),
-  confirmPassword: z.string().optional(),
-  fullNameEn: z.string().optional(),
-  fullNameAr: z.string().optional(),
-  gender: z.enum(["male", "female"]).optional(),
-});
+export const authFormSchema = z
+  .object({
+    mode: z.enum(["login", "register"]),
+    email: z
+      .string()
+      .trim()
+      .min(1, "email_required")
+      .max(320, "email_invalid")
+      .email("email_invalid"),
+    password: z.string().max(256, "invalid_auth_input"),
+    confirmPassword: z.string().max(256, "invalid_auth_input").optional(),
+    fullNameEn: z.string().trim().max(200, "invalid_auth_input").optional(),
+    fullNameAr: z.string().trim().max(200, "invalid_auth_input").optional(),
+    gender: z.enum(["male", "female"]).optional(),
+  })
+  .superRefine((values, context) => {
+    if (!values.password) {
+      context.addIssue({ code: "custom", path: ["password"], message: "password_required" });
+    } else if (values.password.length < 12) {
+      context.addIssue({
+        code: "custom",
+        path: ["password"],
+        message:
+          values.mode === "register" ? "registration_password_too_short" : "password_too_short",
+      });
+    }
+    if (values.mode !== "register") return;
+    if (!values.fullNameEn && !values.fullNameAr)
+      context.addIssue({ code: "custom", path: ["fullNameEn"], message: "full_name_required" });
+    if (!values.gender)
+      context.addIssue({ code: "custom", path: ["gender"], message: "gender_required" });
+    if (!values.confirmPassword)
+      context.addIssue({
+        code: "custom",
+        path: ["confirmPassword"],
+        message: "confirm_password_required",
+      });
+    else if (values.password !== values.confirmPassword)
+      context.addIssue({
+        code: "custom",
+        path: ["confirmPassword"],
+        message: "passwords_do_not_match",
+      });
+  });
 
 export type AuthFormValues = z.infer<typeof authFormSchema>;
 export type AuthMode = "login" | "register";
@@ -21,14 +57,10 @@ export interface InvitationPrefill {
   member_gender: "male" | "female" | "unspecified";
 }
 
-export function registrationValidation(
-  values: AuthFormValues,
-): Partial<Record<keyof AuthFormValues, string>> {
-  const errors: Partial<Record<keyof AuthFormValues, string>> = {};
-  if (!values.fullNameEn?.trim()) errors.fullNameEn = "full_name_en_required";
-  if (!values.fullNameAr?.trim()) errors.fullNameAr = "full_name_ar_required";
-  if (!values.gender) errors.gender = "gender_required";
-  if (values.password.length < 12) errors.password = "registration_password_too_short";
-  if (values.password !== values.confirmPassword) errors.confirmPassword = "passwords_do_not_match";
-  return errors;
+export function normalizedRegistrationNames(
+  values: Pick<AuthFormValues, "fullNameEn" | "fullNameAr">,
+) {
+  const fullNameEn = values.fullNameEn?.trim() ?? "";
+  const fullNameAr = values.fullNameAr?.trim() ?? "";
+  return { fullNameEn: fullNameEn || fullNameAr, fullNameAr: fullNameAr || fullNameEn };
 }

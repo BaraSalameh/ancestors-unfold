@@ -6,7 +6,7 @@ import { authErrorKey } from "../domain/auth-error";
 import { AuthError } from "../domain/auth-service";
 import {
   authFormSchema,
-  registrationValidation,
+  normalizedRegistrationNames,
   type AuthBusyAction,
   type AuthFormValues,
   type AuthMode,
@@ -31,7 +31,10 @@ export function useAuthPage(search: AuthPageSearch) {
   const [invitationLoading, setInvitationLoading] = useState(Boolean(search.invitationToken));
   const form = useForm<AuthFormValues>({
     resolver: zodResolver(authFormSchema),
+    mode: "onSubmit",
+    reValidateMode: "onChange",
     defaultValues: {
+      mode,
       email: "",
       password: "",
       confirmPassword: "",
@@ -52,18 +55,13 @@ export function useAuthPage(search: AuthPageSearch) {
 
   const submit = form.handleSubmit(async (values) => {
     setErrorKey(null);
-    if (!values.password) return form.setError("password", { message: "password_required" });
-    if (mode === "register") {
-      const [field, message] = Object.entries(registrationValidation(values))[0] ?? [];
-      if (field && message) return form.setError(field as keyof AuthFormValues, { message });
-    }
     try {
       if (mode === "register") {
+        const names = normalizedRegistrationNames(values);
         const result = await auth.register({
           email: values.email,
           password: values.password,
-          fullNameEn: values.fullNameEn!,
-          fullNameAr: values.fullNameAr!,
+          ...names,
           gender: values.gender!,
           invitationToken: search.invitationToken,
         });
@@ -99,7 +97,10 @@ export function useAuthPage(search: AuthPageSearch) {
     }),
   );
   const changeMode = (value: string) => {
-    if (value === "login" || value === "register") setMode(value);
+    if (value === "login" || value === "register") {
+      setMode(value);
+      form.setValue("mode", value);
+    }
     setErrorKey(null);
     form.clearErrors();
   };

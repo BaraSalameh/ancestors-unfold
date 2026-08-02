@@ -10,6 +10,14 @@ import type { AuthPageController } from "../client/use-auth-page";
 import { AuthField, GoogleMark } from "./auth-field";
 import { AuthRegistrationFields, FormError } from "./auth-registration-fields";
 
+function errorAttributes(message: string | undefined, id: string) {
+  return message ? { "aria-invalid": true as const, "aria-describedby": id } : {};
+}
+
+function choose<T>(condition: boolean, whenTrue: T, whenFalse: T): T {
+  return condition ? whenTrue : whenFalse;
+}
+
 export function AuthCredentialsView({
   controller,
   redirect,
@@ -23,9 +31,12 @@ export function AuthCredentialsView({
 }) {
   const { t } = useI18n();
   const register = controller.mode === "register";
+  const errors = controller.form.formState.errors;
   return (
     <Tabs value={controller.mode} onValueChange={controller.changeMode}>
-      <TabsList className={`grid w-full ${invitationToken ? "grid-cols-1" : "grid-cols-2"}`}>
+      <TabsList
+        className={`grid w-full ${choose(Boolean(invitationToken), "grid-cols-1", "grid-cols-2")}`}
+      >
         {!invitationToken && <TabsTrigger value="login">{t("login")}</TabsTrigger>}
         <TabsTrigger value="register">{t("register")}</TabsTrigger>
       </TabsList>
@@ -52,19 +63,21 @@ export function AuthCredentialsView({
         )}
         <form onSubmit={controller.submit} className="space-y-4" noValidate>
           {register && <AuthRegistrationFields controller={controller} />}
-          <AuthField label={t("email")} icon={<Mail />}>
+          <AuthField label={t("email")} htmlFor="auth-email" icon={<Mail />}>
             <Input
+              id="auth-email"
               type="email"
               autoComplete="email"
               readOnly={Boolean(invitationToken)}
               aria-readonly={Boolean(invitationToken)}
+              {...errorAttributes(errors.email?.message, "email-error")}
               {...controller.form.register("email")}
             />
           </AuthField>
-          <FormError message={controller.form.formState.errors.email?.message} />
+          <FormError id="email-error" message={errors.email?.message} />
           <div>
             <div className="mb-2 flex justify-between">
-              <Label>{t("password")}</Label>
+              <Label htmlFor="auth-password">{t("password")}</Label>
               {!register && (
                 <button
                   type="button"
@@ -77,24 +90,28 @@ export function AuthCredentialsView({
             </div>
             <AuthField icon={<LockKeyhole />}>
               <PasswordInput
+                id="auth-password"
                 showLabel={t("show_password")}
                 hideLabel={t("hide_password")}
-                autoComplete={register ? "new-password" : "current-password"}
+                autoComplete={choose(register, "new-password", "current-password")}
+                {...errorAttributes(errors.password?.message, "password-error")}
                 {...controller.form.register("password")}
               />
             </AuthField>
-            <FormError message={controller.form.formState.errors.password?.message} />
+            <FormError id="password-error" message={errors.password?.message} />
           </div>
           {register && (
             <>
-              <Label>{t("confirm_password")}</Label>
+              <Label htmlFor="confirm-password">{t("confirm_password")}</Label>
               <PasswordInput
+                id="confirm-password"
                 showLabel={t("show_password")}
                 hideLabel={t("hide_password")}
                 autoComplete="new-password"
+                {...errorAttributes(errors.confirmPassword?.message, "confirm-password-error")}
                 {...controller.form.register("confirmPassword")}
               />
-              <FormError message={controller.form.formState.errors.confirmPassword?.message} />
+              <FormError id="confirm-password-error" message={errors.confirmPassword?.message} />
             </>
           )}
           {error && (
@@ -107,7 +124,7 @@ export function AuthCredentialsView({
             loading={controller.form.formState.isSubmitting}
             disabled={controller.form.formState.isSubmitting || controller.invitationLoading}
           >
-            {register ? t("create_account") : t("login")}
+            {choose(register, t("create_account"), t("login"))}
           </Button>
         </form>
       </TabsContent>

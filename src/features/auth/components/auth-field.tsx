@@ -2,16 +2,18 @@ import { Label } from "@/shared/ui/label";
 
 export function AuthField({
   label,
+  htmlFor,
   icon,
   children,
 }: {
   label?: string;
+  htmlFor?: string;
   icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-2">
-      {label && <Label>{label}</Label>}
+      {label && <Label htmlFor={htmlFor}>{label}</Label>}
       <div className="relative">
         {icon && (
           <span className="absolute inset-s-3 top-2.5 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:text-muted-foreground">

@@ -8,34 +8,58 @@ import { AuthField } from "./auth-field";
 
 type TranslationKey = Parameters<ReturnType<typeof useI18n>["t"]>[0];
 
-function FormError({ message }: { message?: string }) {
+function FormError({ id, message }: { id?: string; message?: string }) {
   const { t } = useI18n();
   return message ? (
-    <p className="mt-2 text-sm text-destructive">{t(message as TranslationKey)}</p>
+    <p id={id} role="alert" className="mt-2 text-sm text-destructive">
+      {t(message as TranslationKey)}
+    </p>
   ) : null;
 }
 
 export function AuthRegistrationFields({ controller }: { controller: AuthPageController }) {
   const { t } = useI18n();
+  const nameError = controller.form.formState.errors.fullNameEn?.message;
+  const genderError = controller.form.formState.errors.gender?.message;
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2">
-        <AuthField label={t("full_name_en")} icon={<UserRound />}>
-          <Input dir="ltr" {...controller.form.register("fullNameEn")} />
+        <AuthField label={t("full_name_en")} htmlFor="full-name-en" icon={<UserRound />}>
+          <Input
+            id="full-name-en"
+            dir="ltr"
+            aria-invalid={Boolean(nameError)}
+            aria-describedby={nameError ? "full-name-error" : undefined}
+            {...controller.form.register("fullNameEn")}
+          />
         </AuthField>
-        <AuthField label={t("full_name_ar")} icon={<UserRound />}>
-          <Input dir="rtl" {...controller.form.register("fullNameAr")} />
+        <AuthField label={t("full_name_ar")} htmlFor="full-name-ar" icon={<UserRound />}>
+          <Input
+            id="full-name-ar"
+            dir="rtl"
+            aria-invalid={Boolean(nameError)}
+            aria-describedby={nameError ? "full-name-error" : undefined}
+            {...controller.form.register("fullNameAr")}
+          />
         </AuthField>
       </div>
+      <FormError id="full-name-error" message={nameError} />
       <div>
-        <Label>{t("gender")}</Label>
+        <Label htmlFor="registration-gender">{t("gender")}</Label>
         <Select
           value={controller.form.watch("gender")}
           onValueChange={(value) =>
-            controller.form.setValue("gender", value as "male" | "female", { shouldValidate: true })
+            controller.form.setValue("gender", value as "male" | "female", {
+              shouldValidate: controller.form.formState.isSubmitted,
+            })
           }
         >
-          <SelectTrigger className="mt-2">
+          <SelectTrigger
+            id="registration-gender"
+            className="mt-2"
+            aria-invalid={Boolean(genderError)}
+            aria-describedby={genderError ? "gender-error" : undefined}
+          >
             <SelectValue placeholder={t("gender_required")} />
           </SelectTrigger>
           <SelectContent>
@@ -43,7 +67,7 @@ export function AuthRegistrationFields({ controller }: { controller: AuthPageCon
             <SelectItem value="female">{t("female")}</SelectItem>
           </SelectContent>
         </Select>
-        <FormError message={controller.form.formState.errors.gender?.message} />
+        <FormError id="gender-error" message={genderError} />
       </div>
     </>
   );
