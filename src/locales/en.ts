@@ -318,10 +318,12 @@ export const en = {
   tree_unavailable: "Family tree unavailable",
   tree_unavailable_hint: "This tree does not exist or could not be loaded.",
   family_dashboard: "Family dashboard",
+  tree_actions: "Tree actions",
   loading: "Loading…",
   tree_owner: "Tree owner",
   gender_unspecified: "Not specified",
   authenticity: "Authenticity",
+  view_authenticity_details: "View authenticity details",
   family_backed_explanation:
     "This tree is maintained by registered family members who manage different family branches. The platform does not independently certify every historical detail.",
   active_contributors: "Active contributors",

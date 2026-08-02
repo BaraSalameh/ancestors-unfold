@@ -3,6 +3,10 @@ import { useI18n } from "@/shared/i18n";
 import type { CurrentTree, Statistics } from "../pages/dashboard-types";
 import type { DashboardTreeControls } from "../client/use-dashboard-tree-controls";
 import type { ContributorAccountDeletionController } from "../client/use-contributor-account-deletion";
+import type { DashboardInvitationsController } from "../client/use-dashboard-invitations";
+import type { OwnershipTransferController } from "../client/use-ownership-transfer";
+import type { ContributorRemovalController } from "../client/use-contributor-removal";
+import type { OwnershipTransfer } from "../pages/dashboard-types";
 import { DashboardStat } from "./dashboard-components";
 import { DashboardHeaderActions } from "./dashboard-header-actions";
 
@@ -11,11 +15,19 @@ export function DashboardHeader({
   stats,
   treeControls,
   accountDeletion,
+  invitation,
+  transfer,
+  removal,
+  ownershipTransfer,
 }: {
   tree: CurrentTree;
   stats: Statistics;
   treeControls: DashboardTreeControls;
   accountDeletion: ContributorAccountDeletionController;
+  invitation: DashboardInvitationsController;
+  transfer: OwnershipTransferController;
+  removal: ContributorRemovalController;
+  ownershipTransfer: OwnershipTransfer | null;
 }) {
   const { t, lang } = useI18n();
   const name =
@@ -35,9 +47,13 @@ export function DashboardHeader({
             tree={tree}
             treeControls={treeControls}
             accountDeletion={accountDeletion}
+            invitation={invitation}
+            transfer={transfer}
+            removal={removal}
+            ownershipTransfer={ownershipTransfer}
           />
         </div>
-        <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-7 grid overflow-hidden rounded-xl border bg-background sm:grid-cols-2 lg:grid-cols-4">
           <DashboardStat
             icon={<Users />}
             label={t("people_recorded")}

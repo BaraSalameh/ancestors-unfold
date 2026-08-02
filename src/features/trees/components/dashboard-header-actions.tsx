@@ -1,10 +1,21 @@
 import { Link } from "@tanstack/react-router";
-import { Copy, ExternalLink, Pencil, TextCursorInput, Trash2 } from "lucide-react";
+import {
+  Copy,
+  ExternalLink,
+  MailPlus,
+  MoreHorizontal,
+  Pencil,
+  ShieldCheck,
+  TextCursorInput,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
 import { TooltipProvider } from "@/shared/ui/tooltip";
@@ -16,69 +27,162 @@ import {
 import type { CurrentTree } from "../pages/dashboard-types";
 import type { DashboardTreeControls } from "../client/use-dashboard-tree-controls";
 import type { ContributorAccountDeletionController } from "../client/use-contributor-account-deletion";
+import type { DashboardInvitationsController } from "../client/use-dashboard-invitations";
+import type { OwnershipTransferController } from "../client/use-ownership-transfer";
+import type { ContributorRemovalController } from "../client/use-contributor-removal";
+import type { OwnershipTransfer } from "../pages/dashboard-types";
 import { DashboardActionTooltip } from "./dashboard-components";
+
+type HeaderActionsProps = {
+  tree: CurrentTree;
+  treeControls: DashboardTreeControls;
+  accountDeletion: ContributorAccountDeletionController;
+  invitation: DashboardInvitationsController;
+  transfer: OwnershipTransferController;
+  removal: ContributorRemovalController;
+  ownershipTransfer: OwnershipTransfer | null;
+};
+
+function TreeActionsTrigger() {
+  const { t } = useI18n();
+  return (
+    <DropdownMenuTrigger asChild>
+      <Button variant="outline">
+        <MoreHorizontal aria-hidden="true" />
+        {t("tree_actions")}
+      </Button>
+    </DropdownMenuTrigger>
+  );
+}
+
+function OwnerTreeActions({
+  tree,
+  treeControls,
+  invitation,
+  transfer,
+  removal,
+  ownershipTransfer,
+}: Omit<HeaderActionsProps, "accountDeletion">) {
+  const { t } = useI18n();
+  return (
+    <DropdownMenu>
+      <TreeActionsTrigger />
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel>{t("tree_actions")}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={treeControls.openRename}>
+          <TextCursorInput aria-hidden="true" />
+          {t("rename")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => invitation.setInviteOpen(true)}>
+          <MailPlus aria-hidden="true" />
+          {t("invite_contributor")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={removal.removableBranches.length === 0}
+          onSelect={() => removal.setOpen(true)}
+        >
+          <Trash2 aria-hidden="true" />
+          {t("cancel_contributor_contribution")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={Boolean(ownershipTransfer?.verified)}
+          onSelect={() => transfer.setOpen(true)}
+        >
+          <ShieldCheck aria-hidden="true" />
+          {t(
+            ownershipTransfer && !ownershipTransfer.verified
+              ? "continue_ownership_transfer"
+              : "transfer_ownership",
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link
+            to="/tree/$id"
+            params={{ id: tree.id }}
+            search={{ mode: "preview", preview: "lineage" }}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ExternalLink aria-hidden="true" />
+            {t("open_preview")}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void treeControls.copyPreview()}>
+          <Copy aria-hidden="true" />
+          {t("copy_preview_link")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ContributorTreeActions({
+  tree,
+  treeControls,
+  accountDeletion,
+}: Pick<HeaderActionsProps, "tree" | "treeControls" | "accountDeletion">) {
+  const { t } = useI18n();
+  return (
+    <DropdownMenu>
+      <TreeActionsTrigger />
+      <DropdownMenuContent align="end" className="w-64">
+        {canUseTreePreviewControls(tree.role) && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link
+                to="/tree/$id"
+                params={{ id: tree.id }}
+                search={{ mode: "preview", preview: "lineage" }}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink aria-hidden="true" />
+                {t("open_preview")}
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void treeControls.copyPreview()}>
+              <Copy aria-hidden="true" />
+              {t("copy_preview_link")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onSelect={() => accountDeletion.setOpen(true)}
+        >
+          <Trash2 className="me-2 h-4 w-4" />
+          {t("cancel_contribution")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function DashboardHeaderActions({
   tree,
   treeControls,
   accountDeletion,
-}: {
-  tree: CurrentTree;
-  treeControls: DashboardTreeControls;
-  accountDeletion: ContributorAccountDeletionController;
-}) {
+  invitation,
+  transfer,
+  removal,
+  ownershipTransfer,
+}: HeaderActionsProps) {
   const { t } = useI18n();
   return (
     <TooltipProvider delayDuration={350}>
       <div className="flex flex-wrap justify-end gap-2">
         {canUseOwnerTreeControls(tree.role) && (
-          <>
-            <DashboardActionTooltip
-              title={t("rename")}
-              description={t("rename_tooltip_description")}
-            >
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={treeControls.openRename}
-                aria-label={t("rename")}
-              >
-                <TextCursorInput aria-hidden="true" />
-              </Button>
-            </DashboardActionTooltip>
-          </>
-        )}
-        {canUseTreePreviewControls(tree.role) && (
-          <DropdownMenu>
-            <DashboardActionTooltip
-              title={t("preview")}
-              description={t("preview_tooltip_description")}
-            >
-              <DropdownMenuTrigger asChild>
-                <Button size="icon" variant="outline" aria-label={t("preview")}>
-                  <ExternalLink aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-            </DashboardActionTooltip>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/tree/$id"
-                  params={{ id: tree.id }}
-                  search={{ mode: "preview", preview: "lineage" }}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink aria-hidden="true" />
-                  {t("open_preview")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void treeControls.copyPreview()}>
-                <Copy aria-hidden="true" />
-                {t("copy_preview_link")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <OwnerTreeActions
+            tree={tree}
+            treeControls={treeControls}
+            invitation={invitation}
+            transfer={transfer}
+            removal={removal}
+            ownershipTransfer={ownershipTransfer}
+          />
         )}
         <DashboardActionTooltip title={t("edit")} description={t("edit_tooltip_description")}>
           <Button
@@ -97,12 +201,11 @@ export function DashboardHeaderActions({
           </Button>
         </DashboardActionTooltip>
         {tree.role === "contributor" && (
-          <>
-            <Button variant="destructive" onClick={() => accountDeletion.setOpen(true)}>
-              <Trash2 className="me-2 h-4 w-4" />
-              {t("cancel_contribution")}
-            </Button>
-          </>
+          <ContributorTreeActions
+            tree={tree}
+            treeControls={treeControls}
+            accountDeletion={accountDeletion}
+          />
         )}
       </div>
     </TooltipProvider>

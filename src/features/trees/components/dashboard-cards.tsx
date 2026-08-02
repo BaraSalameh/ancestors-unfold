@@ -1,20 +1,22 @@
-import { Link } from "@tanstack/react-router";
-import { Activity, AlertTriangle, MailPlus, RotateCw, ShieldCheck, Trash2, X } from "lucide-react";
+import { AlertTriangle, RotateCw, ShieldCheck, X } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/shared/ui/dialog";
 import { useI18n } from "@/shared/i18n";
-import { activityDescription, type ActivityItem } from "../domain/activity-label";
-import type { DashboardData, OwnershipTransfer } from "../pages/dashboard-types";
+import type { DashboardData } from "../pages/dashboard-types";
 import type { DashboardInvitationsController } from "../client/use-dashboard-invitations";
-import type { OwnershipTransferController } from "../client/use-ownership-transfer";
-import type { ContributorRemovalController } from "../client/use-contributor-removal";
 import { AuthenticityRoadmap } from "./authenticity-roadmap";
 import { DashboardFact } from "./dashboard-components";
 
 type InvitationController = DashboardInvitationsController;
-type TransferController = OwnershipTransferController;
-type RemovalController = ContributorRemovalController;
 type Local = (en?: string | null, ar?: string | null) => string;
 
 export function BranchesCard({ data, local }: { data: DashboardData; local: Local }) {
@@ -109,50 +111,36 @@ export function InvitationsCard({
   );
 }
 
-export function ActivityCard({ activity }: { activity: ActivityItem[] }) {
-  const { t, lang } = useI18n();
-  return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between">
-        <CardTitle>{t("latest_activity")}</CardTitle>
-        <Button asChild size="icon" variant="ghost" aria-label={t("view_activity_history")}>
-          <Link to="/activity">
-            <Activity className="h-4 w-4" />
-          </Link>
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {activity.length === 0 && (
-          <p className="text-sm text-muted-foreground">{t("no_activity")}</p>
-        )}
-        {activity.slice(0, 5).map((row) => (
-          <div key={row.id} className="flex items-center gap-3 border-b pb-3 last:border-0">
-            <Activity className="h-4 w-4 text-primary" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{activityDescription(row, lang, t)}</p>
-              <p className="text-xs text-muted-foreground">
-                {new Date(row.createdAt).toLocaleString(lang === "ar" ? "ar" : "en")}
-              </p>
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
 export function AuthenticityCard({ data, local }: { data: DashboardData; local: Local }) {
   const { t } = useI18n();
   const stats = data.stats;
+  const levelLabel = {
+    new: t("new_family_tree"),
+    growing: t("growing_family_tree"),
+    family_backed: t("family_backed_tree"),
+    established: t("established_family_tree"),
+  }[stats.earned_authenticity_level];
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5" />
-          {t("authenticity")}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-4 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="rounded-full bg-primary/10 p-2 text-primary">
+              <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="font-semibold">{t("authenticity")}</p>
+              <p className="text-sm text-muted-foreground">{levelLabel}</p>
+            </div>
+          </div>
+          <Badge
+            variant={stats.authenticity_level === "under_review" ? "destructive" : "secondary"}
+          >
+            {t(
+              stats.authenticity_level === "under_review" ? "under_review" : "authenticity_current",
+            )}
+          </Badge>
+        </div>
         {stats.authenticity_level === "under_review" && (
           <div
             className="flex gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm"
@@ -172,97 +160,34 @@ export function AuthenticityCard({ data, local }: { data: DashboardData; local: 
             </div>
           </div>
         )}
-        <AuthenticityRoadmap stats={stats} />
-        <p className="text-sm text-muted-foreground">{t("family_backed_explanation")}</p>
-        <dl className="space-y-3 text-sm">
-          <DashboardFact
-            label={t("tree_owner")}
-            value={local(stats.owner_name_en, stats.owner_name_ar)}
-          />
-          <DashboardFact label={t("serious_complaints")} value={String(stats.serious_complaints)} />
-          <DashboardFact
-            label={t("tree_active_since")}
-            value={new Date(stats.tree_created_at).toLocaleDateString()}
-          />
-        </dl>
-      </CardContent>
-    </Card>
-  );
-}
-
-export function OwnerControlsCard({
-  transfer,
-  transferController,
-  invitation,
-  removal,
-  local,
-}: {
-  transfer: OwnershipTransfer | null;
-  transferController: TransferController;
-  invitation: InvitationController;
-  removal: RemovalController;
-  local: Local;
-}) {
-  const { t } = useI18n();
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("owner_controls")}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <Button
-          className="w-full justify-start"
-          variant="outline"
-          onClick={() => invitation.setInviteOpen(true)}
-        >
-          <MailPlus className="me-2 h-4 w-4" />
-          {t("invite_contributor")}
-        </Button>
-        <Button
-          className="w-full justify-start"
-          variant="outline"
-          disabled={removal.removableBranches.length === 0}
-          onClick={() => removal.setOpen(true)}
-        >
-          <Trash2 className="me-2 h-4 w-4" />
-          {t("cancel_contributor_contribution")}
-        </Button>
-        {removal.removableBranches.length === 0 && (
-          <p className="text-sm text-muted-foreground">{t("no_active_contributors_to_remove")}</p>
-        )}
-        <Button
-          className="w-full justify-start"
-          variant="outline"
-          disabled={Boolean(transfer?.verified)}
-          onClick={() => transferController.setOpen(true)}
-        >
-          <ShieldCheck className="me-2 h-4 w-4" />
-          {t(transfer && !transfer.verified ? "continue_ownership_transfer" : "transfer_ownership")}
-        </Button>
-        {transfer && (
-          <div className="mt-4 space-y-3 rounded-lg border p-4 text-foreground">
-            <p className="font-medium">{t("ownership_transfer_pending")}</p>
-            <p className="text-sm text-muted-foreground">
-              {t("ownership_transfer_to", {
-                name: local(transfer.proposed_owner_name_en, transfer.proposed_owner_name_ar),
-                branch: local(transfer.branch_name_en, transfer.branch_name_ar),
-              })}
-            </p>
-            {transfer.verified ? (
-              <Badge>{t("awaiting_contributor_acceptance")}</Badge>
-            ) : (
-              <Badge variant="outline">{t("verification_code_required")}</Badge>
-            )}
-            <Button
-              variant="outline"
-              loading={transferController.action === "cancel"}
-              disabled={Boolean(transferController.action)}
-              onClick={() => void transferController.act("cancel")}
-            >
-              {t("cancel_transfer")}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="w-full">
+              {t("view_authenticity_details")}
             </Button>
-          </div>
-        )}
+          </DialogTrigger>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{t("authenticity")}</DialogTitle>
+              <DialogDescription>{t("family_backed_explanation")}</DialogDescription>
+            </DialogHeader>
+            <AuthenticityRoadmap stats={stats} />
+            <dl className="space-y-3 border-t pt-4 text-sm">
+              <DashboardFact
+                label={t("tree_owner")}
+                value={local(stats.owner_name_en, stats.owner_name_ar)}
+              />
+              <DashboardFact
+                label={t("serious_complaints")}
+                value={String(stats.serious_complaints)}
+              />
+              <DashboardFact
+                label={t("tree_active_since")}
+                value={new Date(stats.tree_created_at).toLocaleDateString()}
+              />
+            </dl>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

@@ -316,10 +316,12 @@ export const ar = {
   preview_link_copied: "تم نسخ رابط المعاينة",
   preview_link_copy_failed: "تعذر نسخ رابط المعاينة",
   family_dashboard: "لوحة تحكم العائلة",
+  tree_actions: "إجراءات الشجرة",
   loading: "جارٍ التحميل…",
   tree_owner: "مالك الشجرة",
   gender_unspecified: "غير محدد",
   authenticity: "الموثوقية العائلية",
+  view_authenticity_details: "عرض تفاصيل الموثوقية",
   family_backed_explanation:
     "تتم صيانة هذه الشجرة بواسطة أفراد عائلة مسجلين يديرون فروعاً عائلية مختلفة. لا تصادق المنصة بشكل مستقل على كل معلومة تاريخية.",
   active_contributors: "المساهمون النشطون",

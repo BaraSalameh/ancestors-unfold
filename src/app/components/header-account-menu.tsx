@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Activity, LogOut, Settings, UserRound } from "lucide-react";
+import { Activity, House, LogOut, Settings, UserRound } from "lucide-react";
 import { accountDisplayName } from "@/features/account";
 import { Button } from "@/shared/ui/button";
 import {
@@ -13,7 +13,7 @@ import {
 
 type User = { email: string; fullNameEn: string; fullNameAr: string };
 type Translate = (
-  key: "user_profile" | "profile_settings" | "activity_history" | "logout",
+  key: "user_profile" | "dashboard" | "profile_settings" | "activity_history" | "logout",
 ) => string;
 
 export function HeaderAccountMenu({
@@ -42,6 +42,12 @@ export function HeaderAccountMenu({
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/">
+            <House className="h-4 w-4" />
+            {t("dashboard")}
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to="/profile">
             <Settings className="h-4 w-4" />
