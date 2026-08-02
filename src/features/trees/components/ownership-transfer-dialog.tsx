@@ -1,7 +1,7 @@
 import { Button } from "@/shared/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
-import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { VerificationCodeInput } from "@/shared/ui/verification-code-input";
 import { useI18n } from "@/shared/i18n";
 import type { OwnershipTransferController } from "../client/use-ownership-transfer";
 import type { Branch, OwnershipTransfer } from "../pages/dashboard-types";
@@ -71,16 +71,11 @@ export function OwnershipTransferDialog({
             </p>
             <div className="space-y-2">
               <Label htmlFor="ownership-transfer-code">{t("verification_code")}</Label>
-              <Input
+              <VerificationCodeInput
                 id="ownership-transfer-code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                dir="ltr"
-                maxLength={6}
                 value={controller.code}
-                onChange={(event) =>
-                  controller.setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                }
+                onChange={controller.setCode}
+                disabled={Boolean(controller.action)}
               />
               {transfer.verification_expires_at && (
                 <p className="text-xs text-muted-foreground">

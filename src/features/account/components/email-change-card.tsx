@@ -7,9 +7,9 @@ import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/shared/ui/input-otp";
 import { Label } from "@/shared/ui/label";
 import { PasswordInput } from "@/shared/ui/password-input";
+import { VerificationCodeInput } from "@/shared/ui/verification-code-input";
 import { profileErrorMessage } from "../domain/profile-error";
 
 export function EmailChangeCard() {
@@ -143,15 +143,7 @@ function EmailCodeForm({
       <p className="text-sm font-medium" dir="ltr">
         {email}
       </p>
-      <div dir="ltr">
-        <InputOTP maxLength={6} value={code} onChange={setCode} inputMode="numeric">
-          <InputOTPGroup>
-            {[0, 1, 2, 3, 4, 5].map((index) => (
-              <InputOTPSlot key={index} index={index} />
-            ))}
-          </InputOTPGroup>
-        </InputOTP>
-      </div>
+      <VerificationCodeInput value={code} onChange={setCode} disabled={busy} />
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>

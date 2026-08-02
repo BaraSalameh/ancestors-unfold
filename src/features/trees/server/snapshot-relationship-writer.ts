@@ -130,7 +130,7 @@ async function writeSpouseRelationships(
 ): Promise<void> {
   for (const pair of pairs.values()) {
     const existing = await client.query(
-      `SELECT u.id FROM app.unions u JOIN app.union_partners a ON a.union_id=u.id AND a.member_id=$2 JOIN app.union_partners b ON snapshot.union_id=u.id AND snapshot.member_id=$3 WHERE u.tree_id=$1 AND u.deleted_at IS NULL`,
+      `SELECT u.id FROM app.unions u JOIN app.union_partners a ON a.union_id=u.id AND a.member_id=$2 JOIN app.union_partners b ON b.union_id=u.id AND b.member_id=$3 WHERE u.tree_id=$1 AND u.deleted_at IS NULL`,
       [treeId, pair.a, pair.b],
     );
     if (existing.rowCount) {

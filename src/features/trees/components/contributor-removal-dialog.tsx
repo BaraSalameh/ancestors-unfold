@@ -1,7 +1,7 @@
 import { Button } from "@/shared/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
-import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { VerificationCodeInput } from "@/shared/ui/verification-code-input";
 import { useI18n } from "@/shared/i18n";
 import type { ContributorRemovalController } from "../client/use-contributor-removal";
 
@@ -77,16 +77,11 @@ export function ContributorRemovalDialog({
             </p>
             <div className="space-y-2">
               <Label htmlFor="contributor-removal-code">{t("verification_code")}</Label>
-              <Input
+              <VerificationCodeInput
                 id="contributor-removal-code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                dir="ltr"
-                maxLength={6}
                 value={controller.code}
-                onChange={(event) =>
-                  controller.setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                }
+                onChange={controller.setCode}
+                disabled={Boolean(controller.action)}
               />
               <p className="text-xs text-muted-foreground">
                 {t("verification_code_expires", {

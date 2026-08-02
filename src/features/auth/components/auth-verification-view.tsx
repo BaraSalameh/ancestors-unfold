@@ -1,6 +1,6 @@
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/shared/ui/input-otp";
+import { VerificationCodeInput } from "@/shared/ui/verification-code-input";
 import { useI18n } from "@/shared/i18n";
 import type { AuthPageController } from "../client/use-auth-page";
 
@@ -17,20 +17,8 @@ export function AuthVerificationView({
       <p className="text-center text-sm font-medium" dir="ltr">
         {controller.pendingEmail}
       </p>
-      <div className="flex justify-center" dir="ltr">
-        <InputOTP
-          maxLength={6}
-          value={controller.code}
-          onChange={controller.setCode}
-          inputMode="numeric"
-          pattern="[0-9]*"
-        >
-          <InputOTPGroup>
-            {[0, 1, 2, 3, 4, 5].map((index) => (
-              <InputOTPSlot key={index} index={index} />
-            ))}
-          </InputOTPGroup>
-        </InputOTP>
+      <div className="flex justify-center">
+        <VerificationCodeInput value={controller.code} onChange={controller.setCode} />
       </div>
       {error && (
         <Alert variant="destructive">

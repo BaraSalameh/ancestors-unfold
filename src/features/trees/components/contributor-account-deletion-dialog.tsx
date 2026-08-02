@@ -10,6 +10,7 @@ import {
 } from "@/shared/ui/alert-dialog";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { VerificationCodeInput } from "@/shared/ui/verification-code-input";
 import { useI18n } from "@/shared/i18n";
 import type { ContributorAccountDeletionController } from "../client/use-contributor-account-deletion";
 
@@ -58,16 +59,11 @@ export function ContributorAccountDeletionDialog({
           <>
             <div className="space-y-2">
               <Label htmlFor="delete-account-code">{t("verification_code")}</Label>
-              <Input
+              <VerificationCodeInput
                 id="delete-account-code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                dir="ltr"
-                maxLength={6}
                 value={controller.code}
-                onChange={(event) =>
-                  controller.setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                }
+                onChange={controller.setCode}
+                disabled={Boolean(controller.action)}
               />
               <p className="text-xs text-muted-foreground">{t("account_deletion_code_desc")}</p>
               <p className="text-xs text-muted-foreground">
