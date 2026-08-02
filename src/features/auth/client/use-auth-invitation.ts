@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
-import type { AuthFormValues, InvitationPrefill } from "../domain/auth-form";
+import {
+  invitationRegistrationValues,
+  type AuthFormValues,
+  type InvitationPrefill,
+} from "../domain/auth-form";
 
 export function useAuthInvitation(
   invitationToken: string | undefined,
@@ -18,14 +22,7 @@ export function useAuthInvitation(
       })
       .then((invitation) => {
         if (!active) return;
-        form.reset({
-          email: invitation.invited_email,
-          fullNameEn: invitation.invited_name_en,
-          fullNameAr: invitation.invited_name_ar,
-          gender: invitation.member_gender === "unspecified" ? undefined : invitation.member_gender,
-          password: "",
-          confirmPassword: "",
-        });
+        form.reset(invitationRegistrationValues(invitation));
       })
       .catch(() => active && onInvalid())
       .finally(() => active && onLoaded());

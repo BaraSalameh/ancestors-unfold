@@ -19,6 +19,28 @@ describe("API authentication adapter", () => {
     });
   });
 
+  it("preserves an invalid contributor invitation response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ code: "INVALID_INVITATION" }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    await expect(
+      apiAuthService.register({
+        email: "invitee@example.com",
+        password: "long-password",
+        fullNameEn: "Invited Person",
+        fullNameAr: "شخص مدعو",
+        gender: "male",
+        invitationToken: "cancelled-token",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_INVITATION" });
+  });
+
   it("maps service failures without exposing response details", async () => {
     vi.stubGlobal(
       "fetch",

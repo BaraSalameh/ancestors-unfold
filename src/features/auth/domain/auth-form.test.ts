@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { authFormSchema, normalizedRegistrationNames } from "./auth-form";
+import {
+  authFormSchema,
+  invitationRegistrationValues,
+  normalizedRegistrationNames,
+} from "./auth-form";
 
 const registration = {
   mode: "register" as const,
@@ -76,5 +80,16 @@ describe("authentication form validation", () => {
       fullNameEn: "Name",
       fullNameAr: "Name",
     });
+  });
+
+  it("preserves registration mode when an invitation prefills the form", () => {
+    expect(
+      invitationRegistrationValues({
+        invited_email: "invitee@example.test",
+        invited_name_en: "Invited Person",
+        invited_name_ar: "Invited Person",
+        member_gender: "male",
+      }),
+    ).toMatchObject({ mode: "register", email: "invitee@example.test", gender: "male" });
   });
 });
