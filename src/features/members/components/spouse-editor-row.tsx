@@ -1,21 +1,31 @@
 import { ChevronDown, ChevronUp, HelpCircle, Link2, Unlink, X } from "lucide-react";
-import { familyStore } from "@/features/trees/client";
 import { wifeColorFor } from "@/features/trees/domain";
 import { displayName, ordinal, useI18n } from "@/shared/i18n";
 import type { FamilyMember } from "../domain/types";
 
 interface SpouseEditorRowProps {
-  male: FamilyMember | undefined;
-  maleId: string;
   wife: FamilyMember;
   index: number;
   count: number;
+  divorced: boolean;
+  locked?: boolean;
+  onToggleDivorce: () => void;
+  onMove: (direction: -1 | 1) => void;
+  onRemove: () => void;
 }
 
-export function SpouseEditorRow({ male, maleId, wife, index, count }: SpouseEditorRowProps) {
+export function SpouseEditorRow({
+  wife,
+  index,
+  count,
+  divorced,
+  locked,
+  onToggleDivorce,
+  onMove,
+  onRemove,
+}: SpouseEditorRowProps) {
   const { t, lang } = useI18n();
   const color = wifeColorFor(index);
-  const divorced = (male?.divorced_from ?? []).includes(wife.id);
   return (
     <div
       className="flex items-center gap-2 rounded-md border bg-card px-2 py-1.5 text-sm"
@@ -39,7 +49,7 @@ export function SpouseEditorRow({ male, maleId, wife, index, count }: SpouseEdit
       )}
       <button
         type="button"
-        onClick={() => familyStore.toggleDivorce(maleId, wife.id)}
+        onClick={onToggleDivorce}
         className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
         title={divorced ? t("mark_married") : t("mark_divorced")}
       >
@@ -49,7 +59,7 @@ export function SpouseEditorRow({ male, maleId, wife, index, count }: SpouseEdit
         <button
           type="button"
           disabled={index === 0}
-          onClick={() => familyStore.reorderSpouse(maleId, wife.id, -1)}
+          onClick={() => onMove(-1)}
           className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
           title={t("move_spouse_up")}
         >
@@ -58,21 +68,23 @@ export function SpouseEditorRow({ male, maleId, wife, index, count }: SpouseEdit
         <button
           type="button"
           disabled={index === count - 1}
-          onClick={() => familyStore.reorderSpouse(maleId, wife.id, 1)}
+          onClick={() => onMove(1)}
           className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
           title={t("move_spouse_down")}
         >
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </div>
-      <button
-        type="button"
-        onClick={() => familyStore.removeSpouse(maleId, wife.id)}
-        className="rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-        title={t("remove_wife")}
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+      {!locked && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          title={t("remove_wife")}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }

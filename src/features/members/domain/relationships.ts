@@ -93,6 +93,18 @@ export function detachParentRelationship(
   );
 }
 
+export function setMotherRelationship(
+  members: FamilyMember[],
+  childId: string,
+  motherId: string | undefined,
+  updatedAt: string,
+): FamilyMember[] {
+  const updated = members.map((member) =>
+    member.id === childId ? { ...member, mother_id: motherId, updated_at: updatedAt } : member,
+  );
+  return motherId ? ensureParentsAreSpouses(updated, childId, updatedAt) : updated;
+}
+
 export function removeSpouseAttachment(
   members: FamilyMember[],
   husbandId: string,

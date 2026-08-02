@@ -2,6 +2,7 @@ import { useI18n } from "@/shared/i18n";
 import type { MemberFormController } from "../client/use-member-form";
 import type { FamilyMember } from "../domain/types";
 import { ExternalChildrenEditor } from "./external-children-editor";
+import { MotherChildrenEditor } from "./mother-children-editor";
 import { RelationSearch } from "./relation-search";
 import { SpousesEditor } from "./spouses-editor";
 
@@ -9,10 +10,12 @@ export function MemberRelationshipFields({
   form,
   memberId,
   members,
+  lockedSpouse = false,
 }: {
   form: MemberFormController;
   memberId?: string;
   members: FamilyMember[];
+  lockedSpouse?: boolean;
 }) {
   const { t, lang } = useI18n();
   const spouseEditor = form.draft.gender === "male" && Boolean(memberId);
@@ -49,14 +52,19 @@ export function MemberRelationshipFields({
           onChange={(value) => form.patch("spouse_id", value)}
           options={form.draft.gender === "male" ? form.females : form.males}
           lang={lang}
+          selectedOption={members.find((member) => member.id === form.draft.spouse_id)}
+          disabled={lockedSpouse}
         />
       )}
       {spouseEditor && memberId && <SpousesEditor maleId={memberId} allMembers={members} />}
       {form.draft.gender === "female" && (
-        <ExternalChildrenEditor
-          value={form.draft.external_children}
-          onChange={(value) => form.patch("external_children", value)}
-        />
+        <>
+          {memberId && <MotherChildrenEditor motherId={memberId} members={members} />}
+          <ExternalChildrenEditor
+            value={form.draft.external_children}
+            onChange={(value) => form.patch("external_children", value)}
+          />
+        </>
       )}
     </>
   );

@@ -51,11 +51,13 @@ export function SpousesEditor({
           {wives.map((wife, index) => (
             <SpouseEditorRow
               key={wife.id}
-              male={male}
-              maleId={maleId}
               wife={wife}
               index={index}
               count={wives.length}
+              divorced={(male?.divorced_from ?? []).includes(wife.id)}
+              onToggleDivorce={() => familyStore.toggleDivorce(maleId, wife.id)}
+              onMove={(direction) => familyStore.reorderSpouse(maleId, wife.id, direction)}
+              onRemove={() => familyStore.removeSpouse(maleId, wife.id)}
             />
           ))}
         </div>

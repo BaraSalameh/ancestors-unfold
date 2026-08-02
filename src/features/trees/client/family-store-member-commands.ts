@@ -1,10 +1,11 @@
-import type { FamilyMember, MemberInput } from "@/features/members/domain";
+import type { FamilyMember, MemberInput, StagedSpouse } from "@/features/members/domain";
 import {
   detachParentRelationship,
   ensureParentsAreSpouses,
   linkSpouses,
   removeMember,
   removeSpouseAttachment,
+  setMotherRelationship,
   toggleDivorce as toggleDivorceRelationship,
 } from "@/features/members/domain";
 import { mirrorSpouseLink } from "./member-link-mutations";
@@ -19,6 +20,97 @@ export interface MemberCommandContext {
 
 export function createMemberCommands(ctx: MemberCommandContext) {
   return { ...createMemberCrudCommands(ctx), ...createRelationshipCommands(ctx) };
+}
+
+function addFatherWithSpouses(
+  ctx: MemberCommandContext,
+  input: MemberInput,
+  childId: string | undefined,
+  spouses: StagedSpouse[],
+  imageFile?: File,
+): FamilyMember {
+  const now = new Date().toISOString();
+  const fatherId = crypto.randomUUID();
+  let father: FamilyMember | undefined;
+  let stagedAnyImage = Boolean(imageFile);
+  ctx.commit(() => {
+    const spouseIds: string[] = [];
+    const divorcedIds: string[] = [];
+    const createdWives: FamilyMember[] = [];
+
+    for (const staged of spouses) {
+      let wife: FamilyMember | undefined;
+      if (staged.kind === "existing") {
+        wife = ctx.state.find(
+          (member) => member.id === staged.memberId && member.gender === "female",
+        );
+      } else if (staged.kind === "new" && staged.input) {
+        const wifeId = crypto.randomUUID();
+        wife = {
+          ...staged.input,
+          id: wifeId,
+          gender: "female",
+          spouse_id: fatherId,
+          created_at: now,
+          updated_at: now,
+        };
+        createdWives.push(wife);
+        if (staged.imageFile) {
+          ctx.stagedImages.set(wifeId, staged.imageFile);
+          stagedAnyImage = true;
+        }
+      } else if (staged.kind === "unknown") {
+        wife = {
+          id: crypto.randomUUID(),
+          name_en: "Unknown wife",
+          name_ar: "زوجة غير معروفة",
+          gender: "female",
+          spouse_id: fatherId,
+          is_unknown: true,
+          created_at: now,
+          updated_at: now,
+        };
+        createdWives.push(wife);
+      }
+      if (!wife || spouseIds.includes(wife.id)) continue;
+      spouseIds.push(wife.id);
+      if (staged.divorced) divorcedIds.push(wife.id);
+    }
+
+    father = {
+      ...input,
+      id: fatherId,
+      gender: "male",
+      spouse_id: spouseIds[0],
+      spouse_ids: spouseIds,
+      divorced_from: divorcedIds.length ? divorcedIds : undefined,
+      created_at: now,
+      updated_at: now,
+    };
+    ctx.state = [...ctx.state, father, ...createdWives].map((member) => {
+      if (!spouseIds.includes(member.id)) return member;
+      const divorcedFrom = new Set(member.divorced_from ?? []);
+      if (divorcedIds.includes(member.id)) divorcedFrom.add(fatherId);
+      return {
+        ...member,
+        spouse_id: member.spouse_id ?? fatherId,
+        divorced_from: divorcedFrom.size ? [...divorcedFrom] : undefined,
+        updated_at: now,
+      };
+    });
+    if (childId) {
+      ctx.state = ctx.state.map((member) =>
+        member.id === childId ? { ...member, father_id: fatherId, updated_at: now } : member,
+      );
+      ctx.state = ensureParentsAreSpouses(ctx.state, childId, now);
+    }
+    if (imageFile) ctx.stagedImages.set(fatherId, imageFile);
+  });
+  if (stagedAnyImage) {
+    ctx.replaceStagedImages(ctx.stagedImages);
+    ctx.emit();
+  }
+  return father!;
 }
 
 function createMemberCrudCommands(ctx: MemberCommandContext) {
@@ -72,6 +164,14 @@ function createMemberCrudCommands(ctx: MemberCommandContext) {
         ctx.emit();
       }
       return mother!;
+    },
+    addFatherWithSpouses(
+      input: MemberInput,
+      childId: string | undefined,
+      spouses: StagedSpouse[],
+      imageFile?: File,
+    ): FamilyMember {
+      return addFatherWithSpouses(ctx, input, childId, spouses, imageFile);
     },
     setPosition(id: string, pos: { x: number; y: number } | null): void {
       ctx.commit(() => {
@@ -135,6 +235,12 @@ function createRelationshipCommands(ctx: MemberCommandContext) {
       const now = new Date().toISOString();
       ctx.commit(() => {
         ctx.state = detachParentRelationship(ctx.state, id, role, now);
+      });
+    },
+    setMother(childId: string, motherId: string | undefined): void {
+      const now = new Date().toISOString();
+      ctx.commit(() => {
+        ctx.state = setMotherRelationship(ctx.state, childId, motherId, now);
       });
     },
     toggleDivorce(aId: string, bId: string): void {

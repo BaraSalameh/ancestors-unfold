@@ -1,10 +1,21 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useState } from "react";
 import { toast } from "sonner";
 import { MemberForm } from "@/features/members";
 import { familyStore, useFamily } from "@/features/trees";
 import { useI18n } from "@/shared/i18n";
 import { addMemberTitleKey } from "../domain/add-member-title";
 import { memberDetailsSearch } from "../domain/member-navigation";
+import { existingStagedSpouse, type StagedSpouse } from "../domain/staged-spouse";
+import { StagedSpousesEditor } from "../components/staged-spouses-editor";
+import type { FamilyMember } from "../domain/types";
+
+function lockedFatherForMother(
+  parentRole: "father" | "mother" | undefined,
+  child: FamilyMember | undefined,
+): string | undefined {
+  return parentRole === "mother" ? child?.father_id : undefined;
+}
 
 export function AddPage() {
   const { fatherId, motherId, childId, spouseId, parentRole, returnPreview } = useSearch({
@@ -49,13 +60,18 @@ export function AddMemberPage({
   // Pre-fill based on context
   const child = childId ? members.find((m) => m.id === childId) : undefined;
   const spouseTo = spouseId ? members.find((m) => m.id === spouseId) : undefined;
+  const addingFather = parentRole === "father";
+  const lockedFatherSpouseId = lockedFatherForMother(parentRole, child);
+  const [stagedSpouses, setStagedSpouses] = useState<StagedSpouse[]>(() =>
+    child?.mother_id ? [existingStagedSpouse(child.mother_id, true)] : [],
+  );
   if (!familyStore.canEditActiveTree())
     return <div className="p-8 text-center text-muted-foreground">{t("not_found")}</div>;
 
   const initial = {
     father_id: fatherId,
     mother_id: motherId,
-    spouse_id: spouseId,
+    spouse_id: spouseId ?? lockedFatherSpouseId,
     gender:
       parentRole === "mother"
         ? ("female" as const)
@@ -87,6 +103,16 @@ export function AddMemberPage({
                   : undefined
           }
           submitLabel={t("save")}
+          lockedSpouse={Boolean(lockedFatherSpouseId)}
+          relationshipFields={
+            addingFather ? (
+              <StagedSpousesEditor
+                value={stagedSpouses}
+                onChange={setStagedSpouses}
+                members={members}
+              />
+            ) : undefined
+          }
           onCancel={() => {
             if (spouseTo)
               navigate({
@@ -103,10 +129,11 @@ export function AddMemberPage({
           }}
           onSubmit={(data, imageFile) => {
             const m =
-              child && parentRole === "mother"
-                ? familyStore.addMotherForChild(data, child.id, imageFile)
-                : familyStore.add(data, imageFile);
-            if (child && parentRole === "father") familyStore.update(child.id, { father_id: m.id });
+              parentRole === "father"
+                ? familyStore.addFatherWithSpouses(data, child?.id, stagedSpouses, imageFile)
+                : child && parentRole === "mother"
+                  ? familyStore.addMotherForChild(data, child.id, imageFile)
+                  : familyStore.add(data, imageFile);
             toast.success(t("created"));
             if (spouseTo)
               navigate({

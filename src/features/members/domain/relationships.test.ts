@@ -7,6 +7,7 @@ import {
   linkSpouses,
   removeMember,
   removeSpouseAttachment,
+  setMotherRelationship,
   toggleDivorce,
 } from "./relationships";
 import type { FamilyMember } from "./types";
@@ -22,6 +23,28 @@ const member = (id: string, gender: "male" | "female", patch: Partial<FamilyMemb
 });
 
 describe("family relationships", () => {
+  it("links and unlinks a mother while preserving parent spouse consistency", () => {
+    const members = [
+      member("father", "male"),
+      member("mother", "female"),
+      member("child", "male", { father_id: "father" }),
+    ];
+
+    const linked = setMotherRelationship(members, "child", "mother", "now");
+    expect(linked.find(({ id }) => id === "child")).toMatchObject({
+      mother_id: "mother",
+      updated_at: "now",
+    });
+    expect(linked.find(({ id }) => id === "father")?.spouse_ids).toContain("mother");
+
+    const unlinked = setMotherRelationship(linked, "child", undefined, "later");
+    expect(unlinked.find(({ id }) => id === "child")).toMatchObject({
+      mother_id: undefined,
+      updated_at: "later",
+    });
+    expect(unlinked.find(({ id }) => id === "father")?.spouse_ids).toContain("mother");
+  });
+
   it.each([
     ["father_id", { mother_id: "mother" }],
     ["mother_id", { father_id: "anas" }],

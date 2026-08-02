@@ -24,6 +24,7 @@ interface RelationSearchProps {
   searchFirst?: boolean;
   showBirthYear?: boolean;
   selectedOption?: FamilyMember;
+  disabled?: boolean;
 }
 
 export function RelationSearch({
@@ -35,6 +36,7 @@ export function RelationSearch({
   searchFirst = false,
   showBirthYear = false,
   selectedOption,
+  disabled = false,
 }: RelationSearchProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -54,13 +56,14 @@ export function RelationSearch({
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={disabled ? false : open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             type="button"
             variant="outline"
             role="combobox"
-            aria-expanded={open}
+            aria-expanded={disabled ? false : open}
+            disabled={disabled}
             className="w-full justify-between font-normal"
           >
             <span className={selected ? "truncate" : "truncate text-muted-foreground"}>

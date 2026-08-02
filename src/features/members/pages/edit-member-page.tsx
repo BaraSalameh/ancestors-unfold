@@ -60,6 +60,7 @@ export function EditPage() {
           memberId={id}
           members={members}
           submitLabel={t("save")}
+          cancelLabel={t("back")}
           onCancel={() => {
             if (checkpoint.current) familyStore.restoreDraftCheckpoint(checkpoint.current);
             navigate({

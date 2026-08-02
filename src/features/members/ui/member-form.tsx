@@ -5,6 +5,7 @@ import { useI18n } from "@/shared/i18n";
 import { useMemberForm } from "../client/use-member-form";
 import { MemberDemographicFields, MemberNameFields } from "../components/member-form-fields";
 import { MemberRelationshipFields } from "../components/member-relationship-fields";
+import type { ReactNode } from "react";
 import type { FamilyMember, Gender, MemberInput } from "../domain/types";
 import { MemberImageField } from "./member-image-field";
 
@@ -14,6 +15,9 @@ interface MemberFormProps {
   members: FamilyMember[];
   onSubmit: (data: MemberInput, imageFile?: File) => void;
   onCancel: () => void;
+  cancelLabel?: string;
+  relationshipFields?: ReactNode | false;
+  lockedSpouse?: boolean;
   submitLabel: string;
   lockedGender?: Gender;
   initialImageFile?: File;
@@ -41,7 +45,16 @@ export function MemberForm(props: MemberFormProps) {
         }}
         onFileChange={form.setImageFile}
       />
-      <MemberRelationshipFields form={form} memberId={props.memberId} members={props.members} />
+      {props.relationshipFields === false
+        ? null
+        : (props.relationshipFields ?? (
+            <MemberRelationshipFields
+              form={form}
+              memberId={props.memberId}
+              members={props.members}
+              lockedSpouse={props.lockedSpouse}
+            />
+          ))}
       <div className="space-y-2">
         <Label htmlFor="notes">{t("notes")}</Label>
         <Textarea
@@ -54,7 +67,7 @@ export function MemberForm(props: MemberFormProps) {
       {form.error && <p className="text-sm text-destructive">{t(form.error)}</p>}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={props.onCancel}>
-          {t("cancel")}
+          {props.cancelLabel ?? t("cancel")}
         </Button>
         <Button type="submit">{props.submitLabel}</Button>
       </div>
