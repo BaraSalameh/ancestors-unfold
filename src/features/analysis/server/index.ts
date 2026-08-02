@@ -1,0 +1,1 @@
+export { handleAnalysisRequest } from "./handler";

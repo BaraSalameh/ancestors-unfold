@@ -21,6 +21,7 @@ import {
   type Session,
 } from "@/features/auth/server";
 import { apiErrorResponse } from "./http/api-error-response";
+import { handleAnalysisRequest } from "@/features/analysis/server";
 
 export async function handleApi(request: Request): Promise<Response | null> {
   const url = new URL(request.url);
@@ -91,6 +92,8 @@ async function handleAuthenticatedApi(
   if (sessionResponse) return sessionResponse;
   const accountResponse = await handleAccountRequest(request, url, session, requestId);
   if (accountResponse) return accountResponse;
+  const analysisResponse = await handleAnalysisRequest(request, url, session, requestId);
+  if (analysisResponse) return analysisResponse;
   const treeResponse = await handleTreeRequest(request, url, session, requestId);
   if (treeResponse) return treeResponse;
   if (url.pathname === "/api/migration/status") {

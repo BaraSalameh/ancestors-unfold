@@ -406,4 +406,70 @@ BEGIN
   END IF;
 END $$;
 
+-- Analysis storage and canonical per-root scope remain permission-bound.
+DO $$
+DECLARE
+  v_owner_id uuid := gen_random_uuid();
+  v_contributor_id uuid := gen_random_uuid();
+  v_tree_id uuid := gen_random_uuid();
+  v_assigned_branch uuid := gen_random_uuid();
+  v_outside_branch uuid := gen_random_uuid();
+  v_assigned_member uuid := gen_random_uuid();
+  v_outside_member uuid := gen_random_uuid();
+BEGIN
+  IF to_regclass('app.analysis_saved_views') IS NULL
+     OR to_regclass('app.family_members_analysis_active_idx') IS NULL
+     OR to_regprocedure('app.branch_members_for_root(uuid,uuid)') IS NULL THEN
+    RAISE EXCEPTION 'analysis schema is incomplete';
+  END IF;
+  INSERT INTO app.users(id,email,full_name_en,full_name_ar,status) VALUES
+    (v_owner_id,'analysis-owner@example.test','Analysis owner','Analysis owner','active'),
+    (v_contributor_id,'analysis-contributor@example.test','Analysis contributor','Analysis contributor','active');
+  INSERT INTO app.family_trees(id,owner_user_id,name_en) VALUES(v_tree_id,v_owner_id,'Analysis tree');
+  INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES
+    (v_tree_id,v_owner_id,'owner'),(v_tree_id,v_contributor_id,'viewer');
+  INSERT INTO app.subfamilies(id,tree_id,name_en) VALUES
+    (v_assigned_branch,v_tree_id,'Assigned analysis branch'),
+    (v_outside_branch,v_tree_id,'Outside analysis branch');
+  INSERT INTO app.family_members(id,tree_id,name_en,gender,subfamily_id) VALUES
+    (v_assigned_member,v_tree_id,'Assigned analysis member','male',v_assigned_branch),
+    (v_outside_member,v_tree_id,'Outside analysis member','female',v_outside_branch);
+  INSERT INTO app.branch_grants(user_id,tree_id,root_subfamily_id,role,granted_by)
+    VALUES(v_contributor_id,v_tree_id,v_assigned_branch,'branch_editor',v_owner_id);
+
+  PERFORM app.set_request_context(v_contributor_id,NULL,gen_random_uuid());
+  IF NOT EXISTS (
+    SELECT 1 FROM app.branch_members_for_root(v_tree_id,v_assigned_branch) WHERE member_id=v_assigned_member
+  ) OR EXISTS (
+    SELECT 1 FROM app.branch_members_for_root(v_tree_id,v_outside_branch) WHERE member_id=v_outside_member
+  ) THEN
+    RAISE EXCEPTION 'analysis branch scope exposed unauthorized members';
+  END IF;
+  INSERT INTO app.analysis_saved_views(tree_id,user_id,name,definition)
+    VALUES(v_tree_id,v_contributor_id,'Adults',jsonb_build_object('filters',jsonb_build_object(),'sort','name','direction','asc'));
+  IF NOT EXISTS (
+    SELECT 1 FROM app.analysis_saved_views v
+    WHERE v.tree_id=v_tree_id AND v.user_id=v_contributor_id AND v.name='Adults'
+  ) THEN
+    RAISE EXCEPTION 'analysis saved view was not persisted';
+  END IF;
+  PERFORM app.set_request_context(NULL,NULL,gen_random_uuid());
+END $$;
+
+-- Lifecycle age semantics stay exact at birthdays, death, leap days, and unknown dates.
+DO $$
+BEGIN
+  IF extract(year FROM age(date '2026-08-03',date '2008-08-03'))::integer <> 18
+     OR extract(year FROM age(date '2026-08-02',date '2008-08-03'))::integer <> 17
+     OR extract(year FROM age(date '2025-03-01',date '2008-02-29'))::integer <> 17
+     OR extract(year FROM age(date '2026-03-01',date '2008-02-29'))::integer <> 18
+     OR extract(year FROM age(date '2020-01-01',date '1980-01-01'))::integer <> 40 THEN
+    RAISE EXCEPTION 'analysis lifecycle age semantics regressed';
+  END IF;
+  IF (CASE WHEN NULL::date IS NULL THEN NULL
+      ELSE extract(year FROM age(date '2026-08-03',NULL::date))::integer END) IS NOT NULL THEN
+    RAISE EXCEPTION 'analysis unknown birth date must retain unknown age';
+  END IF;
+END $$;
+
 ROLLBACK;

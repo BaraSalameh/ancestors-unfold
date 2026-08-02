@@ -21,3 +21,9 @@ export function logError(message: string, error: unknown, context: Record<string
   if (process.env.NODE_ENV === "production") console.error(JSON.stringify(event));
   else console.error(message, event);
 }
+
+export function logInfo(message: string, context: Record<string, unknown> = {}) {
+  const event = { level: "info", message, ...redactRecord(context) };
+  if (process.env.NODE_ENV === "production") console.info(JSON.stringify(event));
+  else console.info(message, event);
+}

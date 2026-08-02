@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   TextCursorInput,
   Trash2,
+  ChartNoAxesCombined,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
@@ -174,6 +175,14 @@ export function DashboardHeaderActions({
   return (
     <TooltipProvider delayDuration={350}>
       <div className="flex flex-wrap justify-end gap-2">
+        {tree.analysis_enabled !== false && (
+          <Button asChild variant="outline">
+            <Link to="/analysis">
+              <ChartNoAxesCombined aria-hidden="true" />
+              {t("analysis")}
+            </Link>
+          </Button>
+        )}
         {canUseOwnerTreeControls(tree.role) && (
           <OwnerTreeActions
             tree={tree}

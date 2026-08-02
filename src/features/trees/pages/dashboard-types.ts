@@ -9,6 +9,7 @@ export interface CurrentTree {
   role: "owner" | "contributor";
   affiliation_status: "active" | "read_only" | "removed";
   assigned_branch_id: string | null;
+  analysis_enabled?: boolean;
 }
 
 export interface Statistics {

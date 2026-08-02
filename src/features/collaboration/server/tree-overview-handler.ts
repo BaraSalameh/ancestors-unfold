@@ -4,6 +4,7 @@ import { ApiError } from "@/server/security";
 import { authenticitySql } from "./authenticity-query";
 import { currentTreeForSession } from "./current-tree-repository";
 import type { CollaborationSession } from "./types";
+import { serverConfig } from "@/shared/server/config";
 
 export async function handleTreeOverviewRequest(
   request: Request,
@@ -13,7 +14,9 @@ export async function handleTreeOverviewRequest(
 ): Promise<Response | undefined> {
   if (url.pathname === "/api/tree/current" && request.method === "GET") {
     const result = await currentTreeForSession(session, requestId);
-    return result.rowCount ? json(result.rows[0]) : json({ code: "TREE_UNAVAILABLE" }, 404);
+    return result.rowCount
+      ? json({ ...result.rows[0], analysis_enabled: serverConfig.ANALYSIS_ENABLED })
+      : json({ code: "TREE_UNAVAILABLE" }, 404);
   }
   const stats = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/statistics$/);
   if (stats && request.method === "GET") {
