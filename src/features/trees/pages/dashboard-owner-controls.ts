@@ -2,6 +2,10 @@ export function canUseOwnerTreeControls(role: "owner" | "contributor"): boolean 
   return role === "owner";
 }
 
+export function canUseTreePreviewControls(role: "owner" | "contributor"): boolean {
+  return role === "owner" || role === "contributor";
+}
+
 export function activeContributorBranches<
   T extends { status: string; contributor_user_id: string | null },
 >(branches: T[]): T[] {

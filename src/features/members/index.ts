@@ -8,7 +8,13 @@ export type {
   SubFamilyAttachment,
 } from "./domain/types";
 export { getChildren, getGeneration, getSubfamilyMembers } from "./domain/queries";
-export { linkSpouses, descendantIds, removeMember, toggleDivorce } from "./domain/relationships";
+export {
+  linkSpouses,
+  descendantIds,
+  removeMember,
+  setMotherRelationship,
+  toggleDivorce,
+} from "./domain/relationships";
 export { ancestorConnector, memberNameWithBirthYear } from "./domain/member-display";
 export {
   memberDetailsSearch,
@@ -20,6 +26,7 @@ export {
 } from "./domain/member-navigation";
 export { MemberForm } from "./ui/member-form";
 export { ExpandableProfileImage } from "./ui/expandable-profile-image";
-export { AddMemberPage, AddPage, addMemberSearchSchema } from "./pages/add-member-page";
+export { AddMemberPage, AddPage } from "./pages/add-member-page";
+export { addMemberSearchSchema } from "./domain/add-member-search";
 export { EditPage } from "./pages/edit-member-page";
 export { MemberPage } from "./pages/member-page";

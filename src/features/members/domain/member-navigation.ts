@@ -7,7 +7,7 @@ export interface MemberNavigationContext {
   returnPreview: MemberReturnPreview;
 }
 
-export interface ParsedMemberNavigationSearch {
+interface ParsedMemberNavigationSearch {
   treeId?: string;
   returnMode: MemberReturnMode;
   returnPreview: MemberReturnPreview;

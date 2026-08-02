@@ -20,6 +20,7 @@ async function call<T>(path: string, method = "GET", body?: unknown): Promise<T>
     "INVALID_OR_EXPIRED_TOKEN",
     "RESEND_TOO_SOON",
     "DELIVERY_FAILED",
+    "INVALID_INVITATION",
   ] as const;
   try {
     return await apiRequest<T>(path, { method, body });

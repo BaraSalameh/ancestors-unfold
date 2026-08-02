@@ -3,23 +3,22 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/features/auth";
 import { useI18n } from "@/shared/i18n";
 import { RoutePageSkeleton } from "@/shared/ui/page-skeletons";
-import { isPublicPreviewRoute } from "@/app/domain/public-route";
+import {
+  currentTreeDisplayName,
+  guardedRedirect,
+  mayAccessRoute,
+} from "@/app/domain/auth-guard-policy";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading, session } = useAuth();
   const { t, lang } = useI18n();
   const location = useRouterState({ select: (state) => state.location });
   const navigate = useNavigate();
-  const isAuthPage = location.pathname === "/auth";
-  const isPasswordReset = location.pathname === "/reset-password";
-  const isInvitation = location.pathname.startsWith("/invitation/");
-  const isPublicPreview = isPublicPreviewRoute(location.pathname, location.search);
-  const mayView =
-    isAuthPage || isPasswordReset || isInvitation || isPublicPreview || isAuthenticated;
+  const mayView = mayAccessRoute(location.pathname, location.search, isAuthenticated);
 
   useEffect(() => {
     if (isLoading || mayView) return;
-    const destination = `${location.pathname}${location.href.includes("?") ? `?${location.href.split("?")[1]}` : ""}`;
+    const destination = guardedRedirect(location.pathname, location.href);
     void navigate({
       to: "/auth",
       search: { redirect: destination, oauthError: undefined },
@@ -33,11 +32,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
         pathname={location.pathname}
         label={t("loading")}
         dashboardRole={session?.currentTree?.role}
-        dashboardName={
-          (lang === "ar"
-            ? session?.currentTree?.nameAr || session?.currentTree?.nameEn
-            : session?.currentTree?.nameEn || session?.currentTree?.nameAr) ?? undefined
-        }
+        dashboardName={currentTreeDisplayName(session?.currentTree, lang)}
       />
     );
   }

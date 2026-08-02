@@ -52,12 +52,23 @@ export default tseslint.config(
     },
   },
   {
+    files: [
+      "src/app/**/*.{ts,tsx}",
+      "src/features/**/*.{ts,tsx}",
+      "src/server/**/*.{ts,tsx}",
+      "src/shared/**/*.{ts,tsx}",
+    ],
+    ignores: ["src/routeTree.gen.ts", "src/locales/**", "src/shared/ui/**"],
+    rules: {
+      "max-lines": ["error", { max: 400, skipBlankLines: true, skipComments: true }],
+      "max-lines-per-function": ["error", { max: 120, skipBlankLines: true, skipComments: true }],
+      complexity: ["error", 15],
+    },
+  },
+  {
     files: ["src/app/**/*.{ts,tsx}", "src/features/**/*.{ts,tsx}", "src/shared/**/*.{ts,tsx}"],
     ignores: ["src/features/*/server/**", "src/shared/server/**", "src/shared/ui/**"],
     rules: {
-      "max-lines": ["warn", { max: 400, skipBlankLines: true, skipComments: true }],
-      "max-lines-per-function": ["warn", { max: 120, skipBlankLines: true, skipComments: true }],
-      complexity: ["warn", 15],
       "no-restricted-imports": [
         "error",
         {
@@ -101,9 +112,17 @@ export default tseslint.config(
       "src/server/infrastructure/**/*.{ts,tsx}",
     ],
     rules: {
-      "max-lines": ["warn", { max: 400, skipBlankLines: true, skipComments: true }],
-      "max-lines-per-function": ["warn", { max: 120, skipBlankLines: true, skipComments: true }],
-      complexity: ["warn", 15],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/app/**", "@/routes/**"],
+              message: "Server modules must not depend on browser composition or route modules.",
+            },
+          ],
+        },
+      ],
     },
   },
   eslintPluginPrettier,

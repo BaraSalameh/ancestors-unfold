@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMemberSearchSchema } from "./add-member-page";
+import { addMemberSearchSchema } from "../domain/add-member-search";
 
 describe("connector member creation search context", () => {
   it("accepts an explicit child parent pair", () => {

@@ -2,7 +2,7 @@ export const authenticityLevels = ["new", "growing", "family_backed", "establish
 
 export type EarnedAuthenticityLevel = (typeof authenticityLevels)[number];
 export type AuthenticityLevel = EarnedAuthenticityLevel | "under_review";
-export type AuthenticityStepStatus = "completed" | "current" | "upcoming";
+type AuthenticityStepStatus = "completed" | "current" | "upcoming";
 
 export type AuthenticityProgressMetrics = {
   activeContributors: number;

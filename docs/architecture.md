@@ -6,7 +6,11 @@ Ancestors Unfold is a TypeScript full-stack monolith. TanStack Start provides Re
 
 `src/server.ts` is the server entry. Requests under `/api/` are handled by `src/server/api.ts`; other requests continue to TanStack SSR. API writes validate JSON with Zod, authenticate the HttpOnly session cookie, authorize access, and execute PostgreSQL work in a transaction. Authenticated tree snapshot operations set the database request context so PostgreSQL RLS and audit triggers have the actor, session, and correlation ID.
 
-The browser uses `src/lib/auth.tsx` for session state and `src/lib/family-store.ts` for a tree editor. Editor changes are optimistic. Snapshot writes are serialized and use an acknowledged version; a `VERSION_CONFLICT` blocks automatic writes until the user reloads the latest snapshot.
+The browser uses the auth feature's context/provider for session state and the
+trees feature's `familyStore` compatibility facade for tree editing. Editor
+changes are optimistic. Snapshot writes are serialized and use an acknowledged
+version; a `VERSION_CONFLICT` blocks automatic writes until the user reloads the
+latest snapshot.
 
 ## Boundaries
 
@@ -23,12 +27,30 @@ New work follows a feature-first modular-monolith layout:
 - `src/features/*` owns browser-facing domain logic, API adapters, components, and pages for one feature.
 - `src/shared/*` contains feature-neutral browser transport, UI primitives, i18n, and utilities.
 - `src/app/*` composes providers and application-wide browser behavior.
-- `src/server/http` owns HTTP routing and response concerns; `src/server/modules` owns server feature handlers, services, and repositories; `src/server/infrastructure` owns runtime integrations.
+- `src/server/http` owns shared HTTP routing and response concerns. Feature
+  server directories own capability handlers, application services, and
+  repositories; `src/server` retains only the thin dispatcher and shared
+  infrastructure/security composition.
 - `src/routes/*` remains the TanStack file-routing boundary. Route declarations stay directly in these files so route generation can discover them; route bodies should delegate to feature pages.
 
 Dependencies point from routes to features to shared modules. Server handlers call services, services call capability repositories, and repositories alone issue feature-specific SQL. Browser code must not import `src/server`. Cross-feature imports use an explicit public entrypoint rather than another feature's internals.
 
-Handwritten files under `app`, `features`, and `shared` are limited by ESLint to 400 logical lines, 120 logical lines per function, and cyclomatic complexity 15. Generated code, historical migrations, locale dictionaries, and unmodified UI primitives are documented exceptions.
+Handwritten files under `app`, `features`, `server`, and `shared` are limited by
+ESLint to 400 logical lines, 120 logical lines per function, and cyclomatic
+complexity 15. Generated code, historical migrations, locale dictionaries, and
+external-style UI primitives are structural exclusions.
+
+These limits are CI-blocking errors and also apply to handwritten server code.
+Temporary violations must be enumerated in `docs/architecture-exceptions.md`;
+the ledger is currently empty. New path-based exceptions require deliberate
+approval, a reason, an owner phase, and a removal condition. A size limit is a
+review guardrail, not permission to split cohesive behavior into arbitrary
+fragments.
+
+Files should be named for the capability they own (`snapshot-reader`,
+`invitation-service`, `viewport-persistence`) rather than generic buckets such
+as `helpers` or `utils`. Tests are colocated with the behavior they characterize
+and may be divided by behavior when a suite becomes oversized.
 
 ## Authentication and authorization
 
@@ -44,4 +66,7 @@ Expected API failures use stable error codes. Unexpected failures receive `INTER
 
 ## Testing strategy
 
-The executable gates are TypeScript, ESLint/Prettier, Vitest unit and contract tests, the transactional PostgreSQL smoke test, and the production build. PostgreSQL role-matrix and browser E2E coverage remain planned.
+The executable gates are TypeScript, ESLint/Prettier, Knip dead-code analysis,
+Vitest unit and contract tests, the transactional PostgreSQL smoke test, and the
+production client/SSR/server build. PostgreSQL role-matrix and browser E2E
+coverage remain independent hardening work.

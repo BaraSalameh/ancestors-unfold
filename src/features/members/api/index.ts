@@ -1,1 +1,1 @@
-export { memberImageClient, type UploadedMemberImage } from "./member-image-client";
+export { memberImageClient } from "./member-image-client";

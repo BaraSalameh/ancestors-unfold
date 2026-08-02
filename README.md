@@ -20,4 +20,6 @@ Run `npm run validate` for type checking, linting, the database smoke test, and 
 
 `npm run build` generates the deployable Nitro Node server in `.output`; start it with `npm run preview`. The production runtime requires PostgreSQL, secure environment configuration, TLS, and `SESSION_COOKIE_SECURE=true` for an HTTPS public origin.
 
-See `ARCHITECTURE.md` for system boundaries and `AGENTS.md` for contribution and security rules.
+See [`docs/architecture.md`](docs/architecture.md) for system boundaries,
+[`docs/README.md`](docs/README.md) for the documentation index, and `AGENTS.md`
+for contribution and security rules.

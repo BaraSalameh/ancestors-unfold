@@ -71,10 +71,10 @@ export function contributorInvitationMail(
   return {
     to,
     subject: `Invitation to contribute to ${treeName}`,
-    text: `You were invited to manage the ${branchName} branch of ${treeName}. This invitation is for an unregistered account and can be used once: ${link}`,
+    text: `You were invited to manage the ${branchName} branch of ${treeName}. This invitation is for an unregistered account and can be used once: ${link}\n\nتمت دعوتك لإدارة فرع ${branchName} في شجرة ${treeName}. هذه الدعوة مخصصة لحساب غير مسجل ويمكن استخدامها مرة واحدة: ${link}`,
     html: layout(
-      "Family tree contributor invitation",
-      `<p>You were invited to manage the <strong>${escapeHtml(branchName)}</strong> branch of <strong>${escapeHtml(treeName)}</strong>.</p><p><a href="${safeLink}">Accept invitation</a></p>`,
+      "Family tree contributor invitation | دعوة للمساهمة في شجرة العائلة",
+      `<p>You were invited to manage the <strong>${escapeHtml(branchName)}</strong> branch of <strong>${escapeHtml(treeName)}</strong>.</p><p>This invitation is for an unregistered account and can be used once.</p><p><a href="${safeLink}">Accept invitation</a></p><div dir="rtl"><p>تمت دعوتك لإدارة فرع <strong>${escapeHtml(branchName)}</strong> في شجرة <strong>${escapeHtml(treeName)}</strong>.</p><p>هذه الدعوة مخصصة لحساب غير مسجل ويمكن استخدامها مرة واحدة.</p><p><a href="${safeLink}">قبول الدعوة</a></p></div>`,
     ),
   };
 }

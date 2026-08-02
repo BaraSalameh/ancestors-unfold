@@ -1,5 +1,6 @@
 import type { Edge, Node } from "reactflow";
 import type { MemberNodeData } from "../ui/member-node";
+import { routeBundleChild } from "./decade-child-route";
 
 export type RoutePoint = { x: number; y: number };
 export type SharedRouteScope = "source" | "family";
@@ -21,7 +22,6 @@ const STEM_CLEARANCE = 40;
 const CARD_CLEARANCE = 32;
 const BUNDLE_GAP = 44;
 const BRANCH_GAP = 36;
-const APPROACH_GAP = 32;
 const ROW_NUDGE = 8;
 
 const dimension = (value: number | null | undefined, fallback: number) =>
@@ -48,16 +48,6 @@ export function sharedRouteSelectionIds(
       })
       .map((edge) => edge.id),
   );
-}
-
-function segmentHitsCard(first: RoutePoint, second: RoutePoint, card: CardRect) {
-  const minX = Math.min(first.x, second.x);
-  const maxX = Math.max(first.x, second.x);
-  const minY = Math.min(first.y, second.y);
-  const maxY = Math.max(first.y, second.y);
-  return first.x === second.x
-    ? first.x > card.left && first.x < card.right && maxY > card.top && minY < card.bottom
-    : first.y > card.top && first.y < card.bottom && maxX > card.left && minX < card.right;
 }
 
 export function alignDecadeSingleChildren(
@@ -102,7 +92,34 @@ export function alignDecadeSingleChildren(
   }
 }
 
-function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[] {
+interface BundleRoutingState {
+  nodeById: Map<string, Node<MemberNodeData>>;
+  cards: CardRect[];
+  routeById: Map<string, DecadeBundleRoute>;
+  rowBundleCount: Map<number, number>;
+  usedVerticalLanes: Array<{ x: number; top: number; bottom: number }>;
+  reserveHorizontalRow: (preferredY: number, direction: -1 | 1) => number;
+  reserveVerticalSegment: (x: number, firstY: number, secondY: number) => void;
+  verticalLaneConflicts: (x: number, firstY: number, secondY: number) => boolean;
+  targetApproachOrdinal: Map<string, number>;
+  sortedGroups: Array<[string, Edge[]]>;
+  sourceGroupCounts: Map<string, number>;
+  sourceGroupIndexes: Map<string, number>;
+}
+
+function countSourceGroups(groups: Array<[string, Edge[]]>): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const [, familyEdges] of groups) {
+    const sourceId = familyEdges[0]?.source;
+    if (sourceId) counts.set(sourceId, (counts.get(sourceId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function createBundleRoutingState(
+  nodes: Node<MemberNodeData>[],
+  edges: Edge[],
+): BundleRoutingState {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const cards: CardRect[] = nodes.map((node) => ({
     id: node.id,
@@ -148,7 +165,7 @@ function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[
   const targetApproachOrdinal = new Map<string, number>();
   const targetRows = new Map<number, Edge[]>();
   const sortedGroups = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-  const sourceGroupCounts = new Map<string, number>();
+  const sourceGroupCounts = countSourceGroups(sortedGroups);
   const sourceGroupIndexes = new Map<string, number>();
   for (const edge of edges) {
     if ((edge.data as { kind?: string } | undefined)?.kind !== "parent") continue;
@@ -165,13 +182,46 @@ function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[
       )
       .forEach((edge, index) => targetApproachOrdinal.set(edge.id, rowEdges.length - 1 - index));
   }
-  for (const [, familyEdges] of sortedGroups) {
-    const sourceId = familyEdges[0]?.source;
-    if (sourceId) {
-      sourceGroupCounts.set(sourceId, (sourceGroupCounts.get(sourceId) ?? 0) + 1);
-    }
-  }
+  return {
+    nodeById,
+    cards,
+    routeById,
+    rowBundleCount,
+    usedVerticalLanes,
+    reserveHorizontalRow,
+    reserveVerticalSegment,
+    verticalLaneConflicts,
+    targetApproachOrdinal,
+    sortedGroups,
+    sourceGroupCounts,
+    sourceGroupIndexes,
+  };
+}
 
+function applyBundleRoutes(edges: Edge[], routes: Map<string, DecadeBundleRoute>): Edge[] {
+  return edges.map((edge) => {
+    const decadeBundle = routes.get(edge.id);
+    return decadeBundle
+      ? { ...edge, data: { ...edge.data, decadeBundle } }
+      : { ...edge, data: { ...edge.data, decadeBundle: undefined } };
+  });
+}
+
+function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[] {
+  const {
+    nodeById,
+    cards,
+    routeById,
+    rowBundleCount,
+    usedVerticalLanes,
+    reserveHorizontalRow,
+    reserveVerticalSegment,
+    verticalLaneConflicts,
+    targetApproachOrdinal,
+    sortedGroups,
+    sourceGroupCounts,
+    sourceGroupIndexes,
+  } = createBundleRoutingState(nodes, edges);
   for (const [, familyEdges] of sortedGroups) {
     const source = nodeById.get(familyEdges[0]?.source ?? "");
     if (!source) continue;
@@ -215,110 +265,22 @@ function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[
       .sort(
         (a, b) => a.target.position.x - b.target.position.x || a.edge.id.localeCompare(b.edge.id),
       )
-      .map(({ edge, target }, index, siblings) => {
-        const targetX = target.position.x + width(target) / 2;
-        const unrelated = cards.filter((card) => card.id !== source.id && card.id !== target.id);
-        let approachY =
-          target.position.y -
-          STEM_CLEARANCE -
-          (targetApproachOrdinal.get(edge.id) ?? 0) * APPROACH_GAP;
-        while (
-          approachY > busY + STEM_CLEARANCE &&
-          unrelated.some((card) =>
-            segmentHitsCard(
-              { x: targetX - NODE_WIDTH, y: approachY },
-              { x: targetX + NODE_WIDTH, y: approachY },
-              card,
-            ),
-          )
-        ) {
-          approachY -= APPROACH_GAP;
-        }
-        const blockingTargetLanes = usedVerticalLanes.filter(
-          (lane) =>
-            lane.x === targetX &&
-            Math.max(lane.top, approachY) < Math.min(lane.bottom, target.position.y),
-        );
-        if (blockingTargetLanes.length) {
-          approachY = Math.min(
-            target.position.y,
-            Math.max(...blockingTargetLanes.map((lane) => lane.bottom)) + ROW_NUDGE,
-          );
-        }
-        approachY = reserveHorizontalRow(approachY, -1);
-
-        const top = Math.min(busY, approachY);
-        const bottom = Math.max(busY, approachY);
-        const outerLeft = Math.min(...cards.map((card) => card.left)) - CARD_CLEARANCE;
-        const outerRight = Math.max(...cards.map((card) => card.right)) + CARD_CLEARANCE;
-        const centered = index - (siblings.length - 1) / 2;
-        const expansionCount = cards.length + usedVerticalLanes.length + 2;
-        const candidateXs = [
-          targetX,
-          targetX + centered * BRANCH_GAP,
-          ...unrelated.flatMap((card) => [card.left, card.right]),
-          ...Array.from(
-            { length: expansionCount },
-            (_, expansionIndex) => outerLeft - expansionIndex * BRANCH_GAP,
-          ),
-          ...Array.from(
-            { length: expansionCount },
-            (_, expansionIndex) => outerRight + expansionIndex * BRANCH_GAP,
-          ),
-        ];
-        const routeLength = (candidateX: number) =>
-          Math.abs(trunkX - candidateX) +
-          Math.abs(candidateX - targetX) +
-          Math.abs(busY - approachY) +
-          Math.abs(approachY - target.position.y);
-        const bendCount = (candidateX: number) => (candidateX === targetX ? 0 : 2);
-        const laneX =
-          [...new Set(candidateXs)]
-            .filter(
-              (candidateX) =>
-                !usedVerticalLanes.some(
-                  (lane) =>
-                    Math.abs(lane.x - candidateX) < BRANCH_GAP &&
-                    Math.max(lane.top, top) < Math.min(lane.bottom, bottom),
-                ),
-            )
-            .filter((candidateX) =>
-              unrelated.every(
-                (card) =>
-                  !segmentHitsCard(
-                    { x: candidateX, y: busY },
-                    { x: candidateX, y: approachY },
-                    card,
-                  ) &&
-                  !segmentHitsCard(
-                    { x: candidateX, y: approachY },
-                    { x: targetX, y: approachY },
-                    card,
-                  ),
-              ),
-            )
-            .sort(
-              (first, second) =>
-                routeLength(first) - routeLength(second) ||
-                bendCount(first) - bendCount(second) ||
-                Math.abs(first - targetX) - Math.abs(second - targetX) ||
-                first - second,
-            )[0] ??
-          [outerLeft, outerRight].sort(
-            (first, second) => routeLength(first) - routeLength(second),
-          )[0];
-        reserveVerticalSegment(laneX, busY, approachY);
-        return {
+      .map(({ edge, target }, index, siblings) =>
+        routeBundleChild(
           edge,
-          laneX,
-          branch: [
-            { x: laneX, y: busY },
-            { x: laneX, y: approachY },
-            { x: targetX, y: approachY },
-            { x: targetX, y: target.position.y },
-          ],
-        };
-      });
+          target,
+          index,
+          siblings.length,
+          cards,
+          source.id,
+          busY,
+          trunkX,
+          targetApproachOrdinal,
+          usedVerticalLanes,
+          reserveHorizontalRow,
+          reserveVerticalSegment,
+        ),
+      );
 
     if (!routedChildren.length) continue;
     const busLeft = Math.min(trunkX, ...routedChildren.map(({ laneX }) => laneX));
@@ -365,12 +327,7 @@ function routeDecadeBundles(nodes: Node<MemberNodeData>[], edges: Edge[]): Edge[
     });
   }
 
-  return edges.map((edge) => {
-    const decadeBundle = routeById.get(edge.id);
-    return decadeBundle
-      ? { ...edge, data: { ...edge.data, decadeBundle } }
-      : { ...edge, data: { ...edge.data, decadeBundle: undefined } };
-  });
+  return applyBundleRoutes(edges, routeById);
 }
 
 export function routeParentEdges(

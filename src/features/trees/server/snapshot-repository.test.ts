@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterSnapshotMembers, loadRenderableSnapshot } from "./snapshot-repository";
+import { filterSnapshotMembers, loadRenderableSnapshot } from "./snapshot-reader";
 
 const now = "2026-07-18T00:00:00.000Z";
 
