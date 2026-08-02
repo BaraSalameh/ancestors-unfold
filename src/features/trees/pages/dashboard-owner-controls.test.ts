@@ -2,16 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   activeContributorBranches,
   canUseOwnerTreeControls,
+  canUseTreePreviewControls,
   shouldRefreshDashboard,
 } from "./dashboard-owner-controls";
 
 describe("dashboard owner controls", () => {
-  it("allows the tree owner to rename and share", () => {
+  it("allows only the tree owner to use owner controls", () => {
     expect(canUseOwnerTreeControls("owner")).toBe(true);
+    expect(canUseOwnerTreeControls("contributor")).toBe(false);
   });
 
-  it("hides rename and share controls from every non-owner role", () => {
-    expect(canUseOwnerTreeControls("contributor")).toBe(false);
+  it("allows owners and contributors to use preview controls", () => {
+    expect(canUseTreePreviewControls("owner")).toBe(true);
+    expect(canUseTreePreviewControls("contributor")).toBe(true);
   });
 
   it("offers cancellation only for active branches with a contributor", () => {

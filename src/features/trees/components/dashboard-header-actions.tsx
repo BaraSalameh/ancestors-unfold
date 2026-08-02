@@ -1,9 +1,18 @@
 import { Link } from "@tanstack/react-router";
 import { Copy, ExternalLink, Pencil, TextCursorInput, Trash2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/shared/ui/dropdown-menu";
 import { TooltipProvider } from "@/shared/ui/tooltip";
 import { useI18n } from "@/shared/i18n";
-import { canUseOwnerTreeControls } from "../pages/dashboard-owner-controls";
+import {
+  canUseOwnerTreeControls,
+  canUseTreePreviewControls,
+} from "../pages/dashboard-owner-controls";
 import type { CurrentTree } from "../pages/dashboard-types";
 import type { DashboardTreeControls } from "../client/use-dashboard-tree-controls";
 import type { ContributorAccountDeletionController } from "../client/use-contributor-account-deletion";
@@ -37,37 +46,39 @@ export function DashboardHeaderActions({
                 <TextCursorInput aria-hidden="true" />
               </Button>
             </DashboardActionTooltip>
+          </>
+        )}
+        {canUseTreePreviewControls(tree.role) && (
+          <DropdownMenu>
             <DashboardActionTooltip
-              title={t("open_preview")}
-              description={t("open_preview_tooltip_description")}
+              title={t("preview")}
+              description={t("preview_tooltip_description")}
             >
-              <Button asChild size="icon" variant="outline">
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="outline" aria-label={t("preview")}>
+                  <ExternalLink aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+            </DashboardActionTooltip>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
                 <Link
                   to="/tree/$id"
                   params={{ id: tree.id }}
                   search={{ mode: "preview", preview: "lineage" }}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={t("open_preview")}
                 >
                   <ExternalLink aria-hidden="true" />
+                  {t("open_preview")}
                 </Link>
-              </Button>
-            </DashboardActionTooltip>
-            <DashboardActionTooltip
-              title={t("copy_preview_link")}
-              description={t("copy_preview_link_tooltip_description")}
-            >
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => void treeControls.copyPreview()}
-                aria-label={t("copy_preview_link")}
-              >
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void treeControls.copyPreview()}>
                 <Copy aria-hidden="true" />
-              </Button>
-            </DashboardActionTooltip>
-          </>
+                {t("copy_preview_link")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         <DashboardActionTooltip title={t("edit")} description={t("edit_tooltip_description")}>
           <Button
@@ -87,21 +98,6 @@ export function DashboardHeaderActions({
         </DashboardActionTooltip>
         {tree.role === "contributor" && (
           <>
-            <DashboardActionTooltip
-              title={t("preview")}
-              description={t("preview_tooltip_description")}
-            >
-              <Button asChild size="icon" variant="outline">
-                <Link
-                  to="/tree/$id"
-                  params={{ id: tree.id }}
-                  search={{ mode: "preview" }}
-                  aria-label={t("preview")}
-                >
-                  <ExternalLink aria-hidden="true" />
-                </Link>
-              </Button>
-            </DashboardActionTooltip>
             <Button variant="destructive" onClick={() => accountDeletion.setOpen(true)}>
               <Trash2 className="me-2 h-4 w-4" />
               {t("cancel_contribution")}

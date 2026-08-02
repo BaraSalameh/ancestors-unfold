@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/shared/i18n";
-import { canUseOwnerTreeControls } from "../pages/dashboard-owner-controls";
+import {
+  canUseOwnerTreeControls,
+  canUseTreePreviewControls,
+} from "../pages/dashboard-owner-controls";
 import { copyTreePreviewUrl } from "../pages/dashboard-share";
 import type { CurrentTree } from "../pages/dashboard-types";
 
@@ -41,7 +44,7 @@ export function useDashboardTreeControls(
     }
   };
   const copyPreview = async () => {
-    if (!tree || !canUseOwnerTreeControls(tree.role)) return;
+    if (!tree || !canUseTreePreviewControls(tree.role)) return;
     try {
       await copyTreePreviewUrl(tree.id, window.location.origin, navigator.clipboard);
       toast.success(t("preview_link_copied"));
