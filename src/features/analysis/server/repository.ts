@@ -1,6 +1,5 @@
 import type { PoolClient } from "pg";
 import type {
-  AnalysisFilters,
   AnalysisMember,
   AnalysisQueryDefinition,
   AnalysisScope,
@@ -8,6 +7,7 @@ import type {
 } from "../domain/types";
 import type { MemberPageInput } from "../domain/schemas";
 import type { AnalysisCursor } from "../domain/projection";
+import { addAnalysisSqlValue as addValue, memberFilterSql as filterSql } from "./member-filter-sql";
 
 const scopedMembersCte = `
   scoped_ids AS (
@@ -38,29 +38,32 @@ export async function readAnalysisSummary(
       SELECT count(*)::integer total,
         count(*) FILTER (WHERE NOT is_deceased)::integer living,
         count(*) FILTER (WHERE is_deceased)::integer deceased,
-        count(*) FILTER (WHERE gender='male')::integer male,
-        count(*) FILTER (WHERE gender='female')::integer female,
-        count(*) FILTER (WHERE gender='unspecified')::integer unspecified_gender,
+        count(*) FILTER (WHERE NOT is_deceased AND gender='male')::integer male,
+        count(*) FILTER (WHERE NOT is_deceased AND gender='female')::integer female,
         count(*) FILTER (WHERE lifecycle_age>=18)::integer adults,
-        count(*) FILTER (WHERE lifecycle_age<18)::integer minors,
-        count(*) FILTER (WHERE lifecycle_age IS NULL)::integer unknown_age,
-        count(*) FILTER (WHERE citizen_status='resident')::integer resident,
-        count(*) FILTER (WHERE citizen_status='non_resident')::integer non_resident,
-        count(*) FILTER (WHERE citizen_status IS NULL)::integer unknown_citizenship,
+        count(*) FILTER (WHERE NOT is_deceased AND lifecycle_age>=18)::integer living_adults,
+        count(*) FILTER (WHERE NOT is_deceased AND lifecycle_age<18)::integer minors,
+        count(*) FILTER (WHERE NOT is_deceased AND lifecycle_age IS NULL)::integer unknown_age,
+        count(*) FILTER (WHERE NOT is_deceased AND citizen_status='resident')::integer resident,
+        count(*) FILTER (WHERE NOT is_deceased AND citizen_status='non_resident')::integer non_resident,
         round(avg(lifecycle_age)::numeric,1)::float8 average_age,
         round((percentile_cont(0.5) WITHIN GROUP (ORDER BY lifecycle_age))::numeric,1)::float8 median_age,
         round(avg(lifecycle_age) FILTER (WHERE death_date IS NOT NULL)::numeric,1)::float8 average_lifespan
       FROM scoped_members
+    ), living_age_stats AS (
+      SELECT max((lifecycle_age/10)*10)::integer max_band,
+        count(*) FILTER (WHERE lifecycle_age IS NULL)::integer unknown_count
+      FROM scoped_members WHERE NOT is_deceased
     ), age_bands AS (
-      SELECT CASE
-        WHEN lifecycle_age IS NULL THEN 'unknown'
-        WHEN lifecycle_age<18 THEN 'under_18'
-        WHEN lifecycle_age<30 THEN '18_29'
-        WHEN lifecycle_age<45 THEN '30_44'
-        WHEN lifecycle_age<60 THEN '45_59'
-        WHEN lifecycle_age<75 THEN '60_74'
-        ELSE '75_plus' END key,count(*)::integer count
-      FROM scoped_members GROUP BY 1
+      SELECT band::text key,
+        count(m.id) FILTER (WHERE (m.lifecycle_age/10)*10=band)::integer count,
+        band sort_order
+      FROM living_age_stats stats
+      CROSS JOIN LATERAL generate_series(0,stats.max_band,10) band
+      LEFT JOIN scoped_members m ON NOT m.is_deceased AND m.lifecycle_age IS NOT NULL
+      GROUP BY band
+      UNION ALL
+      SELECT 'unknown',unknown_count,2147483647 FROM living_age_stats
     ), birth_decades AS (
       SELECT ((extract(year FROM birth_date)::integer/10)*10)::text key,count(*)::integer count
       FROM scoped_members WHERE birth_date IS NOT NULL GROUP BY 1 ORDER BY 1
@@ -70,10 +73,11 @@ export async function readAnalysisSummary(
     )
     SELECT t.*,
       (SELECT jsonb_build_object('id',id,'name_en',coalesce(name_en,''),'name_ar',coalesce(name_ar,''),'age',lifecycle_age)
-       FROM scoped_members WHERE lifecycle_age IS NOT NULL ORDER BY lifecycle_age DESC,id LIMIT 1) oldest_member,
+       FROM scoped_members WHERE NOT is_deceased AND lifecycle_age IS NOT NULL
+       ORDER BY lifecycle_age DESC,id LIMIT 1) oldest_member,
       (SELECT jsonb_build_object('id',id,'name_en',coalesce(name_en,''),'name_ar',coalesce(name_ar,''),'age',lifecycle_age)
        FROM scoped_members WHERE lifecycle_age IS NOT NULL ORDER BY lifecycle_age,id LIMIT 1) youngest_member,
-      coalesce((SELECT jsonb_agg(jsonb_build_object('key',key,'count',count) ORDER BY key) FROM age_bands),'[]') age_bands,
+      coalesce((SELECT jsonb_agg(jsonb_build_object('key',key,'count',count) ORDER BY sort_order) FROM age_bands),'[]') age_bands,
       coalesce((SELECT jsonb_agg(jsonb_build_object('key',key,'count',count) ORDER BY key) FROM birth_decades),'[]') birth_decades,
       coalesce((SELECT jsonb_agg(jsonb_build_object('key',key,'count',count) ORDER BY key) FROM death_decades),'[]') death_decades
     FROM totals t`,
@@ -84,6 +88,40 @@ export async function readAnalysisSummary(
 
 const memberAnalysisCtes = `
   ${scopedMembersCte},
+  branch_tree(id,name_en,name_ar,parent_subfamily_id,linked_male_id,depth) AS (
+    SELECT b.id,b.name_en,b.name_ar,b.parent_subfamily_id,b.linked_male_id,0
+    FROM app.subfamilies b
+    WHERE b.tree_id=$1 AND b.deleted_at IS NULL AND b.parent_subfamily_id IS NULL
+    UNION ALL
+    SELECT b.id,b.name_en,b.name_ar,b.parent_subfamily_id,b.linked_male_id,parent.depth+1
+    FROM app.subfamilies b JOIN branch_tree parent ON parent.id=b.parent_subfamily_id
+    WHERE b.tree_id=$1 AND b.deleted_at IS NULL
+  ), branch_lineage(branch_id,member_id,path) AS (
+    SELECT id,linked_male_id,ARRAY[linked_male_id]
+    FROM branch_tree WHERE linked_male_id IS NOT NULL
+    UNION ALL
+    SELECT lineage.branch_id,relationship.child_id,lineage.path||relationship.child_id
+    FROM branch_lineage lineage
+    JOIN app.parent_child_relationships relationship ON relationship.parent_id=lineage.member_id
+    WHERE relationship.tree_id=$1 AND relationship.deleted_at IS NULL
+      AND NOT relationship.child_id=ANY(lineage.path)
+  ), branch_candidates AS (
+    SELECT member.id member_id,branch.id branch_id,branch.name_en,branch.name_ar,
+      branch.depth,true direct_assignment
+    FROM scoped_members member JOIN branch_tree branch ON branch.id=member.subfamily_id
+    UNION
+    SELECT lineage.member_id,branch.id,branch.name_en,branch.name_ar,
+      branch.depth,false direct_assignment
+    FROM branch_lineage lineage JOIN branch_tree branch ON branch.id=lineage.branch_id
+    JOIN scoped_ids scoped ON scoped.id=lineage.member_id
+  ), ranked_branches AS (
+    SELECT *,row_number() OVER (
+      PARTITION BY member_id ORDER BY direct_assignment DESC,depth DESC,branch_id
+    ) branch_rank
+    FROM branch_candidates
+  ), branch_assignment AS (
+    SELECT member_id,branch_id,name_en,name_ar FROM ranked_branches WHERE branch_rank=1
+  ),
   parent_stats AS (
     SELECT r.child_id,count(DISTINCT r.parent_id)::integer parent_count,
       (max(r.parent_id::text) FILTER (WHERE r.parent_role='father'))::uuid father_id,
@@ -116,103 +154,26 @@ const memberAnalysisCtes = `
     SELECT member_id,max(generation)::integer generation FROM generation_walk GROUP BY member_id
   ), base AS (
     SELECT m.id,coalesce(m.name_en,'') name_en,coalesce(m.name_ar,'') name_ar,m.gender,
+      father.name_en father_name_en,father.name_ar father_name_ar,
+      grandfather.name_en grandfather_name_en,grandfather.name_ar grandfather_name_ar,
+      great_grandfather.name_en great_grandfather_name_en,great_grandfather.name_ar great_grandfather_name_ar,
       m.birth_date,m.death_date,m.is_deceased,m.lifecycle_age,
-      m.citizen_status,m.subfamily_id branch_id,sf.name_en branch_name_en,sf.name_ar branch_name_ar,
+      m.citizen_status,branch.branch_id,branch.name_en branch_name_en,branch.name_ar branch_name_ar,
       ps.father_id,ps.mother_id,coalesce(ps.parent_count,0)::integer parent_count,
       coalesce(partner.has_spouse,false) has_spouse,coalesce(cs.child_count,0)::integer child_count,
       gs.generation,m.created_at,m.updated_at,m.image_url,m.is_unknown,
       lower(coalesce(m.name_en,'')||' '||coalesce(m.name_ar,'')) search_name
     FROM scoped_members m
-    LEFT JOIN app.subfamilies sf ON sf.id=m.subfamily_id AND sf.deleted_at IS NULL
-    LEFT JOIN parent_stats ps ON ps.child_id=m.id LEFT JOIN child_stats cs ON cs.parent_id=m.id
+    LEFT JOIN branch_assignment branch ON branch.member_id=m.id
+    LEFT JOIN parent_stats ps ON ps.child_id=m.id
+    LEFT JOIN scoped_members father ON father.id=ps.father_id
+    LEFT JOIN parent_stats father_ps ON father_ps.child_id=father.id
+    LEFT JOIN scoped_members grandfather ON grandfather.id=father_ps.father_id
+    LEFT JOIN parent_stats grandfather_ps ON grandfather_ps.child_id=grandfather.id LEFT JOIN scoped_members great_grandfather ON great_grandfather.id=grandfather_ps.father_id
+    LEFT JOIN child_stats cs ON cs.parent_id=m.id
     LEFT JOIN partner_stats partner ON partner.member_id=m.id
     LEFT JOIN generation_stats gs ON gs.member_id=m.id
   )`;
-
-function addValue(values: unknown[], value: unknown) {
-  values.push(value);
-  return `$${values.length}`;
-}
-
-function addIdentityFilters(filters: AnalysisFilters, values: unknown[], conditions: string[]) {
-  if (filters.search)
-    conditions.push(
-      `search_name LIKE ${addValue(values, `%${filters.search.toLowerCase().replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`)} ESCAPE '\\'`,
-    );
-  if (filters.genders?.length)
-    conditions.push(`gender=ANY(${addValue(values, filters.genders)}::app.gender[])`);
-  if (filters.lifeStatus)
-    conditions.push(filters.lifeStatus === "living" ? "NOT is_deceased" : "is_deceased");
-  if (filters.citizenStatuses?.length) {
-    const known = filters.citizenStatuses.filter((value) => value !== "unknown");
-    const alternatives: string[] = [];
-    if (known.length)
-      alternatives.push(`citizen_status::text=ANY(${addValue(values, known)}::text[])`);
-    if (filters.citizenStatuses.includes("unknown")) alternatives.push("citizen_status IS NULL");
-    conditions.push(`(${alternatives.join(" OR ")})`);
-  }
-  if (filters.branchIds?.length)
-    conditions.push(`branch_id=ANY(${addValue(values, filters.branchIds)}::uuid[])`);
-}
-
-function addAgeAndDateFilters(filters: AnalysisFilters, values: unknown[], conditions: string[]) {
-  if (filters.minAge !== undefined)
-    conditions.push(`lifecycle_age>=${addValue(values, filters.minAge)}::integer`);
-  if (filters.maxAge !== undefined)
-    conditions.push(`lifecycle_age<=${addValue(values, filters.maxAge)}::integer`);
-  for (const [field, value, operator, cast] of [
-    ["birth_date", filters.birthFrom, ">=", "date"],
-    ["birth_date", filters.birthTo, "<=", "date"],
-    ["death_date", filters.deathFrom, ">=", "date"],
-    ["death_date", filters.deathTo, "<=", "date"],
-    ["created_at", filters.createdFrom, ">=", "timestamptz"],
-    ["created_at", filters.createdTo, "<=", "timestamptz"],
-    ["updated_at", filters.updatedFrom, ">=", "timestamptz"],
-    ["updated_at", filters.updatedTo, "<=", "timestamptz"],
-  ] as const)
-    if (value) conditions.push(`${field}${operator}${addValue(values, value)}::${cast}`);
-}
-
-function addRelationshipFilters(filters: AnalysisFilters, values: unknown[], conditions: string[]) {
-  if (filters.parentCount !== undefined)
-    conditions.push(`parent_count=${addValue(values, filters.parentCount)}::integer`);
-  if (filters.hasSpouse !== undefined)
-    conditions.push(`has_spouse=${addValue(values, filters.hasSpouse)}::boolean`);
-  if (filters.hasChildren !== undefined)
-    conditions.push(filters.hasChildren ? "child_count>0" : "child_count=0");
-  if (filters.minChildren !== undefined)
-    conditions.push(`child_count>=${addValue(values, filters.minChildren)}::integer`);
-  if (filters.maxChildren !== undefined)
-    conditions.push(`child_count<=${addValue(values, filters.maxChildren)}::integer`);
-  if (filters.minGeneration !== undefined)
-    conditions.push(`generation>=${addValue(values, filters.minGeneration)}::integer`);
-  if (filters.maxGeneration !== undefined)
-    conditions.push(`generation<=${addValue(values, filters.maxGeneration)}::integer`);
-}
-
-function addMissingFieldFilter(filters: AnalysisFilters, conditions: string[]) {
-  if (filters.missingFields?.length) {
-    const map: Record<string, string> = {
-      name_en: "name_en=''",
-      name_ar: "name_ar=''",
-      birth_date: "birth_date IS NULL",
-      citizen_status: "citizen_status IS NULL",
-      branch: "branch_id IS NULL",
-      image: "image_url IS NULL",
-      parent: "parent_count=0",
-    };
-    conditions.push(`(${filters.missingFields.map((field) => map[field]).join(" OR ")})`);
-  }
-}
-
-function filterSql(filters: AnalysisFilters, values: unknown[]) {
-  const conditions: string[] = [];
-  addIdentityFilters(filters, values, conditions);
-  addAgeAndDateFilters(filters, values, conditions);
-  addRelationshipFilters(filters, values, conditions);
-  addMissingFieldFilter(filters, conditions);
-  return conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-}
 
 const sortExpressions: Record<AnalysisQueryDefinition["sort"], string> = {
   name: "search_name",
@@ -256,6 +217,7 @@ export async function readAnalysisMembers(
   exportLimit?: number,
 ) {
   const needsGeneration =
+    exportLimit !== undefined ||
     input.sort === "generation" ||
     input.filters.minGeneration !== undefined ||
     input.filters.maxGeneration !== undefined;
@@ -267,8 +229,10 @@ export async function readAnalysisMembers(
   const sort = sortExpressions[input.sort];
   const cursorWhere = cursorSql(cursor, sort, values);
   const result = await client.query<MemberPageRow>(
-    `WITH RECURSIVE ${memberAnalysisCtes}, filtered AS (SELECT * FROM base ${filters})
-     SELECT id,name_en,name_ar,gender,birth_date,death_date,is_deceased,lifecycle_age,citizen_status,
+    `WITH RECURSIVE ${memberAnalysisCtes}, filtered AS (SELECT * FROM base member ${filters})
+     SELECT id,name_en,name_ar,father_name_en,father_name_ar,grandfather_name_en,
+       grandfather_name_ar,great_grandfather_name_en,great_grandfather_name_ar,gender,
+       birth_date::text birth_date,death_date::text death_date,is_deceased,lifecycle_age,citizen_status,
        branch_id,branch_name_en,branch_name_ar,father_id,mother_id,parent_count,has_spouse,
        child_count,generation,created_at,updated_at,${sort}::text cursor_value,
        (SELECT count(*)::integer FROM filtered) total_count
@@ -307,7 +271,6 @@ export async function readBranchReport(client: PoolClient, scope: AnalysisScope)
        count(m.id) FILTER (WHERE m.is_deceased)::integer deceased,
        count(m.id) FILTER (WHERE m.gender='male')::integer male,
        count(m.id) FILTER (WHERE m.gender='female')::integer female,
-       count(m.id) FILTER (WHERE m.gender='unspecified')::integer unspecified_gender,
        count(m.id) FILTER (WHERE m.age>=18)::integer adults,
        count(m.id) FILTER (WHERE m.age<18)::integer minors,
        count(m.id) FILTER (WHERE m.age IS NULL)::integer unknown_age,
@@ -318,17 +281,9 @@ export async function readBranchReport(client: PoolClient, scope: AnalysisScope)
        count(m.id) FILTER (WHERE m.age>=75)::integer age_75_plus,
        count(m.id) FILTER (WHERE m.citizen_status='resident')::integer resident,
        count(m.id) FILTER (WHERE m.citizen_status='non_resident')::integer non_resident,
-       count(m.id) FILTER (WHERE m.citizen_status IS NULL)::integer unknown_citizenship,
-       count(m.id) FILTER (WHERE nullif(btrim(m.name_en),'') IS NULL)::integer missing_name_en,
-       count(m.id) FILTER (WHERE nullif(btrim(m.name_ar),'') IS NULL)::integer missing_name_ar,
-       count(m.id) FILTER (WHERE m.birth_date IS NULL)::integer missing_birth_date,
-       count(m.id) FILTER (WHERE m.citizen_status IS NULL)::integer missing_citizenship,
        coalesce(round(avg((
-         (nullif(btrim(m.name_en),'') IS NOT NULL)::integer+
-         (nullif(btrim(m.name_ar),'') IS NOT NULL)::integer+
-         (m.birth_date IS NOT NULL)::integer+(m.citizen_status IS NOT NULL)::integer+
-         (m.image_url IS NOT NULL)::integer+(m.has_parent)::integer
-       )::numeric/6)*100),0)::integer completeness_percent
+         (m.age IS NOT NULL)::integer+(m.image_url IS NOT NULL)::integer+(m.has_parent)::integer
+       )::numeric/3)*100),0)::integer completeness_percent
      FROM branches b LEFT JOIN members m ON m.branch_id=b.id GROUP BY b.id,b.name_en,b.name_ar
      ORDER BY total DESC,b.name_en`,
     [scope.treeId, scope.kind === "branch" ? scope.branchId : null],

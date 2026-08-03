@@ -7,6 +7,7 @@ const male: FamilyMember = {
   name_en: "English Name",
   name_ar: "الاسم العربي",
   gender: "male",
+  citizen_status: "resident",
   created_at: "created",
   updated_at: "updated",
 };

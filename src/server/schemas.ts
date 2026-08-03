@@ -37,7 +37,7 @@ export const schemas = {
     .object({
       fullNameEn: z.string().trim().min(1).max(200),
       fullNameAr: z.string().trim().min(1).max(200),
-      gender: z.enum(["male", "female", "unspecified"]).optional(),
+      gender: z.enum(["male", "female"]).optional(),
     })
     .strict(),
   memberImageSign: z.object({ memberId: z.string().uuid().optional() }).strict(),
@@ -190,11 +190,14 @@ export const schemas = {
               id: z.string().min(1).max(200),
               name_en: z.string().trim().max(200),
               name_ar: z.string().trim().max(200),
-              gender: z.enum(["male", "female", "unspecified"]),
+              gender: z.enum(["male", "female"]),
               birth_date: z.string().max(50).optional(),
               death_date: z.string().max(50).optional(),
               is_deceased: z.boolean().optional(),
-              citizen_status: z.enum(["resident", "non_resident"]).optional(),
+              citizen_status: z
+                .enum(["resident", "non_resident"])
+                .nullish()
+                .transform((value) => value ?? "resident"),
               image_url: z
                 .string()
                 .trim()

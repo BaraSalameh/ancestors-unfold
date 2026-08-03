@@ -48,7 +48,7 @@ function TreeActionsTrigger() {
   const { t } = useI18n();
   return (
     <DropdownMenuTrigger asChild>
-      <Button variant="outline">
+      <Button variant="outline" data-dashboard-action="tree-actions">
         <MoreHorizontal aria-hidden="true" />
         {t("tree_actions")}
       </Button>
@@ -176,7 +176,7 @@ export function DashboardHeaderActions({
     <TooltipProvider delayDuration={350}>
       <div className="flex flex-wrap justify-end gap-2">
         {tree.analysis_enabled !== false && (
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" data-dashboard-action="analysis">
             <Link to="/analysis">
               <ChartNoAxesCombined aria-hidden="true" />
               {t("analysis")}
@@ -193,10 +193,18 @@ export function DashboardHeaderActions({
             ownershipTransfer={ownershipTransfer}
           />
         )}
+        {tree.role === "contributor" && (
+          <ContributorTreeActions
+            tree={tree}
+            treeControls={treeControls}
+            accountDeletion={accountDeletion}
+          />
+        )}
         <DashboardActionTooltip title={t("edit")} description={t("edit_tooltip_description")}>
           <Button
             asChild
             size="icon"
+            data-dashboard-action="edit"
             className="ring-2 ring-primary/20 ring-offset-2 ring-offset-background"
           >
             <Link
@@ -209,13 +217,6 @@ export function DashboardHeaderActions({
             </Link>
           </Button>
         </DashboardActionTooltip>
-        {tree.role === "contributor" && (
-          <ContributorTreeActions
-            tree={tree}
-            treeControls={treeControls}
-            accountDeletion={accountDeletion}
-          />
-        )}
       </div>
     </TooltipProvider>
   );

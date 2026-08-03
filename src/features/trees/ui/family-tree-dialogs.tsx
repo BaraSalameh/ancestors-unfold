@@ -20,7 +20,6 @@ type Translator = ReturnType<typeof useI18n>["t"];
 type Language = ReturnType<typeof useI18n>["lang"];
 
 export interface CreationChoice {
-  kind: "parent" | "child-role";
   memberId: string;
 }
 
@@ -106,12 +105,7 @@ function CreationChoiceDialog(props: FamilyTreeDialogsProps) {
   const choose = (role: "father" | "mother") => {
     const choice = props.creationChoice;
     if (!choice) return;
-    if (choice.kind === "parent")
-      props.navigateToAdd({ childId: choice.memberId, parentRole: role });
-    else
-      props.navigateToAdd(
-        role === "father" ? { fatherId: choice.memberId } : { motherId: choice.memberId },
-      );
+    props.navigateToAdd({ childId: choice.memberId, parentRole: role });
     props.setCreationChoice(null);
   };
   return (
@@ -121,9 +115,7 @@ function CreationChoiceDialog(props: FamilyTreeDialogsProps) {
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {props.creationChoice?.kind === "parent" ? props.t("add_parent") : props.t("add_child")}
-          </DialogTitle>
+          <DialogTitle>{props.t("add_parent")}</DialogTitle>
           <DialogDescription>{props.t("choose_relative_to_add")}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-2 sm:grid-cols-2">

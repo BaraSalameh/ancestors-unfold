@@ -8,7 +8,7 @@ export async function provisionOwnedTree(
     full_name_en: string;
     full_name_ar: string;
     email: string;
-    profile_gender: "male" | "female" | "unspecified";
+    profile_gender: "male" | "female";
   },
 ) {
   const existing = await client.query("SELECT 1 FROM app.tree_memberships WHERE user_id=$1", [
@@ -62,7 +62,7 @@ export async function acceptRegistrationInvitation(
     full_name_en: string;
     full_name_ar: string;
     email: string;
-    profile_gender: "male" | "female" | "unspecified";
+    profile_gender: "male" | "female";
   },
   invitationId: string,
 ) {
@@ -111,7 +111,7 @@ export async function acceptRegistrationInvitation(
     [invitation.id, user.id],
   );
   if (memberId) {
-    const linked = await client.query<{ gender: "male" | "female" | "unspecified" }>(
+    const linked = await client.query<{ gender: "male" | "female" }>(
       `UPDATE app.family_members SET linked_user_id=$2,
         updated_by=$2,updated_at=now(),version=version+1
        WHERE id=$1 AND tree_id=$3 AND linked_user_id IS NULL AND deleted_at IS NULL

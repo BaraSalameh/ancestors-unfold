@@ -5,6 +5,7 @@ import { ApiError, enforceRateLimit, parseBody, requestIp, schemas } from "@/ser
 import {
   canDeleteContributorAccount,
   deleteContributorIdentity,
+  provisionOwnedTree,
 } from "@/features/collaboration/server";
 import { hashEmailCode as codeHash, normalizeEmail } from "./auth-crypto";
 import { sessionCookie } from "./auth-cookies";
@@ -68,13 +69,15 @@ async function updateProfile(
   requestId: string,
 ): Promise<Response> {
   const body = await parseBody(request, schemas.profileNames);
+  const completedGender = body.gender ?? session.profile_gender;
+  if (!completedGender) throw new ApiError("INVALID_INPUT");
   const updated = await transaction(session.user_id, session.id, requestId, async (client) => {
     const profile = await client.query<Session>(
       `UPDATE app.users SET full_name_en=$2,full_name_ar=$3,
                profile_gender=COALESCE($4::app.gender,profile_gender),updated_at=now()
              WHERE id=$1 AND status='active'
              RETURNING id AS user_id,email,full_name_en,full_name_ar,profile_gender`,
-      [session.user_id, body.fullNameEn, body.fullNameAr, body.gender ?? null],
+      [session.user_id, body.fullNameEn, body.fullNameAr, completedGender],
     );
     if (body.gender)
       await client.query(
@@ -83,6 +86,16 @@ async function updateProfile(
                WHERE linked_user_id=$1 AND deleted_at IS NULL AND gender<>$2`,
         [session.user_id, body.gender],
       );
+    if (!session.profile_gender) {
+      const account = profile.rows[0];
+      await provisionOwnedTree(client, {
+        id: account.user_id,
+        email: account.email,
+        full_name_en: account.full_name_en,
+        full_name_ar: account.full_name_ar,
+        profile_gender: completedGender,
+      });
+    }
     return profile;
   });
   return json(await authSessionDto(updated.rows[0], requestId));

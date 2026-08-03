@@ -19,10 +19,18 @@ describe("snapshot relationship writes", () => {
         name_en: "A",
         name_ar: "",
         gender: "male",
+        citizen_status: "resident",
         spouse_id: "member-b",
         ...timestamps,
       },
-      { id: "member-b", name_en: "B", name_ar: "", gender: "female", ...timestamps },
+      {
+        id: "member-b",
+        name_en: "B",
+        name_ar: "",
+        gender: "female",
+        citizen_status: "resident",
+        ...timestamps,
+      },
     ] satisfies NonNullable<SnapshotInput["members"]>;
 
     await writeSnapshotRelationships(

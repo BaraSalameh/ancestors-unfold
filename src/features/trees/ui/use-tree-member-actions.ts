@@ -62,7 +62,7 @@ export function useTreeMemberActions(params: Params) {
       const child = familyStore.get(id);
       if (!params.canEdit || !child || (child.father_id && child.mother_id)) return;
       if (!child.father_id && !child.mother_id) {
-        setCreationChoice({ kind: "parent", memberId: id });
+        setCreationChoice({ memberId: id });
         return;
       }
       navigateToAdd({ childId: id, parentRole: child.father_id ? "mother" : "father" });
@@ -74,10 +74,6 @@ export function useTreeMemberActions(params: Params) {
     (id: string) => {
       const parent = familyStore.get(id);
       if (!params.canEdit || !parent) return;
-      if (parent.gender === "unspecified") {
-        setCreationChoice({ kind: "child-role", memberId: id });
-        return;
-      }
       if (parent.gender === "female") {
         const husbands = [...computeWivesByHusband(familyStore.getAll()).entries()]
           .filter(([, wives]) => wives.some((wife) => wife.id === id))

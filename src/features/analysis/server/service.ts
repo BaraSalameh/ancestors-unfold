@@ -4,6 +4,7 @@ import { transaction } from "@/shared/server/database";
 import { logInfo } from "@/shared/server/logger";
 import {
   analysisMembersCsv,
+  analysisMembersJson,
   decodeAnalysisCursor,
   encodeAnalysisCursor,
 } from "../domain/projection";
@@ -94,6 +95,7 @@ export const analysisCatalog = (session: AnalysisSession, requestId: string, tre
       "birthDate",
       "deathDate",
       "parentCount",
+      "excludeWives",
       "hasSpouse",
       "hasChildren",
       "childCount",
@@ -193,12 +195,12 @@ export async function analysisExport(
   );
   return input.format === "csv"
     ? {
-        body: analysisMembersCsv(result.data),
+        body: analysisMembersCsv(result),
         contentType: "text/csv; charset=utf-8",
         extension: "csv",
       }
     : {
-        body: JSON.stringify(result, null, 2),
+        body: analysisMembersJson(result),
         contentType: "application/json; charset=utf-8",
         extension: "json",
       };

@@ -2,7 +2,6 @@ import { createHash, randomBytes } from "node:crypto";
 import { CodeChallengeMethod } from "google-auth-library";
 import { transaction } from "@/shared/server/database";
 import { ApiError } from "@/server/security";
-import { provisionOwnedTree } from "@/features/collaboration/server";
 import {
   cookieNamed,
   createSession,
@@ -136,28 +135,28 @@ async function completeGoogleAuth(
         email: string;
         full_name_en: string;
         full_name_ar: string;
-        profile_gender: "male" | "female" | "unspecified";
+        profile_gender: "male" | "female" | null;
       }>("SELECT id,email,full_name_en,full_name_ar,profile_gender FROM app.users WHERE id=$1", [
         userId,
       ])
     ).rows[0];
     await c.query("SELECT app.set_request_context($1,NULL,$2)", [userId, requestId]);
-    await provisionOwnedTree(c, account);
     await c.query("UPDATE app.users SET last_login_at=now() WHERE id=$1", [userId]);
     const credential = await c.query<{ credential_version: number }>(
       "SELECT credential_version FROM app.password_credentials WHERE user_id=$1",
       [userId],
     );
-    return createSession(
+    const createdSession = await createSession(
       c,
       userId,
       credential.rows[0]?.credential_version ?? 1,
       request,
       firstGoogleLogin,
     );
+    return { ...createdSession, profileComplete: account.profile_gender !== null };
   });
   const headers = new Headers({
-    location: safeRedirect(saved.redirect),
+    location: login.profileComplete ? safeRedirect(saved.redirect) : "/profile",
     "cache-control": "no-store",
   });
   headers.append("set-cookie", clearOauth);

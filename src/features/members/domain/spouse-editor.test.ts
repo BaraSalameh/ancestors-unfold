@@ -7,6 +7,7 @@ const member = (id: string, patch: Partial<FamilyMember> = {}): FamilyMember => 
   name_en: id,
   name_ar: id,
   gender: "female",
+  citizen_status: "resident",
   created_at: "created",
   updated_at: "updated",
   ...patch,

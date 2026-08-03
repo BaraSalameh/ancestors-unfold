@@ -203,7 +203,7 @@ BEGIN
     (tree_id,owner_id,'owner'),
     (other_tree_id,second_id,'owner');
   INSERT INTO app.family_members(id,tree_id,name_en,name_ar,gender,linked_user_id)
-    VALUES(member_id,tree_id,'Contributor','مساهم','unspecified',contributor_id);
+    VALUES(member_id,tree_id,'Contributor','مساهم','male',contributor_id);
   INSERT INTO app.tree_memberships(tree_id,user_id,role,family_member_id)
     VALUES(tree_id,contributor_id,'viewer',member_id);
   INSERT INTO app.subfamilies(id,tree_id,name_en,status)
@@ -318,10 +318,10 @@ BEGIN
   INSERT INTO app.branch_grants(user_id,tree_id,root_subfamily_id,role,granted_by)
     VALUES(contributor_id,tree_id,branch_id,'branch_editor',owner_id);
   INSERT INTO app.family_members(id,tree_id,name_en,gender,subfamily_id,created_by) VALUES
-    (branch_member_id,tree_id,'Branch member','unspecified',branch_id,owner_id),
-    (outside_member_id,tree_id,'Outside member','unspecified',NULL,owner_id),
-    (own_draft_id,tree_id,'Own draft','unspecified',NULL,contributor_id),
-    (other_draft_id,tree_id,'Other draft','unspecified',NULL,other_contributor_id);
+    (branch_member_id,tree_id,'Branch member','male',branch_id,owner_id),
+    (outside_member_id,tree_id,'Outside member','female',NULL,owner_id),
+    (own_draft_id,tree_id,'Own draft','male',NULL,contributor_id),
+    (other_draft_id,tree_id,'Other draft','female',NULL,other_contributor_id);
 
   PERFORM app.set_request_context(contributor_id,NULL,gen_random_uuid());
   IF NOT app.can_view_tree(tree_id) THEN
@@ -411,47 +411,107 @@ DO $$
 DECLARE
   v_owner_id uuid := gen_random_uuid();
   v_contributor_id uuid := gen_random_uuid();
+  v_other_contributor_id uuid := gen_random_uuid();
+  v_outsider_id uuid := gen_random_uuid();
   v_tree_id uuid := gen_random_uuid();
   v_assigned_branch uuid := gen_random_uuid();
   v_outside_branch uuid := gen_random_uuid();
   v_assigned_member uuid := gen_random_uuid();
   v_outside_member uuid := gen_random_uuid();
+  v_spouse_member uuid := gen_random_uuid();
+  v_union uuid := gen_random_uuid();
+  v_view_id uuid;
+  v_affected integer;
 BEGIN
   IF to_regclass('app.analysis_saved_views') IS NULL
      OR to_regclass('app.family_members_analysis_active_idx') IS NULL
-     OR to_regprocedure('app.branch_members_for_root(uuid,uuid)') IS NULL THEN
+     OR to_regprocedure('app.branch_members_for_root(uuid,uuid)') IS NULL
+     OR to_regprocedure('app.can_analyze_tree(uuid)') IS NULL
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_policies
+       WHERE schemaname='app' AND tablename='analysis_saved_views'
+         AND policyname='analysis_saved_view_select' AND qual LIKE '%can_analyze_tree%'
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_policies
+       WHERE schemaname='app' AND tablename='analysis_saved_views'
+         AND policyname='analysis_saved_view_update'
+         AND qual LIKE '%has_tree_role%' AND qual LIKE '%user_id%'
+     ) THEN
     RAISE EXCEPTION 'analysis schema is incomplete';
   END IF;
   INSERT INTO app.users(id,email,full_name_en,full_name_ar,status) VALUES
     (v_owner_id,'analysis-owner@example.test','Analysis owner','Analysis owner','active'),
-    (v_contributor_id,'analysis-contributor@example.test','Analysis contributor','Analysis contributor','active');
+    (v_contributor_id,'analysis-contributor@example.test','Analysis contributor','Analysis contributor','active'),
+    (v_other_contributor_id,'analysis-other@example.test','Other contributor','Other contributor','active'),
+    (v_outsider_id,'analysis-outsider@example.test','Analysis outsider','Analysis outsider','active');
   INSERT INTO app.family_trees(id,owner_user_id,name_en) VALUES(v_tree_id,v_owner_id,'Analysis tree');
   INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES
-    (v_tree_id,v_owner_id,'owner'),(v_tree_id,v_contributor_id,'viewer');
+    (v_tree_id,v_owner_id,'owner'),
+    (v_tree_id,v_contributor_id,'viewer'),
+    (v_tree_id,v_other_contributor_id,'viewer');
   INSERT INTO app.subfamilies(id,tree_id,name_en) VALUES
     (v_assigned_branch,v_tree_id,'Assigned analysis branch'),
     (v_outside_branch,v_tree_id,'Outside analysis branch');
   INSERT INTO app.family_members(id,tree_id,name_en,gender,subfamily_id) VALUES
     (v_assigned_member,v_tree_id,'Assigned analysis member','male',v_assigned_branch),
     (v_outside_member,v_tree_id,'Outside analysis member','female',v_outside_branch);
+  INSERT INTO app.family_members(id,tree_id,name_en,gender)
+    VALUES(v_spouse_member,v_tree_id,'Marriage-only spouse','female');
+  INSERT INTO app.unions(id,tree_id) VALUES(v_union,v_tree_id);
+  INSERT INTO app.union_partners(union_id,tree_id,member_id,display_order) VALUES
+    (v_union,v_tree_id,v_assigned_member,0),(v_union,v_tree_id,v_spouse_member,1);
   INSERT INTO app.branch_grants(user_id,tree_id,root_subfamily_id,role,granted_by)
-    VALUES(v_contributor_id,v_tree_id,v_assigned_branch,'branch_editor',v_owner_id);
+    VALUES
+      (v_contributor_id,v_tree_id,v_assigned_branch,'branch_editor',v_owner_id),
+      (v_other_contributor_id,v_tree_id,v_outside_branch,'branch_editor',v_owner_id);
 
   PERFORM app.set_request_context(v_contributor_id,NULL,gen_random_uuid());
-  IF NOT EXISTS (
+  IF NOT app.can_analyze_tree(v_tree_id) OR NOT EXISTS (
     SELECT 1 FROM app.branch_members_for_root(v_tree_id,v_assigned_branch) WHERE member_id=v_assigned_member
-  ) OR EXISTS (
+  ) OR NOT EXISTS (
     SELECT 1 FROM app.branch_members_for_root(v_tree_id,v_outside_branch) WHERE member_id=v_outside_member
+  ) OR EXISTS (
+    SELECT 1 FROM app.branch_members_for_root(v_tree_id,v_assigned_branch) WHERE member_id=v_spouse_member
   ) THEN
-    RAISE EXCEPTION 'analysis branch scope exposed unauthorized members';
+    RAISE EXCEPTION 'shared analysis scope or lineage membership is incorrect';
   END IF;
   INSERT INTO app.analysis_saved_views(tree_id,user_id,name,definition)
-    VALUES(v_tree_id,v_contributor_id,'Adults',jsonb_build_object('filters',jsonb_build_object(),'sort','name','direction','asc'));
+    VALUES(v_tree_id,v_contributor_id,'Adults',jsonb_build_object('filters',jsonb_build_object(),'sort','name','direction','asc'))
+    RETURNING id INTO v_view_id;
+
+  PERFORM app.set_request_context(v_other_contributor_id,NULL,gen_random_uuid());
   IF NOT EXISTS (
     SELECT 1 FROM app.analysis_saved_views v
     WHERE v.tree_id=v_tree_id AND v.user_id=v_contributor_id AND v.name='Adults'
   ) THEN
-    RAISE EXCEPTION 'analysis saved view was not persisted';
+    RAISE EXCEPTION 'analysis saved view was not shared';
+  END IF;
+  BEGIN
+    INSERT INTO app.analysis_saved_views(tree_id,user_id,name,definition)
+      VALUES(v_tree_id,v_other_contributor_id,'adults',jsonb_build_object('filters',jsonb_build_object(),'sort','name','direction','asc'));
+    RAISE EXCEPTION 'shared saved-view names should be tree-unique';
+  EXCEPTION WHEN unique_violation THEN NULL;
+  END;
+
+  PERFORM app.set_request_context(v_owner_id,NULL,gen_random_uuid());
+  UPDATE app.analysis_saved_views SET name='Owner managed' WHERE id=v_view_id;
+  GET DIAGNOSTICS v_affected=ROW_COUNT;
+  IF v_affected<>1 THEN
+    RAISE EXCEPTION 'owner could not manage a contributor saved view';
+  END IF;
+  BEGIN
+    UPDATE app.analysis_saved_views SET user_id=v_owner_id WHERE id=v_view_id;
+    RAISE EXCEPTION 'saved-view creator should be immutable';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='saved-view creator should be immutable' THEN RAISE; END IF;
+  END;
+
+  PERFORM app.set_request_context(v_outsider_id,NULL,gen_random_uuid());
+  IF app.can_analyze_tree(v_tree_id) OR EXISTS (
+    SELECT 1 FROM app.branch_members_for_root(v_tree_id,v_assigned_branch)
+  ) THEN
+    RAISE EXCEPTION 'analysis data was exposed outside the tree';
   END IF;
   PERFORM app.set_request_context(NULL,NULL,gen_random_uuid());
 END $$;
@@ -486,21 +546,35 @@ BEGIN
   INSERT INTO app.family_trees(id,owner_user_id,name_en)
     VALUES(v_tree,v_owner,'Death status tree');
   INSERT INTO app.family_members(id,tree_id,name_en,gender,is_deceased)
-    VALUES(v_unknown_death,v_tree,'Unknown death date','unspecified',true);
+    VALUES(v_unknown_death,v_tree,'Unknown death date','male',true);
   INSERT INTO app.family_members(id,tree_id,name_en,gender)
-    VALUES(v_living,v_tree,'Living member','unspecified');
+    VALUES(v_living,v_tree,'Living member','female');
   INSERT INTO app.family_members(id,tree_id,name_en,gender,death_date,is_deceased)
-    VALUES(v_dated_death,v_tree,'Known death date','unspecified',date '2020-01-02',true);
+    VALUES(v_dated_death,v_tree,'Known death date','male',date '2020-01-02',true);
 
   IF (SELECT is_deceased FROM app.family_members WHERE id=v_living)
      OR NOT (SELECT is_deceased AND death_date IS NULL FROM app.family_members WHERE id=v_unknown_death)
-     OR NOT (SELECT is_deceased FROM app.family_members WHERE id=v_dated_death) THEN
+     OR NOT (SELECT is_deceased FROM app.family_members WHERE id=v_dated_death)
+     OR (SELECT citizen_status <> 'resident' FROM app.family_members WHERE id=v_living) THEN
     RAISE EXCEPTION 'independent deceased status was not persisted';
   END IF;
 
   BEGIN
+    INSERT INTO app.family_members(tree_id,name_en,gender)
+      VALUES(v_tree,'Unspecified member','unspecified');
+    RAISE EXCEPTION 'unspecified member gender should have been rejected';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  BEGIN
+    UPDATE app.users SET profile_gender='unspecified' WHERE id=v_owner;
+    RAISE EXCEPTION 'unspecified account gender should have been rejected';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  BEGIN
     INSERT INTO app.family_members(tree_id,name_en,gender,death_date,is_deceased)
-      VALUES(v_tree,'Contradictory status','unspecified',date '2020-01-02',false);
+      VALUES(v_tree,'Contradictory status','female',date '2020-01-02',false);
     RAISE EXCEPTION 'living member with a death date should have been rejected';
   EXCEPTION WHEN check_violation THEN NULL;
   END;

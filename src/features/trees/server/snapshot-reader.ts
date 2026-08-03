@@ -71,7 +71,7 @@ function memberIdentityFields(member: MemberRow) {
     birth_date: member.birth_date ?? undefined,
     death_date: member.death_date ?? undefined,
     is_deceased: member.is_deceased ?? Boolean(member.death_date),
-    citizen_status: member.citizen_status ?? undefined,
+    citizen_status: member.citizen_status ?? "resident",
     image_url: member.image_url ?? undefined,
     is_unknown: member.is_unknown || undefined,
     subfamily_id: member.subfamily_id ?? undefined,

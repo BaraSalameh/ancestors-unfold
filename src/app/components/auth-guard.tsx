@@ -14,17 +14,35 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   const { t, lang } = useI18n();
   const location = useRouterState({ select: (state) => state.location });
   const navigate = useNavigate();
-  const mayView = mayAccessRoute(location.pathname, location.search, isAuthenticated);
+  const profileComplete = session?.user.gender !== null;
+  const mayView = mayAccessRoute(
+    location.pathname,
+    location.search,
+    isAuthenticated,
+    profileComplete,
+  );
 
   useEffect(() => {
     if (isLoading || mayView) return;
+    if (isAuthenticated && !profileComplete) {
+      void navigate({ to: "/profile", replace: true });
+      return;
+    }
     const destination = guardedRedirect(location.pathname, location.href);
     void navigate({
       to: "/auth",
       search: { redirect: destination, oauthError: undefined },
       replace: true,
     });
-  }, [isLoading, mayView, location.pathname, location.href, navigate]);
+  }, [
+    isLoading,
+    mayView,
+    isAuthenticated,
+    profileComplete,
+    location.pathname,
+    location.href,
+    navigate,
+  ]);
 
   if (isLoading || !mayView) {
     return (

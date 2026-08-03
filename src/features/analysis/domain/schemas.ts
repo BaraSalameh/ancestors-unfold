@@ -1,26 +1,18 @@
 import { z } from "zod";
 
-const missingField = z.enum([
-  "name_en",
-  "name_ar",
-  "birth_date",
-  "citizen_status",
-  "branch",
-  "image",
-  "parent",
-]);
+const missingField = z.enum(["name_en", "name_ar", "birth_date", "branch", "image", "parent"]);
 
 const analysisFiltersSchema = z
   .object({
     search: z.string().trim().max(100).optional(),
     genders: z
-      .array(z.enum(["male", "female", "unspecified"]))
-      .max(3)
+      .array(z.enum(["male", "female"]))
+      .max(2)
       .optional(),
     lifeStatus: z.enum(["living", "deceased"]).optional(),
     citizenStatuses: z
-      .array(z.enum(["resident", "non_resident", "unknown"]))
-      .max(3)
+      .array(z.enum(["resident", "non_resident"]))
+      .max(2)
       .optional(),
     branchIds: z.array(z.string().uuid()).max(20).optional(),
     minAge: z.number().int().min(0).max(200).optional(),
@@ -34,6 +26,7 @@ const analysisFiltersSchema = z
     updatedFrom: z.string().datetime().optional(),
     updatedTo: z.string().datetime().optional(),
     parentCount: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
+    excludeWives: z.boolean().optional(),
     hasSpouse: z.boolean().optional(),
     hasChildren: z.boolean().optional(),
     minChildren: z.number().int().min(0).max(1000).optional(),

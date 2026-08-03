@@ -12,7 +12,7 @@ export type Session = {
   email: string;
   full_name_en: string;
   full_name_ar: string;
-  profile_gender: "male" | "female" | "unspecified";
+  profile_gender: "male" | "female" | null;
   show_google_welcome: boolean;
 };
 

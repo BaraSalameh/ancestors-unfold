@@ -7,6 +7,7 @@ const member = (id: string, extra: Partial<FamilyMember> = {}): FamilyMember => 
   name_en: id,
   name_ar: "",
   gender: "male",
+  citizen_status: "resident",
   created_at: "2026-08-01T00:00:00.000Z",
   updated_at: "2026-08-01T00:00:00.000Z",
   ...extra,

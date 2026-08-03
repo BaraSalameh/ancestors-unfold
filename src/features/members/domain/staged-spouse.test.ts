@@ -7,6 +7,7 @@ const member = (id: string): FamilyMember => ({
   name_en: id,
   name_ar: id,
   gender: "female",
+  citizen_status: "resident",
   created_at: "then",
   updated_at: "then",
 });

@@ -58,32 +58,15 @@ function localizedName(lang: Lang, en: string | null, ar: string | null) {
 }
 
 function ScopeControl({
-  tree,
   catalog,
-  summary,
   branchId,
   onBranchChange,
 }: {
-  tree: AnalysisTree;
   catalog: AnalysisCatalog | undefined;
-  summary: AnalysisEnvelope<SummaryData> | undefined;
   branchId: string | null;
   onBranchChange: (branchId: string | null) => void;
 }) {
   const { t, lang } = useI18n();
-  if (tree.role === "contributor")
-    return (
-      <div className="rounded-lg border bg-muted/50 px-4 py-2 text-sm">
-        <div className="text-xs text-muted-foreground">{t("analysis_scope")}</div>
-        <strong>
-          {localizedName(
-            lang,
-            summary?.scope.branchNameEn ?? null,
-            summary?.scope.branchNameAr ?? null,
-          )}
-        </strong>
-      </div>
-    );
   return (
     <label className="space-y-1 text-sm">
       <span className="block text-muted-foreground">{t("analysis_scope")}</span>
@@ -129,13 +112,13 @@ function AnalysisHeader(props: {
             <h1 className="mt-2 text-3xl font-bold">
               {localizedName(lang, props.tree.name_en, props.tree.name_ar)}
             </h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              {t(
-                props.tree.role === "owner" ? "analysis_owner_intro" : "analysis_contributor_intro",
-              )}
-            </p>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("analysis_intro")}</p>
           </div>
-          <ScopeControl {...props} />
+          <ScopeControl
+            catalog={props.catalog}
+            branchId={props.branchId}
+            onBranchChange={props.onBranchChange}
+          />
         </div>
         {props.summary ? (
           <p className="mt-4 text-xs text-muted-foreground">

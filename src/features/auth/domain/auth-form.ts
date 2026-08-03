@@ -54,7 +54,7 @@ export interface InvitationPrefill {
   invited_email: string;
   invited_name_en: string;
   invited_name_ar: string;
-  member_gender: "male" | "female" | "unspecified";
+  member_gender: "male" | "female";
 }
 
 export function invitationRegistrationValues(invitation: InvitationPrefill): AuthFormValues {
@@ -63,7 +63,7 @@ export function invitationRegistrationValues(invitation: InvitationPrefill): Aut
     email: invitation.invited_email,
     fullNameEn: invitation.invited_name_en,
     fullNameAr: invitation.invited_name_ar,
-    gender: invitation.member_gender === "unspecified" ? undefined : invitation.member_gender,
+    gender: invitation.member_gender,
     password: "",
     confirmPassword: "",
   };

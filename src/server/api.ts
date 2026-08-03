@@ -86,6 +86,15 @@ async function handleAuthenticatedApi(
   session: Session,
   requestId: string,
 ): Promise<Response> {
+  if (!session.profile_gender) {
+    const sessionResponse = await handleAuthenticatedSessionRequest(request, url, session);
+    if (sessionResponse) return sessionResponse;
+    if (url.pathname === "/api/profile" && request.method === "PATCH") {
+      const accountResponse = await handleAccountRequest(request, url, session, requestId);
+      if (accountResponse) return accountResponse;
+    }
+    return json({ code: "PROFILE_INCOMPLETE" }, 403);
+  }
   const collaborationResponse = await handleCollaborationRequest(request, session, requestId);
   if (collaborationResponse) return collaborationResponse;
   const sessionResponse = await handleAuthenticatedSessionRequest(request, url, session);

@@ -31,6 +31,8 @@ export function AnalysisSavedViews({
   const views = useQuery({
     queryKey: ["analysis-views", treeId],
     queryFn: () => getSavedAnalysisViews(treeId),
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["analysis-views", treeId] });
   const save = useMutation({
@@ -90,14 +92,18 @@ export function AnalysisSavedViews({
                 <Button variant="outline" size="sm" onClick={() => onApply(view.definition)}>
                   {t("analysis_apply")}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t("delete")}
-                  onClick={() => remove.mutate(view.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {view.can_manage ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("delete")}
+                    loading={remove.isPending && remove.variables === view.id}
+                    disabled={remove.isPending}
+                    onClick={() => remove.mutate(view.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </div>
             </CardContent>
           </Card>

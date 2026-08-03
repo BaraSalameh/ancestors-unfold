@@ -12,9 +12,14 @@ import {
 } from "./relationships";
 import type { FamilyMember } from "./types";
 
-const member = (id: string, gender: "male" | "female", patch: Partial<FamilyMember> = {}) => ({
+const member = (
+  id: string,
+  gender: "male" | "female",
+  patch: Partial<FamilyMember> = {},
+): FamilyMember => ({
   id,
   gender,
+  citizen_status: "resident",
   name_en: id,
   name_ar: id,
   created_at: "created",

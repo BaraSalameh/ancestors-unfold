@@ -4,8 +4,10 @@ export function mayAccessRoute(
   pathname: string,
   search: Record<string, unknown>,
   authenticated: boolean,
+  profileComplete = true,
 ) {
-  if (authenticated || isPublicPreviewRoute(pathname, search)) return true;
+  if (authenticated) return profileComplete || pathname === "/profile";
+  if (isPublicPreviewRoute(pathname, search)) return true;
   return (
     pathname === "/auth" || pathname === "/reset-password" || pathname.startsWith("/invitation/")
   );

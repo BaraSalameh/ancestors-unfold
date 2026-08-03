@@ -8,6 +8,7 @@ const member = (birth_date?: string): FamilyMember => ({
   name_en: "Ahmad",
   name_ar: "أحمد",
   gender: "male",
+  citizen_status: "resident",
   birth_date,
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",

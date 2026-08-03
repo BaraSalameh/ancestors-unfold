@@ -10,21 +10,22 @@ import { Label } from "@/shared/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
 import { profileErrorMessage } from "../domain/profile-error";
 
-type Gender = "male" | "female" | "unspecified";
+type Gender = "male" | "female";
 
-type ProfileUser = { fullNameEn: string; fullNameAr: string; gender: Gender } | null | undefined;
+type ProfileUser =
+  { fullNameEn: string; fullNameAr: string; gender: Gender | null } | null | undefined;
 
 const profileDraft = (user: ProfileUser) => ({
   fullNameEn: user?.fullNameEn ?? "",
   fullNameAr: user?.fullNameAr ?? "",
-  gender: user?.gender ?? ("unspecified" as Gender),
+  gender: user?.gender ?? undefined,
 });
 
 const profileUnchanged = (
   user: ProfileUser,
   fullNameEn: string,
   fullNameAr: string,
-  gender: Gender,
+  gender: Gender | undefined,
 ) => {
   const current = profileDraft(user);
   return (
@@ -40,7 +41,7 @@ export function ProfileIdentityCard() {
   const initial = profileDraft(user);
   const [fullNameEn, setFullNameEn] = useState(initial.fullNameEn);
   const [fullNameAr, setFullNameAr] = useState(initial.fullNameAr);
-  const [gender, setGender] = useState<Gender>(initial.gender);
+  const [gender, setGender] = useState<Gender | undefined>(initial.gender);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +54,7 @@ export function ProfileIdentityCard() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (busy || !fullNameEn.trim() || !fullNameAr.trim()) return;
+    if (busy || !fullNameEn.trim() || !fullNameAr.trim() || !gender) return;
     setBusy(true);
     setError(null);
     try {
@@ -99,13 +100,12 @@ export function ProfileIdentityCard() {
             />
           </div>
           <div className="sm:col-span-2">
-            <Label>{t("gender")}</Label>
+            <Label htmlFor="profile-gender">{t("gender")}</Label>
             <Select value={gender} onValueChange={(value) => setGender(value as Gender)}>
-              <SelectTrigger className="mt-2 sm:max-w-xs">
-                <SelectValue />
+              <SelectTrigger id="profile-gender" className="mt-2 sm:max-w-xs">
+                <SelectValue placeholder={t("gender")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="unspecified">{t("gender_unspecified")}</SelectItem>
                 <SelectItem value="male">{t("male")}</SelectItem>
                 <SelectItem value="female">{t("female")}</SelectItem>
               </SelectContent>
@@ -116,7 +116,7 @@ export function ProfileIdentityCard() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-          <Button className="sm:col-span-2 sm:w-fit" loading={busy} disabled={unchanged}>
+          <Button className="sm:col-span-2 sm:w-fit" loading={busy} disabled={unchanged || !gender}>
             {t("save_changes")}
           </Button>
         </form>

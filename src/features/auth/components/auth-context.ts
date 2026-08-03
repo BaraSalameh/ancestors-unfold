@@ -17,7 +17,7 @@ export type AuthContextValue = {
   updateProfile: (
     fullNameEn: string,
     fullNameAr: string,
-    gender: AuthSession["user"]["gender"],
+    gender: Exclude<AuthSession["user"]["gender"], null>,
   ) => Promise<void>;
   requestContributorAccountDeletionCode: (confirmation: "DELETE") => Promise<{ expiresAt: string }>;
   deleteContributorAccount: (confirmation: "DELETE", code: string) => Promise<void>;

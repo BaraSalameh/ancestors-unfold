@@ -1,6 +1,8 @@
 export type AnalysisScope = {
   kind: "tree" | "branch";
   treeId: string;
+  treeNameEn: string | null;
+  treeNameAr: string | null;
   branchId: string | null;
   branchNameEn: string | null;
   branchNameAr: string | null;
@@ -9,9 +11,9 @@ export type AnalysisScope = {
 
 export type AnalysisFilters = {
   search?: string;
-  genders?: Array<"male" | "female" | "unspecified">;
+  genders?: Array<"male" | "female">;
   lifeStatus?: "living" | "deceased";
-  citizenStatuses?: Array<"resident" | "non_resident" | "unknown">;
+  citizenStatuses?: Array<"resident" | "non_resident">;
   branchIds?: string[];
   minAge?: number;
   maxAge?: number;
@@ -24,15 +26,14 @@ export type AnalysisFilters = {
   updatedFrom?: string;
   updatedTo?: string;
   parentCount?: 0 | 1 | 2;
+  excludeWives?: boolean;
   hasSpouse?: boolean;
   hasChildren?: boolean;
   minChildren?: number;
   maxChildren?: number;
   minGeneration?: number;
   maxGeneration?: number;
-  missingFields?: Array<
-    "name_en" | "name_ar" | "birth_date" | "citizen_status" | "branch" | "image" | "parent"
-  >;
+  missingFields?: Array<"name_en" | "name_ar" | "birth_date" | "branch" | "image" | "parent">;
 };
 
 export type AnalysisSort =
@@ -71,13 +72,12 @@ export type SummaryData = {
   deceased: number;
   male: number;
   female: number;
-  unspecified_gender: number;
   adults: number;
+  living_adults: number;
   minors: number;
   unknown_age: number;
   resident: number;
   non_resident: number;
-  unknown_citizenship: number;
   average_age: number | null;
   median_age: number | null;
   average_lifespan: number | null;
@@ -101,12 +101,18 @@ export type AnalysisMember = {
   id: string;
   name_en: string;
   name_ar: string;
-  gender: "male" | "female" | "unspecified";
+  father_name_en: string | null;
+  father_name_ar: string | null;
+  grandfather_name_en: string | null;
+  grandfather_name_ar: string | null;
+  great_grandfather_name_en: string | null;
+  great_grandfather_name_ar: string | null;
+  gender: "male" | "female";
   birth_date: string | null;
   death_date: string | null;
   is_deceased: boolean;
   lifecycle_age: number | null;
-  citizen_status: "resident" | "non_resident" | null;
+  citizen_status: "resident" | "non_resident";
   branch_id: string | null;
   branch_name_en: string | null;
   branch_name_ar: string | null;
@@ -126,4 +132,5 @@ export type SavedAnalysisView = {
   definition: AnalysisQueryDefinition;
   created_at: string;
   updated_at: string;
+  can_manage: boolean;
 };

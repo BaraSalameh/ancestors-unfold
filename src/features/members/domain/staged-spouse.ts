@@ -47,6 +47,7 @@ export function stagedSpouseMember(
       name_en: "Unknown wife",
       name_ar: "زوجة غير معروفة",
       gender: "female",
+      citizen_status: "resident",
       is_unknown: true,
       created_at: "",
       updated_at: "",

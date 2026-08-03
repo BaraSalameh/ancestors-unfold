@@ -7,6 +7,8 @@ describe("auth guard policy", () => {
     expect(mayAccessRoute("/invitation/token", {}, false)).toBe(true);
     expect(mayAccessRoute("/tree/id", { mode: "preview" }, false)).toBe(true);
     expect(mayAccessRoute("/profile", {}, true)).toBe(true);
+    expect(mayAccessRoute("/profile", {}, true, false)).toBe(true);
+    expect(mayAccessRoute("/dashboard", {}, true, false)).toBe(false);
     expect(mayAccessRoute("/profile", {}, false)).toBe(false);
   });
 

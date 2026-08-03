@@ -98,7 +98,7 @@ async function confirmRegistration(request: Request, requestId: string): Promise
       Session & {
         credential_version: number;
         registration_invitation_id: string | null;
-        profile_gender: "male" | "female" | "unspecified";
+        profile_gender: "male" | "female";
       }
     >(
       `UPDATE app.users SET email_verified_at=now(),status='active'

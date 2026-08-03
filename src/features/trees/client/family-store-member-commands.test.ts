@@ -6,7 +6,8 @@ const member = (id: string, patch: Partial<FamilyMember> = {}): FamilyMember => 
   id,
   name_en: id,
   name_ar: id,
-  gender: "unspecified",
+  gender: "male",
+  citizen_status: "resident",
   created_at: "then",
   updated_at: "then",
   ...patch,
@@ -36,7 +37,7 @@ describe("atomic father and spouse creation", () => {
     const commands = createMemberCommands(context);
 
     const father = commands.addFatherWithSpouses(
-      { name_en: "Father", name_ar: "", gender: "male" },
+      { name_en: "Father", name_ar: "", gender: "male", citizen_status: "resident" },
       "child",
       [
         {
@@ -49,7 +50,12 @@ describe("atomic father and spouse creation", () => {
         {
           key: "new",
           kind: "new",
-          input: { name_en: "New wife", name_ar: "", gender: "female" },
+          input: {
+            name_en: "New wife",
+            name_ar: "",
+            gender: "female",
+            citizen_status: "resident",
+          },
           divorced: true,
         },
         {

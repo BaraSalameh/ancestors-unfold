@@ -3,7 +3,7 @@ export type AuthUser = {
   email: string;
   fullNameEn: string;
   fullNameAr: string;
-  gender: "male" | "female" | "unspecified";
+  gender: "male" | "female" | null;
 };
 
 export type RegistrationInput = {
@@ -62,7 +62,7 @@ export interface AuthService {
   updateProfile(
     fullNameEn: string,
     fullNameAr: string,
-    gender: AuthUser["gender"],
+    gender: Exclude<AuthUser["gender"], null>,
   ): Promise<AuthSession>;
   requestContributorAccountDeletionCode(confirmation: "DELETE"): Promise<{ expiresAt: string }>;
   deleteContributorAccount(confirmation: "DELETE", code: string): Promise<void>;

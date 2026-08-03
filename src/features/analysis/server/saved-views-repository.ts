@@ -3,9 +3,11 @@ import type { AnalysisQueryDefinition, AnalysisScope, SavedAnalysisView } from "
 
 export async function listSavedViews(client: PoolClient, scope: AnalysisScope, userId: string) {
   const result = await client.query<SavedAnalysisView>(
-    `SELECT id,name,definition,created_at,updated_at FROM app.analysis_saved_views
-     WHERE tree_id=$1 AND user_id=$2 ORDER BY updated_at DESC,id`,
-    [scope.treeId, userId],
+    `SELECT id,name,definition,created_at,updated_at,
+       (user_id=$2 OR $3::boolean) can_manage
+     FROM app.analysis_saved_views
+     WHERE tree_id=$1 ORDER BY updated_at DESC,id`,
+    [scope.treeId, userId, scope.role === "owner"],
   );
   return result.rows;
 }
@@ -19,7 +21,8 @@ export async function createSavedView(
 ) {
   const result = await client.query<SavedAnalysisView>(
     `INSERT INTO app.analysis_saved_views(tree_id,user_id,name,definition)
-     VALUES($1,$2,$3,$4) RETURNING id,name,definition,created_at,updated_at`,
+     VALUES($1,$2,$3,$4)
+     RETURNING id,name,definition,created_at,updated_at,true can_manage`,
     [scope.treeId, userId, name, definition],
   );
   return result.rows[0];
@@ -34,8 +37,16 @@ export async function updateSavedView(
 ) {
   const result = await client.query<SavedAnalysisView>(
     `UPDATE app.analysis_saved_views SET name=coalesce($4,name),definition=coalesce($5,definition),updated_at=now()
-     WHERE id=$3 AND tree_id=$1 AND user_id=$2 RETURNING id,name,definition,created_at,updated_at`,
-    [scope.treeId, userId, viewId, patch.name ?? null, patch.definition ?? null],
+     WHERE id=$3 AND tree_id=$1 AND (user_id=$2 OR $6::boolean)
+     RETURNING id,name,definition,created_at,updated_at,true can_manage`,
+    [
+      scope.treeId,
+      userId,
+      viewId,
+      patch.name ?? null,
+      patch.definition ?? null,
+      scope.role === "owner",
+    ],
   );
   return result.rows[0] ?? null;
 }
@@ -47,7 +58,8 @@ export async function deleteSavedView(
   viewId: string,
 ) {
   return client.query(
-    `DELETE FROM app.analysis_saved_views WHERE id=$3 AND tree_id=$1 AND user_id=$2`,
-    [scope.treeId, userId, viewId],
+    `DELETE FROM app.analysis_saved_views
+     WHERE id=$3 AND tree_id=$1 AND (user_id=$2 OR $4::boolean)`,
+    [scope.treeId, userId, viewId, scope.role === "owner"],
   );
 }

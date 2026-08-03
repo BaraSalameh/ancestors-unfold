@@ -17,6 +17,7 @@ const member = (
   id,
   gender,
   birth_date,
+  citizen_status: "resident",
   name_en: `English ${id}`,
   name_ar: `عربي ${id}`,
   created_at: "",

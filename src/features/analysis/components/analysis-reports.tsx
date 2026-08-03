@@ -11,7 +11,6 @@ const reportLabels: Record<string, string> = {
   deceased: "deceased",
   male: "male",
   female: "female",
-  unspecified_gender: "gender_unspecified",
   adults: "analysis_adults",
   total_members: "analysis_total_members",
   parent_links: "analysis_parent_links",
@@ -47,7 +46,6 @@ const reportLabels: Record<string, string> = {
   age_75_plus: "analysis_age_75_plus",
   resident: "resident",
   non_resident: "non_resident",
-  unknown_citizenship: "analysis_unknown_citizenship",
   completeness_percent: "analysis_completeness",
 };
 

@@ -148,9 +148,7 @@ function MemberIdentity({
           {lang === "ar" ? member.name_en : member.name_ar}
         </p>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <DetailBadge>
-            {t(member.gender === "unspecified" ? "gender_unspecified" : member.gender)}
-          </DetailBadge>
+          <DetailBadge>{t(member.gender)}</DetailBadge>
           <DetailBadge>{t(isMemberDeceased(member) ? "deceased" : "living")}</DetailBadge>
           <DetailBadge>
             {t(member.citizen_status === "non_resident" ? "non_resident" : "resident")}

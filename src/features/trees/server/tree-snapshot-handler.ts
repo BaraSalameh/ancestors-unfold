@@ -20,12 +20,14 @@ export async function handleTreeSnapshotRequest(
   if (snapshot && request.method === "GET")
     return json(await readSnapshot(session, requestId, snapshot[1]));
   if (snapshot && request.method === "PUT") {
-    const result = await importSnapshot(
-      session,
-      requestId,
-      snapshot[1],
-      await parseBody(request, schemas.snapshot),
-    );
+    const input = await parseBody(request, schemas.snapshot);
+    const result = await importSnapshot(session, requestId, snapshot[1], {
+      ...input,
+      members: input.members.map((member) => ({
+        ...member,
+        citizen_status: member.citizen_status ?? "resident",
+      })),
+    });
     await reconcileMemberImages(session, requestId, snapshot[1]);
     return json(result);
   }

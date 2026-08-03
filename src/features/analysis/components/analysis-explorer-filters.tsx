@@ -1,9 +1,10 @@
-import { Download, Search } from "lucide-react";
+import { Download, Search, X } from "lucide-react";
 import { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { clearAnalysisFilters, hasActiveAnalysisFilters } from "../domain/filter-state";
 import type { AnalysisBranch, AnalysisFilters, AnalysisQueryDefinition } from "../domain/types";
 import { AnalysisAdvancedFilters } from "./analysis-advanced-filters";
 
@@ -22,6 +23,55 @@ function optionalNumber(value: string) {
   return value === "" ? undefined : Number(value);
 }
 
+function FilterHeader({
+  definition,
+  setDefinition,
+}: Pick<AnalysisFilterPanelProps, "definition" | "setDefinition">) {
+  const { t } = useI18n();
+  return (
+    <CardHeader className="flex flex-row items-center justify-between gap-3">
+      <CardTitle>{t("analysis_filters")}</CardTitle>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={!hasActiveAnalysisFilters(definition.filters)}
+        onClick={() => setDefinition(clearAnalysisFilters(definition))}
+      >
+        <X className="h-4 w-4" />
+        {t("analysis_clear_filters")}
+      </Button>
+    </CardHeader>
+  );
+}
+
+function ExcludeWivesFilter({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex items-end">
+      <Label
+        htmlFor="analysis-exclude-wives"
+        className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md border px-3"
+      >
+        <input
+          id="analysis-exclude-wives"
+          type="checkbox"
+          className="h-4 w-4 accent-primary"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span>{t("analysis_exclude_wives")}</span>
+      </Label>
+    </div>
+  );
+}
+
 export function AnalysisFilterPanel({
   definition,
   branches,
@@ -35,9 +85,7 @@ export function AnalysisFilterPanel({
     patchFilters({ [key]: value ? [value] : undefined } as Partial<AnalysisFilters>);
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{t("analysis_filters")}</CardTitle>
-      </CardHeader>
+      <FilterHeader definition={definition} setDefinition={setDefinition} />
       <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-1">
           <Label htmlFor="analysis-search">{t("analysis_search")}</Label>
@@ -60,7 +108,6 @@ export function AnalysisFilterPanel({
             ["", t("analysis_all")],
             ["male", t("male")],
             ["female", t("female")],
-            ["unspecified", t("gender_unspecified")],
           ]}
         />
         <SelectFilter
@@ -85,7 +132,6 @@ export function AnalysisFilterPanel({
             ["", t("analysis_all")],
             ["resident", t("resident")],
             ["non_resident", t("non_resident")],
-            ["unknown", t("analysis_unknown")],
           ]}
         />
         <NumberFilter
@@ -113,6 +159,10 @@ export function AnalysisFilterPanel({
             ["1", "1"],
             ["2", "2"],
           ]}
+        />
+        <ExcludeWivesFilter
+          checked={definition.filters.excludeWives === true}
+          onChange={(checked) => patchFilters({ excludeWives: checked ? true : undefined })}
         />
         <MissingFieldFilter
           value={definition.filters.missingFields?.[0] ?? ""}
@@ -214,7 +264,6 @@ function MissingFieldFilter({
     ["name_en", t("analysis_missing_name_en")],
     ["name_ar", t("analysis_missing_name_ar")],
     ["birth_date", t("analysis_missing_birth")],
-    ["citizen_status", t("analysis_missing_citizenship")],
     ["branch", t("analysis_missing_branch")],
     ["image", t("analysis_missing_image")],
     ["parent", t("analysis_no_parents_recorded")],

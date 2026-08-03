@@ -12,14 +12,13 @@ const member = {
 
 describe("snapshot trust boundary", () => {
   it("accepts the current versioned snapshot contract", () => {
-    expect(
-      schemas.snapshot.parse({
-        batchId: "2dbd0eb8-23bd-4cc4-bf83-e17eea903655",
-        expectedVersion: 1,
-        members: [member],
-        subfamilies: [],
-      }),
-    ).toBeTruthy();
+    const parsed = schemas.snapshot.parse({
+      batchId: "2dbd0eb8-23bd-4cc4-bf83-e17eea903655",
+      expectedVersion: 1,
+      members: [member],
+      subfamilies: [],
+    });
+    expect(parsed.members[0].citizen_status).toBe("resident");
   });
 
   it("accepts an Arabic-only member name", () => {
@@ -57,6 +56,13 @@ describe("snapshot trust boundary", () => {
       schemas.snapshot.parse({
         expectedVersion: 0,
         members: [{ ...member, injected: true }],
+        subfamilies: [],
+      }),
+    ).toThrow();
+    expect(() =>
+      schemas.snapshot.parse({
+        expectedVersion: 1,
+        members: [{ ...member, gender: "unspecified" }],
         subfamilies: [],
       }),
     ).toThrow();
