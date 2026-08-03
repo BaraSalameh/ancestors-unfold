@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, ChartNoAxesCombined } from "lucide-react";
 import { useState } from "react";
 import { useI18n, type Lang } from "@/shared/i18n";
@@ -19,8 +19,8 @@ import { AnalysisReport } from "../components/analysis-reports";
 import { AnalysisSavedViews } from "../components/analysis-saved-views";
 import { AnalysisSummary } from "../components/analysis-summary";
 import type { AnalysisEnvelope, AnalysisQueryDefinition, SummaryData } from "../domain/types";
+import { analysisPageState, analysisTabs, type AnalysisTab } from "../domain/analysis-page-search";
 
-const initialDefinition: AnalysisQueryDefinition = { filters: {}, sort: "name", direction: "asc" };
 const selectClass = "h-10 min-w-56 rounded-md border bg-background px-3 text-sm";
 
 function AnalysisLoading() {
@@ -131,7 +131,7 @@ function AnalysisHeader(props: {
   );
 }
 
-const analysisTabs = [
+const analysisTabLabels = [
   ["overview", "analysis_overview"],
   ["branches", "analysis_branches"],
   ["relationships", "analysis_relationships"],
@@ -157,14 +157,14 @@ function AnalysisContent({
   definition: AnalysisQueryDefinition;
   activeTab: string;
   onDefinitionChange: (definition: AnalysisQueryDefinition) => void;
-  onTabChange: (tab: string) => void;
+  onTabChange: (tab: AnalysisTab) => void;
 }) {
   const { t } = useI18n();
   return (
     <section className="mx-auto max-w-7xl px-4 py-7 sm:px-6">
-      <Tabs value={activeTab} onValueChange={onTabChange}>
+      <Tabs value={activeTab} onValueChange={(value) => onTabChange(value as AnalysisTab)}>
         <TabsList className="mb-5 h-auto w-full justify-start overflow-x-auto p-1">
-          {analysisTabs.map(([value, key]) => (
+          {analysisTabLabels.map(([value, key]) => (
             <TabsTrigger key={value} value={value}>
               {t(key)}
             </TabsTrigger>
@@ -210,10 +210,10 @@ function AnalysisContent({
   );
 }
 
-export function AnalysisPage() {
-  const [branchId, setBranchId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [definition, setDefinition] = useState<AnalysisQueryDefinition>(initialDefinition);
+function AnalysisPageContent({ initial }: { initial: ReturnType<typeof analysisPageState> }) {
+  const [branchId, setBranchId] = useState<string | null>(initial.branchId);
+  const [activeTab, setActiveTab] = useState<(typeof analysisTabs)[number]>(initial.tab);
+  const [definition, setDefinition] = useState<AnalysisQueryDefinition>(initial.definition);
   const tree = useQuery({
     queryKey: ["analysis-tree"],
     queryFn: ({ signal }) => getAnalysisTree(signal),
@@ -257,4 +257,11 @@ export function AnalysisPage() {
       />
     </main>
   );
+}
+
+export function AnalysisPage() {
+  const search = useSearch({ from: "/analysis" });
+  const initial = analysisPageState(search);
+  const stateKey = `${initial.tab}:${initial.branchId ?? "tree"}:${search.missingField ?? "all"}`;
+  return <AnalysisPageContent key={stateKey} initial={initial} />;
 }

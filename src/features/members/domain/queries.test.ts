@@ -23,12 +23,18 @@ describe("family queries", () => {
     ).toBeGreaterThanOrEqual(1);
   });
 
-  it("includes a linked male's descendants and explicit members", () => {
+  it("includes a linked male's descendants, explicit members, and their wives", () => {
     const members = [
-      member("root"),
+      member("root", { spouse_ids: ["root-wife"] }),
+      member("root-wife", { gender: "female" }),
       member("child", { father_id: "root" }),
+      member("child-wife", { gender: "female", spouse_id: "child" }),
+      member("grandchild", { father_id: "child", mother_id: "co-parent-wife" }),
+      member("co-parent-wife", { gender: "female" }),
       member("explicit", { subfamily_id: "branch" }),
+      member("explicit-wife", { gender: "female", spouse_id: "explicit" }),
       member("other"),
+      member("other-wife", { gender: "female", spouse_id: "other" }),
     ];
     const subfamilies: SubFamily[] = [
       {
@@ -42,8 +48,13 @@ describe("family queries", () => {
     ];
     expect(getSubfamilyMembers(members, subfamilies, "branch").map(({ id }) => id)).toEqual([
       "root",
+      "root-wife",
       "child",
+      "child-wife",
+      "grandchild",
+      "co-parent-wife",
       "explicit",
+      "explicit-wife",
     ]);
   });
 });

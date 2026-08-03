@@ -58,6 +58,20 @@ const excludeMarriageOnlyWives = `NOT (
   )
 )`;
 
+const isWifeWithMaleSpouse = `(
+  member.gender='female'
+  AND EXISTS (
+    SELECT 1 FROM app.union_partners wife
+    JOIN app.unions marriage ON marriage.id=wife.union_id
+      AND marriage.tree_id=$1 AND marriage.deleted_at IS NULL
+    JOIN app.union_partners husband_link ON husband_link.union_id=wife.union_id
+      AND husband_link.member_id<>wife.member_id
+    JOIN app.family_members husband ON husband.id=husband_link.member_id
+      AND husband.tree_id=$1 AND husband.deleted_at IS NULL AND husband.gender='male'
+    WHERE wife.tree_id=$1 AND wife.member_id=member.id
+  )
+)`;
+
 function addRelationshipFilters(filters: AnalysisFilters, values: unknown[], conditions: string[]) {
   if (filters.parentCount !== undefined)
     conditions.push(`parent_count=${addAnalysisSqlValue(values, filters.parentCount)}::integer`);
@@ -82,7 +96,7 @@ function addMissingFieldFilter(filters: AnalysisFilters, conditions: string[]) {
     name_en: "name_en=''",
     name_ar: "name_ar=''",
     birth_date: "birth_date IS NULL",
-    branch: "branch_id IS NULL",
+    branch: `branch_id IS NULL AND NOT ${isWifeWithMaleSpouse}`,
     image: "image_url IS NULL",
     parent: "parent_count=0",
   };

@@ -16,7 +16,11 @@ vi.mock("@tanstack/react-router", () => ({
   }) => createElement("a", { "data-dashboard-action": dashboardAction }, children),
 }));
 
-function renderActions(role: "owner" | "contributor", lang: Lang) {
+function renderActions(
+  role: "owner" | "contributor",
+  lang: Lang,
+  affiliationStatus: "active" | "read_only" = "active",
+) {
   const context = {
     lang,
     dir: lang === "ar" ? ("rtl" as const) : ("ltr" as const),
@@ -24,7 +28,12 @@ function renderActions(role: "owner" | "contributor", lang: Lang) {
     t: (key: TranslationKey, values?: TranslationValues) => translate(lang, key, values),
   };
   const props = {
-    tree: { id: "tree-id", role, analysis_enabled: true },
+    tree: {
+      id: "tree-id",
+      role,
+      analysis_enabled: true,
+      affiliation_status: affiliationStatus,
+    },
     treeControls: {},
     accountDeletion: { setOpen: () => undefined },
     invitation: { setInviteOpen: () => undefined },
@@ -47,21 +56,31 @@ function renderActions(role: "owner" | "contributor", lang: Lang) {
 }
 
 function expectSharedOrder(markup: string) {
+  const edit = markup.indexOf('data-dashboard-action="edit"');
+  const add = markup.indexOf('data-dashboard-action="add-member"');
+  const preview = markup.indexOf('data-dashboard-action="preview"');
   const analysis = markup.indexOf('data-dashboard-action="analysis"');
   const treeActions = markup.indexOf('data-dashboard-action="tree-actions"');
-  const edit = markup.indexOf('data-dashboard-action="edit"');
 
-  expect(analysis).toBeGreaterThanOrEqual(0);
+  expect(edit).toBeGreaterThanOrEqual(0);
+  expect(add).toBe(-1);
+  expect(preview).toBeGreaterThan(edit);
+  expect(analysis).toBeGreaterThan(preview);
   expect(treeActions).toBeGreaterThan(analysis);
-  expect(edit).toBeGreaterThan(treeActions);
 }
 
 describe("dashboard header action order", () => {
-  it("places owner tree actions before edit in LTR", () => {
+  it("shows edit and preview before owner tree actions in LTR", () => {
     expectSharedOrder(renderActions("owner", "en"));
   });
 
-  it("places contributor tree actions before edit in RTL", () => {
+  it("shows edit and preview before contributor tree actions in RTL", () => {
     expectSharedOrder(renderActions("contributor", "ar"));
+  });
+
+  it("disables only contributor editing when access is read only", () => {
+    const markup = renderActions("contributor", "en", "read_only");
+    expect(markup).toMatch(/data-dashboard-action="edit"[^>]*disabled/);
+    expect(markup).not.toMatch(/data-dashboard-action="preview"[^>]*disabled/);
   });
 });

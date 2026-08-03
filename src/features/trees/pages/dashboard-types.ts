@@ -87,6 +87,37 @@ export interface DashboardData {
   ownershipTransfer: OwnershipTransfer | null;
 }
 
+export interface DashboardQualityInsights {
+  total: number;
+  missing_name_en: number;
+  missing_name_ar: number;
+  missing_birth_date: number;
+  missing_citizenship: number;
+  missing_branch: number;
+  missing_image: number;
+  unknown_placeholders: number;
+  no_parents_recorded: number;
+  possible_duplicate_groups: number;
+  contradictory_dates: number;
+  graph_cycles: number;
+}
+
+export interface DashboardBranchHealth {
+  id: string;
+  name_en: string;
+  name_ar: string | null;
+  total: number;
+  completeness_percent: number;
+}
+
+export interface DashboardInsights {
+  quality?: DashboardQualityInsights;
+  branches: DashboardBranchHealth[];
+  loading: boolean;
+  error: boolean;
+  retry: () => void;
+}
+
 export interface SearchOption {
   id: string;
   name_en: string | null;

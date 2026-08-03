@@ -26,6 +26,33 @@ export type ActivityPageResponse = {
   nextCursor: string | null;
 };
 
+export type ActivityIconKind =
+  | "tree"
+  | "edit"
+  | "branch"
+  | "invite"
+  | "resend"
+  | "cancel"
+  | "accepted"
+  | "removed"
+  | "transfer"
+  | "activity";
+
+export function activityIconKind(actionType: string): ActivityIconKind {
+  if (actionType === "tree_created") return "tree";
+  if (actionType === "tree_updated" || actionType === "tree_metadata_updated") return "edit";
+  if (actionType.startsWith("branch_")) return "branch";
+  if (actionType === "invitation_sent") return "invite";
+  if (actionType === "invitation_resent") return "resend";
+  if (actionType === "invitation_cancelled") return "cancel";
+  if (actionType === "invitation_accepted") return "accepted";
+  if (actionType === "contributor_removed" || actionType === "contributor_account_deleted") {
+    return "removed";
+  }
+  if (actionType.startsWith("ownership_transfer_")) return "transfer";
+  return "activity";
+}
+
 const activityLabels: Record<string, TranslationKey> = {
   tree_created: "activity_tree_created",
   tree_updated: "activity_tree_updated",

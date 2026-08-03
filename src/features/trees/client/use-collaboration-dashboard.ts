@@ -37,10 +37,12 @@ async function fetchDashboard(lang: string): Promise<DashboardData> {
 
 export function useCollaborationDashboard(lang: string) {
   const [data, setData] = useState<DashboardData>();
+  const [error, setError] = useState(false);
   const mounted = useRef(false);
   const loadInFlight = useRef<Promise<DashboardData> | undefined>(undefined);
   const load = useCallback(
     async (force = false) => {
+      setError(false);
       if (!force && dashboardCache) {
         setData(dashboardCache);
         if (Date.now() - dashboardCacheUpdatedAt < DASHBOARD_STALE_MS) return;
@@ -48,10 +50,15 @@ export function useCollaborationDashboard(lang: string) {
       loadInFlight.current ??= fetchDashboard(lang).finally(() => {
         loadInFlight.current = undefined;
       });
-      const next = await loadInFlight.current;
-      dashboardCache = next;
-      dashboardCacheUpdatedAt = Date.now();
-      if (mounted.current) setData(next);
+      try {
+        const next = await loadInFlight.current;
+        dashboardCache = next;
+        dashboardCacheUpdatedAt = Date.now();
+        if (mounted.current) setData(next);
+      } catch (requestError) {
+        if (mounted.current) setError(true);
+        throw requestError;
+      }
     },
     [lang],
   );
@@ -84,5 +91,5 @@ export function useCollaborationDashboard(lang: string) {
   const invalidate = () => {
     dashboardCache = undefined;
   };
-  return { data, load, updateTree, invalidate };
+  return { data, error, load, updateTree, invalidate };
 }

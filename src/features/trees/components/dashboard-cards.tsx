@@ -1,51 +1,108 @@
 import { AlertTriangle, RotateCw, ShieldCheck, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/shared/ui/dialog";
 import { useI18n } from "@/shared/i18n";
-import type { DashboardData } from "../pages/dashboard-types";
+import type { DashboardData, DashboardInsights } from "../pages/dashboard-types";
 import type { DashboardInvitationsController } from "../client/use-dashboard-invitations";
 import { AuthenticityRoadmap } from "./authenticity-roadmap";
 import { DashboardFact } from "./dashboard-components";
+import { canEditDashboardTree, dashboardBranches } from "../pages/dashboard-projections";
 
 type InvitationController = DashboardInvitationsController;
 type Local = (en?: string | null, ar?: string | null) => string;
 
-export function BranchesCard({ data, local }: { data: DashboardData; local: Local }) {
+export function BranchesCard({
+  data,
+  insights,
+  local,
+}: {
+  data: DashboardData;
+  insights: DashboardInsights;
+  local: Local;
+}) {
   const { t } = useI18n();
-  const assigned = data.branches.find((branch) => branch.id === data.tree.assigned_branch_id);
-  const branches = data.tree.role === "owner" ? data.branches : assigned ? [assigned] : [];
+  const branches = dashboardBranches(data.tree, data.branches, insights.branches);
+  const healthById = new Map(insights.branches.map((branch) => [branch.id, branch]));
   return (
-    <Card>
+    <Card id="branches" className="scroll-mt-20">
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle>{data.tree.role === "owner" ? t("branches") : t("assigned_branch")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {branches.map((branch) => (
-          <div key={branch.id} className="flex items-center justify-between rounded-lg border p-4">
-            <div>
-              <p className="font-medium">{local(branch.name_en, branch.name_ar)}</p>
-              <p className="text-sm text-muted-foreground">
-                {t("branch_responsible", {
-                  name: branch.contributor_name_en
-                    ? local(branch.contributor_name_en, branch.contributor_name_ar)
-                    : local(data.stats.owner_name_en, data.stats.owner_name_ar),
-                })}
-              </p>
+        {branches.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">
+            {t("no_assigned_branches")}
+          </p>
+        ) : null}
+        {branches.map((branch) => {
+          const health = healthById.get(branch.id);
+          return (
+            <div
+              key={branch.id}
+              className="flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{local(branch.name_en, branch.name_ar)}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("branch_responsible", {
+                    name: branch.contributor_name_en
+                      ? local(branch.contributor_name_en, branch.contributor_name_ar)
+                      : local(data.stats.owner_name_en, data.stats.owner_name_ar),
+                  })}
+                </p>
+                {health ? (
+                  <div className="mt-3 max-w-md space-y-1.5">
+                    <div className="flex justify-between gap-3 text-xs text-muted-foreground">
+                      <span>{t("branch_people_recorded", { count: health.total })}</span>
+                      <span>
+                        {t("recorded_data_completeness", {
+                          count: health.completeness_percent,
+                        })}
+                      </span>
+                    </div>
+                    <div
+                      className="h-1.5 overflow-hidden rounded-full bg-muted"
+                      role="progressbar"
+                      aria-label={t("recorded_data_completeness_label")}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={health.completeness_percent}
+                    >
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${health.completeness_percent}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={branch.status === "active" ? "default" : "secondary"}>
+                  {t(branch.status === "active" ? "branch_active" : "branch_inactive")}
+                </Badge>
+                {data.tree.analysis_enabled !== false ? (
+                  <Button asChild size="sm" variant="outline">
+                    <Link
+                      to="/analysis"
+                      search={{ tab: "quality", branchId: branch.id, missingField: undefined }}
+                    >
+                      {t("review_data")}
+                    </Link>
+                  </Button>
+                ) : null}
+                {data.tree.role === "contributor" && canEditDashboardTree(data.tree) ? (
+                  <Button asChild size="sm">
+                    <Link to="/tree/$id" params={{ id: data.tree.id }} search={{ mode: "edit" }}>
+                      {t("continue_branch")}
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
             </div>
-            <Badge variant={branch.status === "active" ? "default" : "secondary"}>
-              {branch.status}
-            </Badge>
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
     </Card>
   );
@@ -63,7 +120,7 @@ export function InvitationsCard({
   const { t } = useI18n();
   const pending = data.invitations.filter((item) => item.status === "pending");
   return (
-    <Card>
+    <Card id="pending-invitations" className="scroll-mt-20">
       <CardHeader>
         <CardTitle>{t("pending_invitations")}</CardTitle>
       </CardHeader>
@@ -121,7 +178,7 @@ export function AuthenticityCard({ data, local }: { data: DashboardData; local: 
     established: t("established_family_tree"),
   }[stats.earned_authenticity_level];
   return (
-    <Card>
+    <Card id="authenticity" className="scroll-mt-20">
       <CardContent className="space-y-4 p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -160,34 +217,19 @@ export function AuthenticityCard({ data, local }: { data: DashboardData; local: 
             </div>
           </div>
         )}
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="w-full">
-              {t("view_authenticity_details")}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{t("authenticity")}</DialogTitle>
-              <DialogDescription>{t("family_backed_explanation")}</DialogDescription>
-            </DialogHeader>
-            <AuthenticityRoadmap stats={stats} />
-            <dl className="space-y-3 border-t pt-4 text-sm">
-              <DashboardFact
-                label={t("tree_owner")}
-                value={local(stats.owner_name_en, stats.owner_name_ar)}
-              />
-              <DashboardFact
-                label={t("serious_complaints")}
-                value={String(stats.serious_complaints)}
-              />
-              <DashboardFact
-                label={t("tree_active_since")}
-                value={new Date(stats.tree_created_at).toLocaleDateString()}
-              />
-            </dl>
-          </DialogContent>
-        </Dialog>
+        <p className="text-sm text-muted-foreground">{t("family_backed_explanation")}</p>
+        <AuthenticityRoadmap stats={stats} />
+        <dl className="space-y-3 border-t pt-4 text-sm">
+          <DashboardFact
+            label={t("tree_owner")}
+            value={local(stats.owner_name_en, stats.owner_name_ar)}
+          />
+          <DashboardFact label={t("serious_complaints")} value={String(stats.serious_complaints)} />
+          <DashboardFact
+            label={t("tree_active_since")}
+            value={new Date(stats.tree_created_at).toLocaleDateString()}
+          />
+        </dl>
       </CardContent>
     </Card>
   );

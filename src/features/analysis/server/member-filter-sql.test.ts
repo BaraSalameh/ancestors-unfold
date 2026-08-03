@@ -27,4 +27,14 @@ describe("analysis member filter SQL", () => {
     expect(sql).toContain(" AND NOT (");
     expect(values).toEqual([["female"]]);
   });
+
+  it("does not list wives with male spouses as missing a branch", () => {
+    const sql = memberFilterSql({ missingFields: ["branch"] }, []);
+
+    expect(sql).toContain("branch_id IS NULL");
+    expect(sql).toContain("member.gender='female'");
+    expect(sql).toContain("JOIN app.family_members husband");
+    expect(sql).toContain("husband.gender='male'");
+    expect(sql).toContain("wife.member_id=member.id");
+  });
 });

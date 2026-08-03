@@ -25,7 +25,7 @@ export function ContributorRemovalDialog({
     <Dialog open={controller.open} onOpenChange={changeOpen}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("cancel_contributor_contribution")}</DialogTitle>
+          <DialogTitle>{t("remove_contributor")}</DialogTitle>
         </DialogHeader>
         {!controller.challenge ? (
           <>

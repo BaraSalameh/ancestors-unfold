@@ -15,7 +15,21 @@ const scopedMembersCte = `
 
 export async function readQualityReport(client: PoolClient, scope: AnalysisScope) {
   const result = await client.query(
-    `WITH RECURSIVE ${scopedMembersCte}, parent_counts AS (
+    `WITH RECURSIVE ${scopedMembersCte}, wives AS (
+       SELECT DISTINCT wife.member_id
+       FROM app.union_partners wife
+       JOIN app.unions marriage ON marriage.id=wife.union_id
+         AND marriage.tree_id=$1 AND marriage.deleted_at IS NULL
+       JOIN app.union_partners husband_link ON husband_link.union_id=wife.union_id
+         AND husband_link.member_id<>wife.member_id
+       JOIN app.family_members wife_member ON wife_member.id=wife.member_id
+         AND wife_member.tree_id=$1 AND wife_member.deleted_at IS NULL
+         AND wife_member.gender='female'
+       JOIN app.family_members husband ON husband.id=husband_link.member_id
+         AND husband.tree_id=$1 AND husband.deleted_at IS NULL
+         AND husband.gender='male'
+       WHERE wife.tree_id=$1 AND wife.member_id IN (SELECT id FROM scoped_ids)
+     ), parent_counts AS (
        SELECT r.child_id,count(*)::integer count FROM app.parent_child_relationships r
        WHERE r.tree_id=$1 AND r.deleted_at IS NULL AND r.child_id IN (SELECT id FROM scoped_ids)
        GROUP BY r.child_id
@@ -38,7 +52,9 @@ export async function readQualityReport(client: PoolClient, scope: AnalysisScope
        count(*) FILTER (WHERE nullif(btrim(name_ar),'') IS NULL)::integer missing_name_ar,
        count(*) FILTER (WHERE birth_date IS NULL)::integer missing_birth_date,
        count(*) FILTER (WHERE citizen_status IS NULL)::integer missing_citizenship,
-       count(*) FILTER (WHERE subfamily_id IS NULL)::integer missing_branch,
+       count(*) FILTER (
+         WHERE $3::text='tree' AND subfamily_id IS NULL AND id NOT IN (SELECT member_id FROM wives)
+       )::integer missing_branch,
        count(*) FILTER (WHERE image_url IS NULL)::integer missing_image,
        count(*) FILTER (WHERE is_unknown)::integer unknown_placeholders,
        (SELECT count(*)::integer FROM scoped_ids WHERE id NOT IN (SELECT child_id FROM parent_counts)) no_parents_recorded,
