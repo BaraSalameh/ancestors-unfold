@@ -15,7 +15,7 @@ const environmentSchema = z.object({
   MAX_REQUEST_BYTES: positiveInteger(1_000_000),
   REQUIRED_MIGRATIONS: positiveInteger(4),
   AUTH_TOKEN_DELIVERY: z.enum(["console", "smtp", "resend"]).default("console"),
-  ANALYSIS_ENABLED: booleanString.default("false"),
+  ANALYSIS_ENABLED: booleanString.default("true"),
 });
 
 const parsed = environmentSchema.safeParse(process.env);
