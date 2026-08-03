@@ -104,6 +104,7 @@ export type AnalysisMember = {
   gender: "male" | "female" | "unspecified";
   birth_date: string | null;
   death_date: string | null;
+  is_deceased: boolean;
   lifecycle_age: number | null;
   citizen_status: "resident" | "non_resident" | null;
   branch_id: string | null;

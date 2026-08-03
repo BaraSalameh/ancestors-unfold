@@ -8,6 +8,7 @@ export type {
   SubFamilyAttachment,
 } from "./types";
 export { getChildren, getGeneration, getSubfamilyMembers } from "./queries";
+export { isMemberDeceased } from "./member-status";
 export { childrenEligibleForMother, husbandIdsForMother } from "./mother-children";
 export {
   existingStagedSpouse,

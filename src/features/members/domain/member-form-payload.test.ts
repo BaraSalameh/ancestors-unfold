@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { initialMemberFormDraft, memberFormPayload } from "./member-form-payload";
+import {
+  initialMemberFormDraft,
+  memberFormPayload,
+  withDeathDate,
+  withDeceasedStatus,
+} from "./member-form-payload";
 
 describe("member form payload", () => {
   it("requires at least one localized name", () => {
@@ -33,5 +38,28 @@ describe("member form payload", () => {
     });
     const result = memberFormPayload(draft, false);
     if (result.ok) expect(result.payload).not.toHaveProperty("spouse_id");
+  });
+
+  it("supports deceased members without a known death date", () => {
+    const draft = initialMemberFormDraft({ name_en: "Name", is_deceased: true });
+    const result = memberFormPayload(draft, false);
+
+    expect(draft).toMatchObject({ is_deceased: true, death_date: "" });
+    expect(result).toEqual({
+      ok: true,
+      payload: expect.objectContaining({ is_deceased: true, death_date: undefined }),
+    });
+  });
+
+  it("keeps the checkbox and death date coherent", () => {
+    const living = initialMemberFormDraft({ name_en: "Name" });
+    const dated = withDeathDate(living, "2020-01-02");
+    const cleared = withDeceasedStatus(dated, false);
+
+    expect(dated).toMatchObject({ is_deceased: true, death_date: "2020-01-02" });
+    expect(cleared).toMatchObject({ is_deceased: false, death_date: "" });
+    expect(
+      initialMemberFormDraft({ name_en: "Legacy", death_date: "1999-03-04" }).is_deceased,
+    ).toBe(true);
   });
 });

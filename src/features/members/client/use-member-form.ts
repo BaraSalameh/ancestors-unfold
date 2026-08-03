@@ -3,6 +3,8 @@ import { computeWivesByHusband } from "@/features/trees/domain";
 import {
   initialMemberFormDraft,
   memberFormPayload,
+  withDeathDate,
+  withDeceasedStatus,
   type MemberFormDraft,
   type MemberFormError,
 } from "../domain/member-form-payload";
@@ -29,6 +31,9 @@ export function useMemberForm(options: UseMemberFormOptions) {
   const [error, setError] = useState<MemberFormError | null>(null);
   const patch = <Key extends keyof MemberFormDraft>(key: Key, value: MemberFormDraft[Key]) =>
     setDraft((current) => ({ ...current, [key]: value }));
+  const changeDeceased = (checked: boolean) =>
+    setDraft((current) => withDeceasedStatus(current, checked));
+  const changeDeathDate = (value: string) => setDraft((current) => withDeathDate(current, value));
 
   const excludedParentIds = useMemo(() => {
     const excluded = new Set(memberId ? descendantIds(members, memberId) : []);
@@ -78,6 +83,8 @@ export function useMemberForm(options: UseMemberFormOptions) {
   return {
     draft,
     patch,
+    changeDeceased,
+    changeDeathDate,
     imageFile,
     setImageFile,
     error,

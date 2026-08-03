@@ -26,6 +26,7 @@ function runner() {
             name_en: "Mother",
             name_ar: "",
             gender: "female",
+            is_deceased: true,
             created_at: now,
             updated_at: now,
           },
@@ -93,6 +94,7 @@ describe("tree snapshot projection", () => {
     expect(snapshot.members[0].image_public_id).toBe("member-image");
     expect(snapshot.members[0].image_asset_id).toBe("asset-id");
     expect(snapshot.members[0].notes).toBe("private member note");
+    expect(snapshot.members[1]).toMatchObject({ is_deceased: true, death_date: undefined });
     expect(snapshot.members[1].external_children).toEqual([
       expect.objectContaining({ id: "external", notes: "private external note" }),
     ]);

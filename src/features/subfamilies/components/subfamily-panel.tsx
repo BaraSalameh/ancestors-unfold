@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import { familyStore, useFamily } from "@/features/trees";
+import { isMemberDeceased } from "@/features/members";
 import { displayName, useI18n } from "@/shared/i18n";
 import { SelectedSubfamily } from "./selected-subfamily";
 import { SubfamilyList } from "./subfamily-list";
@@ -52,7 +53,7 @@ export function SubfamilyPanel({
   };
 
   if (selected && mode === "home") {
-    const living = selectedMembers.filter((member) => !member.death_date);
+    const living = selectedMembers.filter((member) => !isMemberDeceased(member));
     return (
       <div className="space-y-2">
         <button onClick={clearSelection} className="text-xs hover:underline">

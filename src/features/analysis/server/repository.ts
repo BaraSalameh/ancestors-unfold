@@ -18,8 +18,10 @@ const scopedMembersCte = `
     WHERE $3::text='branch'
   ), scoped_members AS (
     SELECT m.*,
-      CASE WHEN m.birth_date IS NULL THEN NULL
-        ELSE extract(year FROM age(coalesce(m.death_date,current_date),m.birth_date))::integer
+      CASE WHEN m.birth_date IS NULL OR (m.is_deceased AND m.death_date IS NULL) THEN NULL
+        ELSE extract(year FROM age(
+          CASE WHEN m.is_deceased THEN m.death_date ELSE current_date END,m.birth_date
+        ))::integer
       END lifecycle_age
     FROM app.family_members m JOIN scoped_ids s ON s.id=m.id
     WHERE m.tree_id=$1 AND m.deleted_at IS NULL
@@ -34,8 +36,8 @@ export async function readAnalysisSummary(
   const result = await client.query<SummaryData>(
     `WITH ${scopedMembersCte}, totals AS (
       SELECT count(*)::integer total,
-        count(*) FILTER (WHERE death_date IS NULL)::integer living,
-        count(*) FILTER (WHERE death_date IS NOT NULL)::integer deceased,
+        count(*) FILTER (WHERE NOT is_deceased)::integer living,
+        count(*) FILTER (WHERE is_deceased)::integer deceased,
         count(*) FILTER (WHERE gender='male')::integer male,
         count(*) FILTER (WHERE gender='female')::integer female,
         count(*) FILTER (WHERE gender='unspecified')::integer unspecified_gender,
@@ -114,7 +116,7 @@ const memberAnalysisCtes = `
     SELECT member_id,max(generation)::integer generation FROM generation_walk GROUP BY member_id
   ), base AS (
     SELECT m.id,coalesce(m.name_en,'') name_en,coalesce(m.name_ar,'') name_ar,m.gender,
-      m.birth_date,m.death_date,m.lifecycle_age,
+      m.birth_date,m.death_date,m.is_deceased,m.lifecycle_age,
       m.citizen_status,m.subfamily_id branch_id,sf.name_en branch_name_en,sf.name_ar branch_name_ar,
       ps.father_id,ps.mother_id,coalesce(ps.parent_count,0)::integer parent_count,
       coalesce(partner.has_spouse,false) has_spouse,coalesce(cs.child_count,0)::integer child_count,
@@ -140,9 +142,7 @@ function addIdentityFilters(filters: AnalysisFilters, values: unknown[], conditi
   if (filters.genders?.length)
     conditions.push(`gender=ANY(${addValue(values, filters.genders)}::app.gender[])`);
   if (filters.lifeStatus)
-    conditions.push(
-      filters.lifeStatus === "living" ? "death_date IS NULL" : "death_date IS NOT NULL",
-    );
+    conditions.push(filters.lifeStatus === "living" ? "NOT is_deceased" : "is_deceased");
   if (filters.citizenStatuses?.length) {
     const known = filters.citizenStatuses.filter((value) => value !== "unknown");
     const alternatives: string[] = [];
@@ -268,7 +268,7 @@ export async function readAnalysisMembers(
   const cursorWhere = cursorSql(cursor, sort, values);
   const result = await client.query<MemberPageRow>(
     `WITH RECURSIVE ${memberAnalysisCtes}, filtered AS (SELECT * FROM base ${filters})
-     SELECT id,name_en,name_ar,gender,birth_date,death_date,lifecycle_age,citizen_status,
+     SELECT id,name_en,name_ar,gender,birth_date,death_date,is_deceased,lifecycle_age,citizen_status,
        branch_id,branch_name_en,branch_name_ar,father_id,mother_id,parent_count,has_spouse,
        child_count,generation,created_at,updated_at,${sort}::text cursor_value,
        (SELECT count(*)::integer FROM filtered) total_count
@@ -293,16 +293,18 @@ export async function readBranchReport(client: PoolClient, scope: AnalysisScope)
        WHERE b.tree_id=$1 AND b.deleted_at IS NULL AND ($2::uuid IS NULL OR b.id=$2)
      ), members AS (
        SELECT b.id branch_id,m.*,
-         CASE WHEN m.birth_date IS NULL THEN NULL
-           ELSE extract(year FROM age(coalesce(m.death_date,current_date),m.birth_date))::integer END age,
+         CASE WHEN m.birth_date IS NULL OR (m.is_deceased AND m.death_date IS NULL) THEN NULL
+           ELSE extract(year FROM age(
+             CASE WHEN m.is_deceased THEN m.death_date ELSE current_date END,m.birth_date
+           ))::integer END age,
          EXISTS (SELECT 1 FROM app.parent_child_relationships r
            WHERE r.tree_id=$1 AND r.child_id=m.id AND r.deleted_at IS NULL) has_parent
        FROM branches b CROSS JOIN LATERAL app.branch_members_for_root($1,b.id) bm
        JOIN app.family_members m ON m.id=bm.member_id AND m.tree_id=$1 AND m.deleted_at IS NULL
      )
      SELECT b.id,b.name_en,b.name_ar,count(m.id)::integer total,
-       count(m.id) FILTER (WHERE m.death_date IS NULL)::integer living,
-       count(m.id) FILTER (WHERE m.death_date IS NOT NULL)::integer deceased,
+       count(m.id) FILTER (WHERE NOT m.is_deceased)::integer living,
+       count(m.id) FILTER (WHERE m.is_deceased)::integer deceased,
        count(m.id) FILTER (WHERE m.gender='male')::integer male,
        count(m.id) FILTER (WHERE m.gender='female')::integer female,
        count(m.id) FILTER (WHERE m.gender='unspecified')::integer unspecified_gender,

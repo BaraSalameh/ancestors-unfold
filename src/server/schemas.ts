@@ -150,8 +150,12 @@ export const schemas = {
       notes: z.string().max(10_000).optional(),
       birth_date: z.string().date().nullable().optional(),
       death_date: z.string().date().nullable().optional(),
+      is_deceased: z.boolean().optional(),
     })
-    .strict(),
+    .strict()
+    .refine((member) => member.death_date == null || member.is_deceased !== false, {
+      message: "A member with a death date must be deceased",
+    }),
   authenticityConfig: z
     .object({
       growingContributors: z.number().int().nonnegative(),
@@ -189,6 +193,7 @@ export const schemas = {
               gender: z.enum(["male", "female", "unspecified"]),
               birth_date: z.string().max(50).optional(),
               death_date: z.string().max(50).optional(),
+              is_deceased: z.boolean().optional(),
               citizen_status: z.enum(["resident", "non_resident"]).optional(),
               image_url: z
                 .string()
@@ -234,6 +239,9 @@ export const schemas = {
             .strict()
             .refine((member) => !!member.name_en || !!member.name_ar, {
               message: "At least one member name is required",
+            })
+            .refine((member) => !member.death_date || member.is_deceased !== false, {
+              message: "A member with a death date must be deceased",
             }),
         )
         .max(10_000),

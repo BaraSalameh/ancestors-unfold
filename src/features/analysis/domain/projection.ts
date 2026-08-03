@@ -52,6 +52,7 @@ export function analysisMembersCsv(members: AnalysisMember[]): string {
     "gender",
     "birth_date",
     "death_date",
+    "is_deceased",
     "lifecycle_age",
     "citizen_status",
     "branch_name_en",

@@ -99,7 +99,7 @@ function MemberTable({ items }: { items: AnalysisMember[] }) {
                 {t(member.gender === "unspecified" ? "gender_unspecified" : member.gender)}
               </td>
               <td className="p-2 tabular-nums">{member.lifecycle_age ?? dash}</td>
-              <td className="p-2">{t(member.death_date ? "deceased" : "living")}</td>
+              <td className="p-2">{t(member.is_deceased ? "deceased" : "living")}</td>
               <td className="p-2">
                 {lang === "ar"
                   ? member.branch_name_ar || member.branch_name_en || dash

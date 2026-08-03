@@ -22,6 +22,7 @@ describe("analysis projection", () => {
       gender: "female",
       birth_date: "2000-01-01",
       death_date: null,
+      is_deceased: false,
       lifecycle_age: 26,
       citizen_status: "resident",
       branch_id: null,

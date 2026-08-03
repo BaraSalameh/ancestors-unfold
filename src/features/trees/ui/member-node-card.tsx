@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Cake, User, UserPlus } from "lucide-react";
-import { ExpandableProfileImage, type FamilyMember } from "@/features/members";
+import { ExpandableProfileImage, isMemberDeceased, type FamilyMember } from "@/features/members";
 import { displayName, useI18n } from "@/shared/i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 import { familyStore } from "../client/family-store";
@@ -94,6 +94,7 @@ function MemberSummary({ member }: { member: FamilyMember }) {
   const current = familyStore.getClosestSubfamily(member.id);
   const birth = member.birth_date?.slice(0, 4);
   const death = member.death_date?.slice(0, 4);
+  const deceased = isMemberDeceased(member);
   return (
     <div className="min-w-0 flex-1">
       <div className="truncate text-sm font-bold text-card-foreground">
@@ -103,6 +104,11 @@ function MemberSummary({ member }: { member: FamilyMember }) {
         <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:text-emerald-300">
           {member.citizen_status === "non_resident" ? t("non_resident") : t("resident")}
         </span>
+        {deceased && (
+          <span className="inline-flex items-center rounded-full bg-slate-500/10 px-1.5 py-0.5 text-[9px] font-medium text-slate-600 dark:text-slate-300">
+            {t("deceased")}
+          </span>
+        )}
         {current && (
           <SubfamilyChip memberId={member.id} open={subfamilyOpen} setOpen={setSubfamilyOpen} />
         )}

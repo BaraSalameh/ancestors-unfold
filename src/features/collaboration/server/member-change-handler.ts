@@ -50,8 +50,16 @@ export async function handleMemberChangeRequest(
           `UPDATE app.family_members SET
             name_en=COALESCE($3,name_en),name_ar=COALESCE($4,name_ar),
             notes=COALESCE($5,notes),birth_date=COALESCE($6::date,birth_date),
-            death_date=COALESCE($7::date,death_date),updated_by=$2,updated_at=now()
-           WHERE tree_id=$1 AND id=$8 AND deleted_at IS NULL RETURNING *`,
+            death_date=CASE
+              WHEN $9::boolean IS FALSE THEN NULL
+              WHEN NOT $8::boolean THEN death_date
+              ELSE $7::date END,
+            is_deceased=CASE
+              WHEN $9::boolean IS FALSE THEN false
+              WHEN $7::date IS NOT NULL THEN true
+              ELSE COALESCE($9::boolean,is_deceased) END,
+            updated_by=$2,updated_at=now()
+           WHERE tree_id=$1 AND id=$10 AND deleted_at IS NULL RETURNING *`,
           [
             scopedMember[1],
             session.user_id,
@@ -60,6 +68,8 @@ export async function handleMemberChangeRequest(
             body.notes,
             body.birth_date,
             body.death_date,
+            body.death_date !== undefined,
+            body.is_deceased,
             body.memberId,
           ],
         )

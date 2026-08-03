@@ -71,6 +71,20 @@ describe("snapshot trust boundary", () => {
     expect(schemas.snapshot.parse(snapshot("https://example.com/profile.jpg"))).toBeTruthy();
     expect(() => schemas.snapshot.parse(snapshot("http://example.com/profile.jpg"))).toThrow();
   });
+
+  it("accepts unknown-date deaths and legacy dated deaths but rejects contradictory status", () => {
+    const snapshot = (memberPatch: Record<string, unknown>) => ({
+      expectedVersion: 1,
+      members: [{ ...member, ...memberPatch }],
+      subfamilies: [],
+    });
+
+    expect(schemas.snapshot.parse(snapshot({ is_deceased: true }))).toBeTruthy();
+    expect(schemas.snapshot.parse(snapshot({ death_date: "2020-01-02" }))).toBeTruthy();
+    expect(() =>
+      schemas.snapshot.parse(snapshot({ death_date: "2020-01-02", is_deceased: false })),
+    ).toThrow();
+  });
 });
 
 describe("HTTP security checks", () => {

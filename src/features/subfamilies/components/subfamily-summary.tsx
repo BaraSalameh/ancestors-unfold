@@ -1,5 +1,5 @@
 import { displayName, useI18n } from "@/shared/i18n";
-import type { FamilyMember, SubFamily } from "@/features/members";
+import { isMemberDeceased, type FamilyMember, type SubFamily } from "@/features/members";
 
 export function SubfamilySummary({
   subfamily,
@@ -11,7 +11,7 @@ export function SubfamilySummary({
   linkedMale: FamilyMember | null;
 }) {
   const { t, lang } = useI18n();
-  const living = members.filter((member) => !member.death_date);
+  const living = members.filter((member) => !isMemberDeceased(member));
   const values = [
     ["subfamily_total", members.length],
     ["subfamily_living", living.length],

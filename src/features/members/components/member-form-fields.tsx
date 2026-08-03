@@ -79,12 +79,28 @@ export function MemberDemographicFields({
         value={form.draft.birth_date}
         onChange={(value) => form.patch("birth_date", value)}
       />
-      <DateField
-        id="death"
-        label={t("death_date")}
-        value={form.draft.death_date}
-        onChange={(value) => form.patch("death_date", value)}
-      />
+      <div className="space-y-2">
+        <Label htmlFor="death">{t("death_date")}</Label>
+        <Input
+          id="death"
+          type="date"
+          value={form.draft.death_date}
+          onChange={(event) => form.changeDeathDate(event.target.value)}
+        />
+        <label
+          htmlFor="is_deceased"
+          className="flex w-fit cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
+        >
+          <input
+            id="is_deceased"
+            type="checkbox"
+            checked={form.draft.is_deceased}
+            onChange={(event) => form.changeDeceased(event.target.checked)}
+            className="h-4 w-4 accent-primary"
+          />
+          <span>{t("deceased")}</span>
+        </label>
+      </div>
     </div>
   );
 }

@@ -16,6 +16,7 @@ export interface FamilyMember {
   gender: Gender;
   birth_date?: string;
   death_date?: string;
+  is_deceased?: boolean;
   citizen_status?: CitizenStatus;
   image_url?: string;
   image_public_id?: string;

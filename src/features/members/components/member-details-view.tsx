@@ -4,6 +4,7 @@ import { Button } from "@/shared/ui/button";
 import { displayName, useI18n } from "@/shared/i18n";
 import { ExpandableProfileImage } from "../ui/expandable-profile-image";
 import { ancestorConnector } from "../domain/member-display";
+import { isMemberDeceased } from "../domain/member-status";
 import {
   memberDetailsSearch,
   memberReturnDestination,
@@ -150,7 +151,7 @@ function MemberIdentity({
           <DetailBadge>
             {t(member.gender === "unspecified" ? "gender_unspecified" : member.gender)}
           </DetailBadge>
-          <DetailBadge>{member.death_date ? t("deceased") : t("living")}</DetailBadge>
+          <DetailBadge>{t(isMemberDeceased(member) ? "deceased" : "living")}</DetailBadge>
           <DetailBadge>
             {t(member.citizen_status === "non_resident" ? "non_resident" : "resident")}
           </DetailBadge>

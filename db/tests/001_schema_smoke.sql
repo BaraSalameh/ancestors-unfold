@@ -472,4 +472,38 @@ BEGIN
   END IF;
 END $$;
 
+-- Life status remains independent from an optional death date.
+DO $$
+DECLARE
+  v_owner uuid := gen_random_uuid();
+  v_tree uuid := gen_random_uuid();
+  v_living uuid := gen_random_uuid();
+  v_unknown_death uuid := gen_random_uuid();
+  v_dated_death uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO app.users(id,email,full_name_en,full_name_ar,status)
+    VALUES(v_owner,'death-status@example.test','Death Status Owner','Death Status Owner','active');
+  INSERT INTO app.family_trees(id,owner_user_id,name_en)
+    VALUES(v_tree,v_owner,'Death status tree');
+  INSERT INTO app.family_members(id,tree_id,name_en,gender,is_deceased)
+    VALUES(v_unknown_death,v_tree,'Unknown death date','unspecified',true);
+  INSERT INTO app.family_members(id,tree_id,name_en,gender)
+    VALUES(v_living,v_tree,'Living member','unspecified');
+  INSERT INTO app.family_members(id,tree_id,name_en,gender,death_date,is_deceased)
+    VALUES(v_dated_death,v_tree,'Known death date','unspecified',date '2020-01-02',true);
+
+  IF (SELECT is_deceased FROM app.family_members WHERE id=v_living)
+     OR NOT (SELECT is_deceased AND death_date IS NULL FROM app.family_members WHERE id=v_unknown_death)
+     OR NOT (SELECT is_deceased FROM app.family_members WHERE id=v_dated_death) THEN
+    RAISE EXCEPTION 'independent deceased status was not persisted';
+  END IF;
+
+  BEGIN
+    INSERT INTO app.family_members(tree_id,name_en,gender,death_date,is_deceased)
+      VALUES(v_tree,'Contradictory status','unspecified',date '2020-01-02',false);
+    RAISE EXCEPTION 'living member with a death date should have been rejected';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+END $$;
+
 ROLLBACK;

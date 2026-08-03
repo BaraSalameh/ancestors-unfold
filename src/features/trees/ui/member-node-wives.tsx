@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { Heart, HelpCircle, UserPlus } from "lucide-react";
-import type { FamilyMember } from "@/features/members";
+import { isMemberDeceased, type FamilyMember } from "@/features/members";
 import { displayName, ordinal, useI18n } from "@/shared/i18n";
 import { wifeColorFor } from "../domain/wife-colors";
 
@@ -42,6 +42,7 @@ function WifeChip({
   const divorced = husband.divorced_from?.includes(wife.id) ?? false;
   const birth = wife.birth_date?.slice(0, 4);
   const death = wife.death_date?.slice(0, 4);
+  const deceased = isMemberDeceased(wife);
   const years = birth ? `${birth}${death ? `–${death}` : ""}` : "";
   const style = wifeChipStyle(divorced, color.stroke);
   const title = `${ordinal(index + 1, lang)} — ${displayName(wife, lang)}${years ? ` (${years})` : ""}${divorced ? ` · ${t("divorced")}` : ""}`;
@@ -57,6 +58,11 @@ function WifeChip({
       />
       <span className="shrink-0 opacity-70">{ordinal(index + 1, lang)}</span>
       <WifeName wife={wife} divorced={divorced} />
+      {deceased && (
+        <span className="shrink-0 rounded-full bg-slate-500/15 px-1 py-0.5 text-[8px] text-slate-600 dark:text-slate-300">
+          {t("deceased")}
+        </span>
+      )}
       {wife.is_unknown && <HelpCircle className="h-2.5 w-2.5 shrink-0 opacity-60" />}
       {Boolean(wife.external_children?.length) && (
         <span

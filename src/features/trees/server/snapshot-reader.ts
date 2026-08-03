@@ -70,6 +70,7 @@ function memberIdentityFields(member: MemberRow) {
     gender: member.gender,
     birth_date: member.birth_date ?? undefined,
     death_date: member.death_date ?? undefined,
+    is_deceased: member.is_deceased ?? Boolean(member.death_date),
     citizen_status: member.citizen_status ?? undefined,
     image_url: member.image_url ?? undefined,
     is_unknown: member.is_unknown || undefined,
@@ -115,7 +116,7 @@ export async function loadRenderableSnapshot(
 ) {
   const members = await runner.query<MemberRow>(
     `SELECT m.id,coalesce(m.name_en, '') name_en,coalesce(m.name_ar, '') name_ar,
-      m.gender,m.birth_date::text birth_date,m.death_date::text death_date,
+      m.gender,m.birth_date::text birth_date,m.death_date::text death_date,m.is_deceased,
       m.citizen_status,m.image_url,m.image_public_id,m.image_asset_id,m.notes,m.is_unknown,m.subfamily_id,
       m.pos_x,m.pos_y,m.decade_pos_x,m.decade_pos_y,m.created_at,m.updated_at,
       f.parent_id father_id,mo.parent_id mother_id FROM app.family_members m

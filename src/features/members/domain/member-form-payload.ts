@@ -7,6 +7,7 @@ export interface MemberFormDraft {
   citizen_status: CitizenStatus;
   birth_date: string;
   death_date: string;
+  is_deceased: boolean;
   image_url: string;
   image_public_id?: string;
   image_asset_id?: string;
@@ -21,6 +22,22 @@ export type MemberFormError = "name_required" | "image_url_invalid";
 type MemberPayloadResult =
   { ok: true; payload: MemberInput } | { ok: false; error: MemberFormError };
 
+export function withDeceasedStatus(draft: MemberFormDraft, isDeceased: boolean): MemberFormDraft {
+  return {
+    ...draft,
+    is_deceased: isDeceased,
+    death_date: isDeceased ? draft.death_date : "",
+  };
+}
+
+export function withDeathDate(draft: MemberFormDraft, deathDate: string): MemberFormDraft {
+  return {
+    ...draft,
+    death_date: deathDate,
+    is_deceased: deathDate ? true : draft.is_deceased,
+  };
+}
+
 function validImageUrl(value: string): boolean {
   if (!value) return true;
   try {
@@ -28,6 +45,10 @@ function validImageUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function normalizedDeceasedStatus(draft: Pick<MemberFormDraft, "is_deceased" | "death_date">) {
+  return draft.is_deceased || Boolean(draft.death_date);
 }
 
 export function memberFormPayload(
@@ -47,6 +68,7 @@ export function memberFormPayload(
     citizen_status: draft.citizen_status,
     birth_date: draft.birth_date || undefined,
     death_date: draft.death_date || undefined,
+    is_deceased: normalizedDeceasedStatus(draft),
     image_url: imageUrl || undefined,
     image_public_id: imageUrl ? draft.image_public_id : undefined,
     image_asset_id: imageUrl ? draft.image_asset_id : undefined,
@@ -67,6 +89,7 @@ export function initialMemberFormDraft(initial: Partial<MemberInput> = {}): Memb
     citizen_status: initial.citizen_status ?? "resident",
     birth_date: initial.birth_date ?? "",
     death_date: initial.death_date ?? "",
+    is_deceased: initial.is_deceased ?? Boolean(initial.death_date),
     image_url: initial.image_url ?? "",
     image_public_id: initial.image_public_id,
     image_asset_id: initial.image_asset_id,
