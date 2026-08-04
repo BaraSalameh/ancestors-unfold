@@ -17,6 +17,7 @@ import { Header } from "@/app/components/header";
 import { Toaster } from "@/shared/ui/sonner";
 import { AuthProvider } from "@/features/auth";
 import { AuthGuard } from "@/app/components/auth-guard";
+import TawkToWidget from "@/shared/ui/tawk-to-widget";
 
 function NotFoundComponent() {
   return (
@@ -112,6 +113,7 @@ function RootShell({ children }: { children: ReactNode }) {
       <body>
         {children}
         <Scripts />
+        <TawkToWidget />
       </body>
     </html>
   );
