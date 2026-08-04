@@ -78,7 +78,7 @@ export function removeMember(members: FamilyMember[], id: string): FamilyMember[
     }));
 }
 
-export type ParentRole = "father_id" | "mother_id";
+type ParentRole = "father_id" | "mother_id";
 
 export function detachParentRelationship(
   members: FamilyMember[],

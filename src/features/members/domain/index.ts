@@ -1,24 +1,8 @@
-export type {
-  CitizenStatus,
-  ExternalChild,
-  FamilyMember,
-  Gender,
-  MemberInput,
-  SubFamily,
-  SubFamilyAttachment,
-} from "./types";
+export type { FamilyMember, MemberInput, SubFamily } from "./types";
 export { getChildren, getGeneration, getSubfamilyMembers } from "./queries";
-export { isMemberDeceased } from "./member-status";
-export { childrenEligibleForMother, husbandIdsForMother } from "./mother-children";
-export {
-  existingStagedSpouse,
-  moveStagedSpouse,
-  stagedSpouseMember,
-  type StagedSpouse,
-} from "./staged-spouse";
+export { type StagedSpouse } from "./staged-spouse";
 export {
   detachParentRelationship,
-  descendantIds,
   ensureParentsAreSpouses,
   linkSpouses,
   removeMember,
@@ -26,4 +10,3 @@ export {
   setMotherRelationship,
   toggleDivorce,
 } from "./relationships";
-export type { ParentRole } from "./relationships";

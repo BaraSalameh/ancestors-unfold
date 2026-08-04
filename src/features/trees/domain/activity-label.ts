@@ -55,11 +55,6 @@ const localizedName = (person: ActivityPerson | ActivityNamedTarget | null, lang
     : person.nameEn || person.nameAr || "";
 };
 
-export function activityLabel(actionType: string, t: Translate): string {
-  const key = activityLabels[actionType];
-  return key ? t(key) : actionType.replaceAll("_", " ");
-}
-
 export function activityDescription(item: ActivityItem, lang: Lang, t: Translate): string {
   const key = activityLabels[item.actionType];
   if (!key) return item.actionType.replaceAll("_", " ");

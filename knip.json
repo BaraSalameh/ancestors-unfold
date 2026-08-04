@@ -10,5 +10,9 @@
     "scripts/*.mjs"
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/*.mjs"],
+  "includeEntryExports": true,
+  "ignoreIssues": {
+    "src/server.ts": ["exports"]
+  },
   "ignoreDependencies": ["tailwindcss", "tw-animate-css"]
 }

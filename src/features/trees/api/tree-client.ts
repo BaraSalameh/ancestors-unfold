@@ -1,7 +1,7 @@
 import type { FamilyMember, SubFamily } from "@/features/members/domain";
 import { ApiClientError, apiRequest } from "@/shared/api/client";
 
-export interface TreeSnapshot {
+interface TreeSnapshot {
   version: number;
   access_scope: "tree" | "branch" | "preview";
   assigned_branch_id?: string;
@@ -9,7 +9,7 @@ export interface TreeSnapshot {
   subfamilies: SubFamily[];
 }
 
-export interface SaveTreeSnapshot extends Omit<
+interface SaveTreeSnapshot extends Omit<
   TreeSnapshot,
   "version" | "access_scope" | "assigned_branch_id"
 > {

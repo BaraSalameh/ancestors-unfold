@@ -1,6 +1,5 @@
 import "reactflow/dist/style.css";
 import { ReactFlowProvider } from "reactflow";
-import { SubfamilyPanel } from "@/features/subfamilies";
 import type { TreeAccessMode } from "../domain/access-policy";
 import {
   DEFAULT_CHRONOLOGICAL_PERIOD,
@@ -11,8 +10,6 @@ import { FamilyTreeComposition } from "./family-tree-composition";
 import { useFamilyTreeInteractions } from "./use-family-tree-interactions";
 import { useFamilyTreeProjection } from "./use-family-tree-projection";
 import { useFamilyTreeState } from "./use-family-tree-state";
-
-export { SubfamilyPanel };
 
 interface FamilyTreeProps {
   accessMode?: TreeAccessMode;
