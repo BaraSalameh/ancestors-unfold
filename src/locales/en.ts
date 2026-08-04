@@ -700,6 +700,37 @@ export const en = {
   citizenship_status: "Citizen status",
   name_english: "Name",
   under_review: "Under Review",
+  family_csv_import: "Import CSV",
+  family_csv_import_title: "Import a complete family tree",
+  family_csv_import_description:
+    "Validate members, spouses, parents, and branches before replacing the current tree with an editable draft.",
+  family_csv_choose_file: "Choose CSV file",
+  family_csv_download_template: "Download template",
+  family_csv_required_fields:
+    "Required: member_id, gender, and at least one of name_en or name_ar. Relationship fields use member IDs.",
+  family_csv_preview_failed: "The CSV could not be validated. Check the file and try again.",
+  family_csv_save_or_discard: "Save or discard the current tree changes before starting an import.",
+  family_csv_members: "Members",
+  family_csv_parent_links: "Parent links",
+  family_csv_spouse_links: "Spouse links",
+  family_csv_branches: "Branches",
+  family_csv_preserve_connections: "Preserve linked accounts and branch access",
+  family_csv_preserve_connections_desc:
+    "Map each existing linked record to its matching imported record. Each imported record can be selected once.",
+  family_csv_select_member: "Select imported member",
+  family_csv_select_branch: "Select imported branch",
+  family_csv_issues: "Import issues",
+  family_csv_download_errors: "Download report",
+  family_csv_row: "Row",
+  family_csv_load_draft: "Load editable draft",
+  family_csv_draft_loaded: "Family import loaded as an editable draft. Review it, then save.",
+  family_csv_mapping_invalid: "Complete every mapping with a unique compatible record.",
+  family_csv_draft_pending: "Import draft loaded",
+  family_csv_file_too_large: "CSV files may not exceed 10 MiB.",
+  family_csv_save_import: "Save import",
+  discard_changes: "Discard",
+  discard_changes_warning: "Discard all unsaved tree changes?",
+  activity_family_csv_import: "{actor} imported a family CSV",
 } as const;
 
 export type TranslationKey = keyof typeof en;

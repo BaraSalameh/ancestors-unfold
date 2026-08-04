@@ -1,6 +1,7 @@
+/* eslint-disable max-lines -- The external store centralizes atomic tree and import-draft state. */
 import type { FamilyMember, SubFamily } from "@/features/members/domain";
 import { ApiClientError } from "@/shared/api/client";
-import { treeClient } from "../api/tree-client";
+import { treeClient, type FamilyCsvPreviewResponse } from "../api/tree-client";
 // eslint-disable-next-line no-restricted-imports -- tree persistence coordinates staged member-image uploads.
 import { memberImageClient } from "@/features/members/api";
 import { createMemberCommands, type MemberCommandContext } from "./family-store-member-commands";
@@ -14,6 +15,7 @@ import {
   type TreeAccessMode,
   type TreeAccessScope,
 } from "../domain/access-policy";
+import { buildFamilyCsvDraft, type FamilyCsvMappingSelections } from "./family-csv-draft";
 
 let activeTreeId = "";
 let activeAccessMode: TreeAccessMode = "edit";
@@ -24,6 +26,7 @@ let state: FamilyMember[] = [];
 let subfamilies: SubFamily[] = [];
 let accessScope: TreeAccessScope = "preview";
 let assignedBranchId: string | undefined;
+let canImportCsv = false;
 const listeners = new Set<() => void>();
 type DraftSnapshot = { members: FamilyMember[]; stagedImages: Map<string, File> };
 let past: DraftSnapshot[] = [];
@@ -38,11 +41,21 @@ let saveInFlight = false;
 let saveGeneration = 0;
 let pendingBatchId: string | null = null;
 
+type PendingCsvImport = {
+  expectedVersion: number;
+  sourceMemberIds: Map<string, string>;
+  sourceBranchIds: Map<string, string>;
+  protectedMemberIds: Map<string, FamilyMember["gender"]>;
+  protectedBranchIds: Set<string>;
+};
+let pendingCsvImport: PendingCsvImport | null = null;
+
 export type PersistenceState = {
   dirty: boolean;
   saving: boolean;
   error: string | null;
   conflicted: boolean;
+  importPending: boolean;
 };
 
 type DraftCheckpoint = {
@@ -56,6 +69,7 @@ let cachedPersistenceState: PersistenceState = {
   saving: false,
   error: null,
   conflicted: false,
+  importPending: false,
 };
 export type FamilyLoadState = "idle" | "loading" | "ready" | "error";
 let loadState: FamilyLoadState = "idle";
@@ -76,6 +90,7 @@ async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
     remoteVersion = snapshot.version;
     accessScope = snapshot.access_scope;
     assignedBranchId = snapshot.assigned_branch_id;
+    canImportCsv = snapshot.capabilities?.can_import_csv ?? false;
     state = cloneMembers(snapshot.members);
     subfamilies = cloneSubfamilies(snapshot.subfamilies);
     baselineMembers = cloneMembers(state);
@@ -84,6 +99,7 @@ async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
     future = [];
     replaceStagedImages(new Map());
     pendingBatchId = null;
+    pendingCsvImport = null;
     persistenceError = null;
     loadState = "ready";
     emit();
@@ -118,20 +134,42 @@ async function updateRemoteSnapshot() {
     }
     const members = cloneMembers(state);
     const currentSubfamilies = cloneSubfamilies(subfamilies);
-    const result = await treeClient.saveSnapshot(treeId, {
-      batchId,
-      expectedVersion: remoteVersion,
-      members,
-      subfamilies: currentSubfamilies,
-    });
+    const activeImport = pendingCsvImport;
+    const result = activeImport
+      ? await treeClient.applyFamilyCsv(treeId, {
+          batchId,
+          expectedVersion: activeImport.expectedVersion,
+          members,
+          subfamilies: currentSubfamilies,
+          sourceMemberIds: members.map(({ id: targetId }) => ({
+            targetId,
+            sourceId: activeImport.sourceMemberIds.get(targetId) ?? targetId,
+          })),
+          sourceBranchIds: currentSubfamilies.map(({ id: targetId }) => ({
+            targetId,
+            sourceId: activeImport.sourceBranchIds.get(targetId) ?? targetId,
+          })),
+        })
+      : await treeClient.saveSnapshot(treeId, {
+          batchId,
+          expectedVersion: remoteVersion,
+          members,
+          subfamilies: currentSubfamilies,
+        });
     if (activeTreeId === treeId) {
       remoteVersion = result.version;
-      baselineMembers = members;
-      baselineSubfamilies = currentSubfamilies;
-      past = [];
-      future = [];
-      pendingBatchId = null;
-      persistenceError = null;
+      if (activeImport) {
+        pendingCsvImport = null;
+        loadState = "loading";
+        await hydrateFromServer(treeId, activeAccessMode);
+      } else {
+        baselineMembers = members;
+        baselineSubfamilies = currentSubfamilies;
+        past = [];
+        future = [];
+        pendingBatchId = null;
+        persistenceError = null;
+      }
     }
   } catch (error) {
     persistenceError =
@@ -166,6 +204,7 @@ function load() {
 
 function isDirty() {
   return (
+    Boolean(pendingCsvImport) ||
     stagedImages.size > 0 ||
     JSON.stringify(baselineMembers) !== JSON.stringify(state) ||
     JSON.stringify(baselineSubfamilies) !== JSON.stringify(subfamilies)
@@ -178,6 +217,7 @@ function emit() {
     saving: saveInFlight,
     error: persistenceError,
     conflicted: persistenceError === "VERSION_CONFLICT",
+    importPending: Boolean(pendingCsvImport),
   };
   for (const l of listeners) l();
 }
@@ -272,6 +312,9 @@ const memberCommandContext: MemberCommandContext = {
   commit,
   replaceStagedImages,
   emit,
+  protectedGender(id) {
+    return pendingCsvImport?.protectedMemberIds.get(id);
+  },
 };
 
 const subfamilyCommandContext: SubfamilyCommandContext = {
@@ -290,6 +333,9 @@ const subfamilyCommandContext: SubfamilyCommandContext = {
   commit,
   markDraftChanged,
   emit,
+  canDeleteSubfamily(id) {
+    return !pendingCsvImport?.protectedBranchIds.has(id);
+  },
 };
 
 export const familyStore = {
@@ -310,6 +356,8 @@ export const familyStore = {
     replaceStagedImages(new Map());
     persistenceError = null;
     pendingBatchId = null;
+    pendingCsvImport = null;
+    canImportCsv = false;
     loadState = "loading";
     void hydrateFromServer(activeTreeId, activeAccessMode);
     emit();
@@ -327,6 +375,8 @@ export const familyStore = {
     remoteVersion = 1;
     persistenceError = null;
     pendingBatchId = null;
+    pendingCsvImport = null;
+    canImportCsv = false;
     load();
     loadSubfamilies();
     emit();
@@ -348,6 +398,7 @@ export const familyStore = {
     past = [];
     future = [];
     pendingBatchId = null;
+    pendingCsvImport = null;
     persistenceError = null;
     saveGeneration += 1;
     emit();
@@ -375,6 +426,43 @@ export const familyStore = {
   getAll: (): FamilyMember[] => state,
   canManageSubfamilies(): boolean {
     return treeAccessPolicy(accessScope, activeAccessMode).canManageSubfamilies;
+  },
+  canImportFamilyCsv(): boolean {
+    return canImportCsv && canEditActiveTree();
+  },
+  isFamilyCsvImportPending(): boolean {
+    return Boolean(pendingCsvImport);
+  },
+  protectedImportGender(id: string): FamilyMember["gender"] | undefined {
+    return pendingCsvImport?.protectedMemberIds.get(id);
+  },
+  isProtectedImportBranch(id: string): boolean {
+    return pendingCsvImport?.protectedBranchIds.has(id) ?? false;
+  },
+  stageFamilyCsvImport(
+    preview: FamilyCsvPreviewResponse,
+    selections: FamilyCsvMappingSelections,
+  ): void {
+    if (!canImportCsv || !canEditActiveTree()) throw new ApiClientError("FORBIDDEN", 403);
+    if (isDirty()) throw new ApiClientError("UNSAVED_CHANGES", 409);
+    if (preview.expectedVersion !== remoteVersion)
+      throw new ApiClientError("VERSION_CONFLICT", 409);
+    const draft = buildFamilyCsvDraft(preview, selections, state, subfamilies);
+    replaceStagedImages(new Map());
+    state = draft.members;
+    subfamilies = draft.subfamilies;
+    pendingCsvImport = {
+      expectedVersion: preview.expectedVersion,
+      sourceMemberIds: draft.sourceMemberIds,
+      sourceBranchIds: draft.sourceBranchIds,
+      protectedMemberIds: draft.protectedMemberIds,
+      protectedBranchIds: draft.protectedBranchIds,
+    };
+    past = [];
+    future = [];
+    pendingBatchId = crypto.randomUUID();
+    markDraftChanged();
+    emit();
   },
   getAccessScope: (): TreeAccessScope => accessScope,
   getAssignedBranchId: (): string | undefined => assignedBranchId,
@@ -413,6 +501,7 @@ export const familyStore = {
   },
 
   reset() {
+    if (pendingCsvImport) return;
     commit(() => {
       state = SAMPLE;
     });

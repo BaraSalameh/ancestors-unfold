@@ -8,6 +8,7 @@ type Persistence = {
   saving: boolean;
   conflicted: boolean;
   error: string | null;
+  importPending: boolean;
 };
 
 type Translate = (key: TranslationKey) => string;
@@ -16,6 +17,7 @@ function saveLabel(persistence: Persistence, t: Translate) {
   if (persistence.saving) return t("updating_tree");
   if (persistence.conflicted) return t("reload_latest");
   if (persistence.error) return t("retry_update");
+  if (persistence.importPending) return t("family_csv_save_import");
   return persistence.dirty ? t("update") : t("saved");
 }
 
@@ -34,16 +36,27 @@ export function HeaderTreeSave({ persistence, t }: { persistence: Persistence; t
     }
   };
 
+  const discard = () => {
+    if (window.confirm(t("discard_changes_warning"))) familyStore.discardDraft();
+  };
+
   return (
-    <Button
-      size="sm"
-      variant={persistence.dirty ? "default" : "secondary"}
-      loading={persistence.saving}
-      disabled={!persistence.dirty}
-      onClick={() => void updateTree()}
-      aria-live="polite"
-    >
-      {saveLabel(persistence, t)}
-    </Button>
+    <div className="flex items-center gap-1">
+      {persistence.dirty ? (
+        <Button size="sm" variant="ghost" disabled={persistence.saving} onClick={discard}>
+          {t("discard_changes")}
+        </Button>
+      ) : null}
+      <Button
+        size="sm"
+        variant={persistence.dirty ? "default" : "secondary"}
+        loading={persistence.saving}
+        disabled={!persistence.dirty}
+        onClick={() => void updateTree()}
+        aria-live="polite"
+      >
+        {saveLabel(persistence, t)}
+      </Button>
+    </div>
   );
 }

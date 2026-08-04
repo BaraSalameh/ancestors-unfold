@@ -66,6 +66,7 @@ export function SelectedSubfamily({
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
+              disabled={familyStore.isProtectedImportBranch(subfamily.id)}
               className="rounded border p-1 text-muted-foreground hover:bg-accent"
               title={t("delete")}
             >

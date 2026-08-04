@@ -48,7 +48,12 @@ export function EditPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-foreground">{t("edit_member")}</h1>
-        <Button type="button" variant="destructive" onClick={() => setConfirmOpen(true)}>
+        <Button
+          type="button"
+          variant="destructive"
+          disabled={Boolean(familyStore.protectedImportGender(id))}
+          onClick={() => setConfirmOpen(true)}
+        >
           <Trash2 className="me-2 h-4 w-4" />
           {t("delete")}
         </Button>
@@ -59,6 +64,7 @@ export function EditPage() {
           initialImageFile={familyStore.getStagedMemberImage(id)}
           memberId={id}
           members={members}
+          lockedGender={familyStore.protectedImportGender(id)}
           submitLabel={t("save")}
           cancelLabel={t("back")}
           onCancel={() => {

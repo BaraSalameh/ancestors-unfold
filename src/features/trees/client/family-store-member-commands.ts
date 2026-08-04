@@ -16,6 +16,7 @@ export interface MemberCommandContext {
   commit(mutator: () => void): void;
   replaceStagedImages(next: ReadonlyMap<string, File>): void;
   emit(): void;
+  protectedGender?(id: string): FamilyMember["gender"] | undefined;
 }
 
 export function createMemberCommands(ctx: MemberCommandContext) {
@@ -114,6 +115,8 @@ function addFatherWithSpouses(
   return father!;
 }
 
+// Member CRUD intentionally stays together so every mutation shares the same checkpoint behavior.
+// eslint-disable-next-line max-lines-per-function
 function createMemberCrudCommands(ctx: MemberCommandContext) {
   return {
     add(input: MemberInput, imageFile?: File): FamilyMember {
@@ -214,10 +217,18 @@ function createMemberCrudCommands(ctx: MemberCommandContext) {
       });
     },
     update(id: string, patch: Partial<MemberInput>, imageFile?: File | null): void {
+      const protectedGender = ctx.protectedGender?.(id);
+      const safePatch =
+        protectedGender && patch.gender && patch.gender !== protectedGender
+          ? { ...patch, gender: protectedGender }
+          : patch;
       const now = new Date().toISOString();
       ctx.commit(() => {
-        ctx.state = ctx.state.map((m) => (m.id === id ? { ...m, ...patch, updated_at: now } : m));
-        if (patch.spouse_id) ctx.state = mirrorSpouseLink(ctx.state, id, patch.spouse_id, now);
+        ctx.state = ctx.state.map((m) =>
+          m.id === id ? { ...m, ...safePatch, updated_at: now } : m,
+        );
+        if (safePatch.spouse_id)
+          ctx.state = mirrorSpouseLink(ctx.state, id, safePatch.spouse_id, now);
         ctx.state = ensureParentsAreSpouses(ctx.state, id, now);
         if (imageFile instanceof File) ctx.stagedImages.set(id, imageFile);
         else if (imageFile === null) ctx.stagedImages.delete(id);
@@ -289,7 +300,13 @@ function createRelationshipCommands(ctx: MemberCommandContext) {
     removeSpouse(maleId: string, femaleId: string): void {
       const now = new Date().toISOString();
       ctx.commit(() => {
-        ctx.state = removeSpouseAttachment(ctx.state, maleId, femaleId, now);
+        ctx.state = removeSpouseAttachment(
+          ctx.state,
+          maleId,
+          femaleId,
+          now,
+          Boolean(ctx.protectedGender?.(femaleId)),
+        );
       });
     },
     addUnknownSpouse(maleId: string): FamilyMember | undefined {
@@ -331,6 +348,7 @@ function createRelationshipCommands(ctx: MemberCommandContext) {
       return wife;
     },
     remove(id: string): void {
+      if (ctx.protectedGender?.(id)) return;
       ctx.commit(() => {
         ctx.state = removeMember(ctx.state, id);
         ctx.stagedImages.delete(id);

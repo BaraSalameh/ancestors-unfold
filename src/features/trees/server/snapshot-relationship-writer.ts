@@ -103,20 +103,23 @@ function snapshotSpousePairs(
   map: Map<string, string>,
 ): Map<string, SpousePair> {
   const pairs = new Map<string, { a: string; b: string; divorced: boolean; order: number }>();
-  for (const [order, m] of members.entries())
-    for (const spouse of [
+  for (const [memberOrder, m] of members.entries())
+    for (const [spouseOrder, spouse] of [
       ...(m.spouse_ids ?? []),
       ...(m.spouse_id ? [m.spouse_id] : []),
       ...(m.divorced_from ?? []),
-    ]) {
+    ].entries()) {
       if (!map.get(spouse) || spouse === m.id) continue;
       const ids = [map.get(m.id)!, map.get(spouse)!].sort(),
-        key = ids.join(":");
+        key = ids.join(":"),
+        existing = pairs.get(key),
+        candidateOrder =
+          (m.gender === "male" ? 0 : members.length * 101) + memberOrder * 101 + spouseOrder;
       pairs.set(key, {
         a: ids[0],
         b: ids[1],
-        divorced: (m.divorced_from ?? []).includes(spouse) || (pairs.get(key)?.divorced ?? false),
-        order,
+        divorced: (m.divorced_from ?? []).includes(spouse) || (existing?.divorced ?? false),
+        order: Math.min(existing?.order ?? candidateOrder, candidateOrder),
       });
     }
   return pairs;

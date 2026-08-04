@@ -7,6 +7,7 @@ export interface SubfamilyCommandContext {
   commit(mutator: () => void): void;
   markDraftChanged(): void;
   emit(): void;
+  canDeleteSubfamily?(id: string): boolean;
 }
 
 export function createSubfamilyCommands(ctx: SubfamilyCommandContext) {
@@ -54,6 +55,7 @@ export function createSubfamilyCommands(ctx: SubfamilyCommandContext) {
     },
 
     deleteSubfamily(id: string): void {
+      if (ctx.canDeleteSubfamily && !ctx.canDeleteSubfamily(id)) return;
       ctx.subfamilies = ctx.subfamilies
         .filter((sf) => sf.id !== id)
         .map((sf) =>

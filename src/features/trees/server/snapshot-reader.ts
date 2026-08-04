@@ -146,6 +146,7 @@ export async function loadRenderableSnapshot(
   return {
     version,
     access_scope: includePrivate ? ("tree" as const) : ("preview" as const),
+    capabilities: { can_import_csv: false },
     members: members.rows.map((member) =>
       projectMember(member, includePrivate, external.rows, spouseMap, divorceMap),
     ),
@@ -202,14 +203,23 @@ export async function readSnapshot(session: SessionContext, requestId: string, t
     );
     if (!tree.rowCount) throw new Error("FORBIDDEN");
     const snapshot = await loadRenderableSnapshot(client, treeId, tree.rows[0].version, true);
-    const fullAccess = await client.query(
-      `SELECT 1 FROM app.family_trees t
-       WHERE t.id=$1 AND (t.owner_user_id=$2 OR EXISTS (
-         SELECT 1 FROM app.tree_memberships m WHERE m.tree_id=t.id AND m.user_id=$2
-           AND m.role IN ('owner','administrator','editor') AND m.revoked_at IS NULL))`,
+    const fullAccess = await client.query<{ role: string }>(
+      `SELECT CASE WHEN t.owner_user_id=$2 THEN 'owner' ELSE membership.role::text END role
+       FROM app.family_trees t
+       LEFT JOIN app.tree_memberships membership
+         ON membership.tree_id=t.id AND membership.user_id=$2 AND membership.revoked_at IS NULL
+       WHERE t.id=$1
+         AND (t.owner_user_id=$2 OR membership.role IN ('owner','administrator','editor'))
+       LIMIT 1`,
       [treeId, session.user_id],
     );
-    if (fullAccess.rowCount) return snapshot;
+    if (fullAccess.rowCount)
+      return {
+        ...snapshot,
+        capabilities: {
+          can_import_csv: ["owner", "administrator"].includes(fullAccess.rows[0].role),
+        },
+      };
     const assignedBranch = await client.query<{ id: string }>(
       `SELECT root_subfamily_id id FROM app.branch_grants
        WHERE tree_id=$1 AND user_id=$2 AND role='branch_editor' AND revoked_at IS NULL

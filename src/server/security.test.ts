@@ -1,5 +1,6 @@
+import { z } from "zod";
 import { describe, expect, it } from "vitest";
-import { ApiError, assertJsonRequest, assertSameOrigin, schemas } from "./security";
+import { ApiError, assertJsonRequest, assertSameOrigin, parseBody, schemas } from "./security";
 
 const member = {
   id: "member-1",
@@ -167,6 +168,18 @@ describe("HTTP security checks", () => {
       headers: { origin: "https://attacker.example" },
     });
     expect(() => assertSameOrigin(request)).toThrowError("CSRF_REJECTED");
+  });
+
+  it("enforces the actual UTF-8 body size when content-length is absent", async () => {
+    const request = new Request("http://localhost/api/x", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: "ééé" }),
+    });
+    await expect(parseBody(request, z.object({ value: z.string() }), 5)).rejects.toMatchObject({
+      code: "PAYLOAD_TOO_LARGE",
+      status: 413,
+    });
   });
 });
 
