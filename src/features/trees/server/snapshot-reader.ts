@@ -126,7 +126,7 @@ export async function loadRenderableSnapshot(
     [treeId],
   );
   const subfamilies = await runner.query<Record<string, unknown>>(
-    `SELECT id,name_en,name_ar,linked_male_id,parent_subfamily_id,notes,color,created_at,updated_at
+    `SELECT id,name_en,name_ar,linked_male_id,parent_subfamily_id,status,notes,color,created_at,updated_at
     FROM app.subfamilies WHERE tree_id=$1 AND deleted_at IS NULL`,
     [treeId],
   );
@@ -155,6 +155,7 @@ export async function loadRenderableSnapshot(
       name_ar: subfamily.name_ar ?? "",
       linked_male_id: subfamily.linked_male_id ?? undefined,
       parent_subfamily_id: subfamily.parent_subfamily_id ?? undefined,
+      status: subfamily.status ?? "active",
       ...(includePrivate ? { notes: subfamily.notes ?? undefined } : {}),
       color: subfamily.color ?? undefined,
       created_at: subfamily.created_at,
@@ -209,6 +210,13 @@ export async function readSnapshot(session: SessionContext, requestId: string, t
       [treeId, session.user_id],
     );
     if (fullAccess.rowCount) return snapshot;
+    const assignedBranch = await client.query<{ id: string }>(
+      `SELECT root_subfamily_id id FROM app.branch_grants
+       WHERE tree_id=$1 AND user_id=$2 AND role='branch_editor' AND revoked_at IS NULL
+         AND (expires_at IS NULL OR expires_at>now())
+       ORDER BY granted_at DESC LIMIT 1`,
+      [treeId, session.user_id],
+    );
     const branchMembers = await client.query<{ id: string }>(
       "SELECT member_id id FROM app.branch_members($1,$2)",
       [treeId, session.user_id],
@@ -224,6 +232,7 @@ export async function readSnapshot(session: SessionContext, requestId: string, t
         new Set([...branchMembers.rows, ...ownedDrafts.rows].map(({ id }) => id)),
       ),
       access_scope: "branch" as const,
+      assigned_branch_id: assignedBranch.rows[0]?.id,
     };
   });
 }

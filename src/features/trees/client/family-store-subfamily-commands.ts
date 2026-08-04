@@ -25,6 +25,7 @@ export function createSubfamilyCommands(ctx: SubfamilyCommandContext) {
         name_ar,
         linked_male_id,
         parent_subfamily_id,
+        status: "active",
         attachments: [],
         color,
         created_at: now,

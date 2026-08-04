@@ -93,6 +93,67 @@ describe("snapshot trust boundary", () => {
   });
 });
 
+describe("automatic branch management inputs", () => {
+  const version = {
+    batchId: "00000000-0000-4000-8000-000000000001",
+    expectedVersion: 1,
+  };
+  const rootFamilyMemberId = "00000000-0000-4000-8000-000000000002";
+
+  it("requires a root and rejects manual parent, position, and member inputs", () => {
+    expect(
+      schemas.branch.parse({
+        ...version,
+        name_en: "North",
+        rootFamilyMemberId,
+        status: "active",
+      }).rootFamilyMemberId,
+    ).toBe(rootFamilyMemberId);
+    expect(() => schemas.branch.parse({ ...version, name_en: "North" })).toThrow();
+    expect(() =>
+      schemas.branch.parse({
+        ...version,
+        name_en: "North",
+        rootFamilyMemberId,
+        parentBranchId: rootFamilyMemberId,
+      }),
+    ).toThrow();
+  });
+
+  it("requires DELETE, a six-digit code, and serialized version fields", () => {
+    expect(
+      schemas.branchDeactivationConfirm.parse({
+        ...version,
+        confirmation: "DELETE",
+        code: "012345",
+      }).code,
+    ).toBe("012345");
+    expect(() =>
+      schemas.branchDeactivationConfirm.parse({
+        ...version,
+        confirmation: "delete",
+        code: "012345",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts only approved branch attachment types up to 10 MB", () => {
+    const attachment = {
+      fileName: "family.pdf",
+      mediaType: "application/pdf",
+      byteSize: 10 * 1024 * 1024,
+      checksumSha256: "a".repeat(64),
+    };
+    expect(schemas.branchAttachmentSign.parse(attachment)).toEqual(attachment);
+    expect(() =>
+      schemas.branchAttachmentSign.parse({ ...attachment, mediaType: "application/zip" }),
+    ).toThrow();
+    expect(() =>
+      schemas.branchAttachmentSign.parse({ ...attachment, byteSize: 10 * 1024 * 1024 + 1 }),
+    ).toThrow();
+  });
+});
+
 describe("HTTP security checks", () => {
   it("rejects non-JSON write bodies", () => {
     expect(() =>

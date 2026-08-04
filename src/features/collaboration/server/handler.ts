@@ -1,6 +1,8 @@
 import { handleTreeOverviewRequest } from "./tree-overview-handler";
 import { handleCollaborationSearchRequest } from "./collaboration-search-handler";
 import { handleBranchRequest } from "./branch-handler";
+import { handleBranchDeactivationRequest } from "./branch-deactivation-handler";
+import { handleBranchAttachmentRequest } from "./branch-attachment-handler";
 import { handleInvitationRequest } from "./invitation-handler";
 import { handleActivityRequest } from "./activity-handler";
 import { handleModerationRequest } from "./moderation-handler";
@@ -22,6 +24,15 @@ export async function handleCollaborationRequest(
   if (searchResponse) return searchResponse;
   const branchResponse = await handleBranchRequest(request, url, session, requestId);
   if (branchResponse) return branchResponse;
+  const deactivationResponse = await handleBranchDeactivationRequest(
+    request,
+    url,
+    session,
+    requestId,
+  );
+  if (deactivationResponse) return deactivationResponse;
+  const attachmentResponse = await handleBranchAttachmentRequest(request, url, session, requestId);
+  if (attachmentResponse) return attachmentResponse;
   const invitationResponse = await handleInvitationRequest(request, url, session, requestId);
   if (invitationResponse) return invitationResponse;
   const activityResponse = await handleActivityRequest(request, url, session, requestId);

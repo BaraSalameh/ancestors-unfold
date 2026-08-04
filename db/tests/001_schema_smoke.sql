@@ -580,4 +580,46 @@ BEGIN
   END;
 END $$;
 
+-- Active branch parents and member tags are derived from the nearest branch root.
+DO $$
+DECLARE
+  v_owner uuid := gen_random_uuid();
+  v_tree uuid := gen_random_uuid();
+  v_grandfather uuid := gen_random_uuid();
+  v_father uuid := gen_random_uuid();
+  v_child uuid := gen_random_uuid();
+  v_outer uuid := gen_random_uuid();
+  v_inner uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO app.users(id,email,full_name_en,full_name_ar,status)
+    VALUES(v_owner,'automatic-branches@example.test','Branch Owner','Branch Owner','active');
+  INSERT INTO app.family_trees(id,owner_user_id,name_en) VALUES(v_tree,v_owner,'Automatic branches');
+  INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES(v_tree,v_owner,'owner');
+  INSERT INTO app.family_members(id,tree_id,name_en,gender) VALUES
+    (v_grandfather,v_tree,'Grandfather','male'),
+    (v_father,v_tree,'Father','male'),
+    (v_child,v_tree,'Child','female');
+  INSERT INTO app.parent_child_relationships(tree_id,child_id,parent_id,parent_role) VALUES
+    (v_tree,v_father,v_grandfather,'father'),
+    (v_tree,v_child,v_father,'father');
+  INSERT INTO app.subfamilies(id,tree_id,name_en,linked_male_id,created_at) VALUES
+    (v_outer,v_tree,'Outer',v_grandfather,now()-interval '1 day'),
+    (v_inner,v_tree,'Inner',v_father,now());
+
+  PERFORM app.reconcile_branch_structure(v_tree);
+  IF (SELECT parent_subfamily_id FROM app.subfamilies WHERE id=v_inner) IS DISTINCT FROM v_outer
+     OR (SELECT subfamily_id FROM app.family_members WHERE id=v_grandfather) IS DISTINCT FROM v_outer
+     OR (SELECT subfamily_id FROM app.family_members WHERE id=v_father) IS DISTINCT FROM v_inner
+     OR (SELECT subfamily_id FROM app.family_members WHERE id=v_child) IS DISTINCT FROM v_inner THEN
+    RAISE EXCEPTION 'nearest branch reconciliation failed';
+  END IF;
+
+  UPDATE app.subfamilies SET status='inactive',linked_male_id=NULL WHERE id=v_inner;
+  PERFORM app.reconcile_branch_structure(v_tree);
+  IF (SELECT subfamily_id FROM app.family_members WHERE id=v_father) IS DISTINCT FROM v_outer
+     OR (SELECT subfamily_id FROM app.family_members WHERE id=v_child) IS DISTINCT FROM v_outer THEN
+    RAISE EXCEPTION 'deactivated branch members were not retagged to the active ancestor';
+  END IF;
+END $$;
+
 ROLLBACK;

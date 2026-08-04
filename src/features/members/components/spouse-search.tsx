@@ -9,7 +9,8 @@ import {
   CommandList,
 } from "@/shared/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
-import { displayName, useI18n } from "@/shared/i18n";
+import { useI18n } from "@/shared/i18n";
+import { memberSearchLabel } from "../domain/member-display";
 import type { FamilyMember } from "../domain/types";
 
 interface SpouseSearchProps {
@@ -41,7 +42,7 @@ function SearchResult({
     >
       <div className="flex w-full items-center gap-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm">{displayName(member, lang)}</div>
+          <div className="truncate text-sm">{memberSearchLabel(member, lang)}</div>
           <div className="truncate text-[11px] text-muted-foreground">
             {lang === "ar" ? member.name_en : member.name_ar}
           </div>

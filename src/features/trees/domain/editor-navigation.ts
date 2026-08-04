@@ -9,6 +9,7 @@ export function isTreeEditorDestination(
     pathname.startsWith(`${activeTreePath}/`) ||
     /^\/(edit|member)\//.test(pathname) ||
     pathname === "/add" ||
+    pathname === "/branches" ||
     pathname === "/subfamilies"
   );
 }

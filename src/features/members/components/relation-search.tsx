@@ -11,8 +11,9 @@ import {
 } from "@/shared/ui/command";
 import { Label } from "@/shared/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
-import { displayName, type Lang, useI18n } from "@/shared/i18n";
-import { parentDisplayName, searchParentCandidates } from "../domain/parent-selection";
+import { type Lang, useI18n } from "@/shared/i18n";
+import { memberSearchLabel } from "../domain/member-display";
+import { searchParentCandidates } from "../domain/parent-selection";
 import type { FamilyMember } from "../domain/types";
 
 interface RelationSearchProps {
@@ -22,7 +23,6 @@ interface RelationSearchProps {
   options: FamilyMember[];
   lang: Lang;
   searchFirst?: boolean;
-  showBirthYear?: boolean;
   selectedOption?: FamilyMember;
   disabled?: boolean;
 }
@@ -34,7 +34,6 @@ export function RelationSearch({
   options,
   lang,
   searchFirst = false,
-  showBirthYear = false,
   selectedOption,
   disabled = false,
 }: RelationSearchProps) {
@@ -43,10 +42,7 @@ export function RelationSearch({
   const [query, setQuery] = useState("");
   const selected = options.find((member) => member.id === value) ?? selectedOption;
   const results = searchFirst || query.trim() ? searchParentCandidates(options, query) : options;
-  const optionName = (member: FamilyMember) => {
-    const name = displayName(member, lang);
-    return showBirthYear ? parentDisplayName(member, name) : name;
-  };
+  const optionName = (member: FamilyMember) => memberSearchLabel(member, lang);
   const select = (id: string) => {
     onChange(id);
     setQuery("");

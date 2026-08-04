@@ -94,6 +94,7 @@ export async function importSnapshot(
       map,
       sfMap,
     );
+    await c.query("SELECT app.reconcile_branch_structure($1)", [treeId]);
     const updated = await c.query<{ version: number }>(
       "UPDATE app.family_trees SET version=version+1 WHERE id=$1 RETURNING version",
       [treeId],

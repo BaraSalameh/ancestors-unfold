@@ -16,7 +16,11 @@ export {
   setMotherRelationship,
   toggleDivorce,
 } from "./domain/relationships";
-export { ancestorConnector, memberNameWithBirthYear } from "./domain/member-display";
+export {
+  ancestorConnector,
+  memberNameWithBirthYear,
+  memberSearchLabel,
+} from "./domain/member-display";
 export {
   memberDetailsSearch,
   memberReturnDestination,
@@ -29,5 +33,6 @@ export { MemberForm } from "./ui/member-form";
 export { ExpandableProfileImage } from "./ui/expandable-profile-image";
 export { AddMemberPage, AddPage } from "./pages/add-member-page";
 export { addMemberSearchSchema } from "./domain/add-member-search";
+export { MemberSearchPicker } from "./components/member-search-picker";
 export { EditPage } from "./pages/edit-member-page";
 export { MemberPage } from "./pages/member-page";

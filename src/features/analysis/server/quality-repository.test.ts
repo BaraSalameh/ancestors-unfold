@@ -52,6 +52,8 @@ describe("quality repository", () => {
     expect(sql).toContain("JOIN quality_ids parent ON parent.id=r.parent_id");
     expect(sql).toContain("JOIN quality_ids quality_child ON quality_child.id=r.child_id");
     expect(sql).toContain("JOIN quality_ids quality_parent ON quality_parent.id=r.parent_id");
+    expect(sql).not.toContain("missing_citizenship");
+    expect(sql).not.toContain("citizen_status IS NULL");
     expect(query.mock.calls[0][1]).toEqual([scope.treeId, null, "tree"]);
   });
 });

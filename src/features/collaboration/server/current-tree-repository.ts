@@ -15,12 +15,13 @@ export function currentTreeForSession(
     client.query<
       CurrentTreeSummary & {
         created_at: string;
+        version: number;
         affiliation_status: string;
         family_member_id: string | null;
         assigned_branch_id: string | null;
       }
     >(
-      `SELECT t.id,t.name_en,t.name_ar,t.created_at,
+      `SELECT t.id,t.name_en,t.name_ar,t.created_at,t.version,
         CASE WHEN m.role='owner' THEN 'owner'
              WHEN g.id IS NOT NULL THEN 'contributor'
              ELSE m.role::text END role,

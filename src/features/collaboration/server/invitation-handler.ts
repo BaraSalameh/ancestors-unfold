@@ -34,7 +34,7 @@ async function listInvitations(
   const result = await transaction(session.user_id, session.id, requestId, async (client) => {
     await requireTreeOwner(client, treeId, session.user_id);
     return client.query(
-      `SELECT i.id,i.invited_name_en,i.invited_name_ar,i.invited_email,i.position_label,
+      `SELECT i.id,i.branch_id,i.invited_name_en,i.invited_name_ar,i.invited_email,i.position_label,
           i.status,i.expires_at,i.created_at,b.name_en branch_name_en,b.name_ar branch_name_ar
          FROM app.contributor_invitations i JOIN app.subfamilies b ON b.id=i.branch_id
          WHERE i.tree_id=$1 ORDER BY i.created_at DESC`,

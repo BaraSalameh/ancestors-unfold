@@ -6,21 +6,21 @@ import { Label } from "@/shared/ui/label";
 import { LoadingStatus } from "@/shared/ui/page-skeletons";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { useI18n } from "@/shared/i18n";
+import { memberSearchLabel } from "@/features/members";
 import type { SearchOption } from "../pages/dashboard-types";
 
 function optionLabel(option: SearchOption, lang: "en" | "ar") {
-  const name =
-    (lang === "ar" ? option.name_ar || option.name_en : option.name_en || option.name_ar) ?? "";
-  return option.birth_year ? `${name} (${option.birth_year})` : name;
+  return memberSearchLabel(
+    { name_en: option.name_en ?? "", name_ar: option.name_ar ?? "", birth_year: option.birth_year },
+    lang,
+  );
 }
 
 function SearchPicker({
-  kind,
   treeId,
   value,
   onSelect,
 }: {
-  kind: "branch" | "member";
   treeId: string;
   value?: SearchOption;
   onSelect: (value: SearchOption | undefined) => void;
@@ -37,8 +37,7 @@ function SearchPicker({
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoading(true);
-      const endpoint = kind === "branch" ? "available-branches" : "invitable-members";
-      void fetch(`/api/trees/${treeId}/${endpoint}?q=${encodeURIComponent(query.trim())}`, {
+      void fetch(`/api/trees/${treeId}/invitable-members?q=${encodeURIComponent(query.trim())}`, {
         credentials: "include",
         signal: controller.signal,
       })
@@ -50,15 +49,15 @@ function SearchPicker({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [kind, query, treeId]);
+  }, [query, treeId]);
   const display = (option: SearchOption) => optionLabel(option, lang);
   return (
     <div className="relative">
-      <Label>{t(kind === "branch" ? "select_branch" : "select_family_member")}</Label>
+      <Label>{t("select_family_member")}</Label>
       <Input
         className="mt-2"
         value={value ? display(value) : query}
-        placeholder={t(kind === "branch" ? "search_branch" : "search_family_member")}
+        placeholder={t("search_family_member")}
         onChange={(event) => {
           onSelect(undefined);
           setQuery(event.target.value);
@@ -108,11 +107,13 @@ export function InviteDialog({
   onOpenChange,
   treeId,
   onSent,
+  initialBranch,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   treeId: string;
   onSent: () => Promise<void>;
+  initialBranch?: SearchOption;
 }) {
   const { t } = useI18n();
   const [branch, setBranch] = useState<SearchOption>();
@@ -120,6 +121,9 @@ export function InviteDialog({
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  useEffect(() => {
+    if (open && initialBranch) setBranch(initialBranch);
+  }, [initialBranch, open]);
   const submit = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -165,8 +169,7 @@ export function InviteDialog({
               onChange={(event) => setEmail(event.target.value)}
             />
           </div>
-          <SearchPicker kind="branch" treeId={treeId} value={branch} onSelect={setBranch} />
-          <SearchPicker kind="member" treeId={treeId} value={member} onSelect={setMember} />
+          <SearchPicker treeId={treeId} value={member} onSelect={setMember} />
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>

@@ -52,7 +52,7 @@ export function FamilyTreeSidebar(props: FamilyTreeSidebarProps) {
     <div className="absolute top-24 right-4 z-10 flex max-h-[calc(100%-8rem)] w-72 max-w-[calc(100%-2rem)] flex-col gap-2 overflow-y-auto">
       {props.overviewMode && <PreviewWidget {...props} />}
       {props.previewType === "chronological" && <GenerationWidget {...props} />}
-      {(props.overviewMode || props.canManageSubfamilies) && <SubfamiliesWidget {...props} />}
+      {props.canManageSubfamilies ? <SubfamiliesWidget {...props} /> : null}
     </div>
   );
 }
@@ -209,7 +209,7 @@ function SubfamiliesWidget(props: FamilyTreeSidebarProps) {
         <div className="max-h-[calc(100vh-260px)] overflow-y-auto overscroll-contain pr-1">
           <SubfamilyPanel
             mode="home"
-            readOnly={props.overviewMode || !props.canManageSubfamilies}
+            readOnly
             selectedSubfamilyId={props.selectedSubfamilyId}
             onSelectSubfamily={props.setSelectedSubfamilyId}
             filterEnabled={props.subfamilyFilterEnabled}

@@ -73,7 +73,6 @@ export async function readQualityReport(
        count(*) FILTER (WHERE nullif(btrim(name_en),'') IS NULL)::integer missing_name_en,
        count(*) FILTER (WHERE nullif(btrim(name_ar),'') IS NULL)::integer missing_name_ar,
        count(*) FILTER (WHERE birth_date IS NULL)::integer missing_birth_date,
-       count(*) FILTER (WHERE citizen_status IS NULL)::integer missing_citizenship,
        count(*) FILTER (
          WHERE $3::text='tree' AND effective_branch_id IS NULL
            AND id NOT IN (SELECT member_id FROM wives)

@@ -29,6 +29,7 @@ export function SubfamilyPanel({
   const members = useFamily();
   const subfamilies = familyStore
     .getSubfamilies()
+    .filter((subfamily) => subfamily.status !== "inactive")
     .filter((subfamily) => !allowedSubfamilyId || subfamily.id === allowedSubfamilyId);
   const selected = selectedSubfamilyId
     ? subfamilies.find(({ id }) => id === selectedSubfamilyId)

@@ -13,6 +13,7 @@ import { Route as SubfamiliesRouteImport } from './routes/subfamilies'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as BranchesRouteImport } from './routes/branches'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AnalysisRouteImport } from './routes/analysis'
 import { Route as AddRouteImport } from './routes/add'
@@ -42,6 +43,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BranchesRoute = BranchesRouteImport.update({
+  id: '/branches',
+  path: '/branches',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/add': typeof AddRoute
   '/analysis': typeof AnalysisRoute
   '/auth': typeof AuthRoute
+  '/branches': typeof BranchesRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/add': typeof AddRoute
   '/analysis': typeof AnalysisRoute
   '/auth': typeof AuthRoute
+  '/branches': typeof BranchesRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/add': typeof AddRoute
   '/analysis': typeof AnalysisRoute
   '/auth': typeof AuthRoute
+  '/branches': typeof BranchesRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/analysis'
     | '/auth'
+    | '/branches'
     | '/profile'
     | '/reset-password'
     | '/settings'
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/analysis'
     | '/auth'
+    | '/branches'
     | '/profile'
     | '/reset-password'
     | '/settings'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/analysis'
     | '/auth'
+    | '/branches'
     | '/profile'
     | '/reset-password'
     | '/settings'
@@ -201,6 +213,7 @@ export interface RootRouteChildren {
   AddRoute: typeof AddRoute
   AnalysisRoute: typeof AnalysisRoute
   AuthRoute: typeof AuthRoute
+  BranchesRoute: typeof BranchesRoute
   ProfileRoute: typeof ProfileRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
@@ -240,6 +253,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/branches': {
+      id: '/branches'
+      path: '/branches'
+      fullPath: '/branches'
+      preLoaderRoute: typeof BranchesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -321,6 +341,7 @@ const rootRouteChildren: RootRouteChildren = {
   AddRoute: AddRoute,
   AnalysisRoute: AnalysisRoute,
   AuthRoute: AuthRoute,
+  BranchesRoute: BranchesRoute,
   ProfileRoute: ProfileRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,

@@ -63,7 +63,7 @@ export const schemas = {
   tree: z
     .object({
       name_en: z.string().trim().min(1).max(200),
-      name_ar: z.string().trim().max(200).optional(),
+      name_ar: z.string().trim().max(200).nullable().optional(),
       description_en: z.string().trim().max(5000).optional(),
       description_ar: z.string().trim().max(5000).optional(),
       color: z.string().trim().max(100).optional(),
@@ -89,23 +89,85 @@ export const schemas = {
     .strict(),
   branch: z
     .object({
+      batchId: z.string().uuid(),
+      expectedVersion: z.number().int().positive(),
       name_en: z.string().trim().min(1).max(200),
       name_ar: z.string().trim().max(200).optional(),
-      rootFamilyMemberId: z.string().uuid().nullable().optional(),
-      parentBranchId: z.string().uuid().nullable().optional(),
-      positionLabel: z.string().trim().max(500).optional(),
-      status: z.enum(["active", "inactive"]).default("active"),
+      rootFamilyMemberId: z.string().uuid(),
+      status: z.literal("active").default("active"),
     })
     .strict(),
   branchUpdate: z
     .object({
+      batchId: z.string().uuid(),
+      expectedVersion: z.number().int().positive(),
       name_en: z.string().trim().min(1).max(200).optional(),
       name_ar: z.string().trim().max(200).nullable().optional(),
-      positionLabel: z.string().trim().max(500).nullable().optional(),
-      status: z.enum(["active", "inactive"]).optional(),
+      rootFamilyMemberId: z.string().uuid().optional(),
+      status: z.literal("active").optional(),
     })
     .strict()
-    .refine((value) => Object.keys(value).length > 0),
+    .refine(
+      ({ batchId: _batchId, expectedVersion: _expectedVersion, ...changes }) =>
+        Object.keys(changes).length > 0,
+    )
+    .refine((value) => value.status !== "active" || Boolean(value.rootFamilyMemberId), {
+      path: ["rootFamilyMemberId"],
+    }),
+  branchDelete: z
+    .object({
+      batchId: z.string().uuid(),
+      expectedVersion: z.number().int().positive(),
+    })
+    .strict(),
+  branchDeactivationRequest: z.object({ confirmation: z.literal("DELETE") }).strict(),
+  branchDeactivationConfirm: z
+    .object({
+      confirmation: z.literal("DELETE"),
+      code: z.string().regex(/^\d{6}$/),
+      batchId: z.string().uuid(),
+      expectedVersion: z.number().int().positive(),
+    })
+    .strict(),
+  branchAttachmentSign: z
+    .object({
+      fileName: z.string().trim().min(1).max(255),
+      mediaType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"]),
+      byteSize: z
+        .number()
+        .int()
+        .positive()
+        .max(10 * 1024 * 1024),
+      checksumSha256: z.string().regex(/^[0-9a-f]{64}$/),
+    })
+    .strict(),
+  branchAttachmentRegister: z
+    .object({
+      fileName: z.string().trim().min(1).max(255),
+      mediaType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"]),
+      byteSize: z
+        .number()
+        .int()
+        .positive()
+        .max(10 * 1024 * 1024),
+      checksumSha256: z.string().regex(/^[0-9a-f]{64}$/),
+      assetId: z.string().min(1).max(255),
+      publicId: z.string().min(1).max(500),
+      secureUrl: z.string().url().max(2000),
+      version: z.number().int().positive(),
+      signature: z.string().min(1).max(255),
+      resourceType: z.enum(["image", "raw"]),
+    })
+    .strict(),
+  branchAttachmentDiscard: z
+    .object({
+      assetId: z.string().min(1).max(255),
+      publicId: z.string().min(1).max(500),
+      version: z.number().int().positive(),
+      signature: z.string().min(1).max(255),
+      resourceType: z.enum(["image", "raw"]),
+    })
+    .strict(),
   transferRequest: z
     .object({
       proposedOwnerUserId: z.string().uuid(),
@@ -257,6 +319,7 @@ export const schemas = {
               name_ar: z.string().trim().max(200),
               linked_male_id: z.string().max(200).optional(),
               parent_subfamily_id: z.string().max(200).optional(),
+              status: z.enum(["active", "inactive"]).optional(),
               notes: z.string().max(10_000).optional(),
               attachments: z.array(z.unknown()).max(100).optional(),
               color: z.string().max(100).optional(),

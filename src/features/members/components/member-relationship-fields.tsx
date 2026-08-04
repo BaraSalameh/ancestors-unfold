@@ -31,7 +31,6 @@ export function MemberRelationshipFields({
             selectedOption={form.selectedFather}
             lang={lang}
             searchFirst
-            showBirthYear
           />
           <RelationSearch
             label={t("mother")}
@@ -41,7 +40,6 @@ export function MemberRelationshipFields({
             selectedOption={form.selectedMother}
             lang={lang}
             searchFirst={!form.draft.father_id}
-            showBirthYear
           />
         </div>
       )}

@@ -24,6 +24,13 @@ interface UseMemberFormOptions {
   onSubmit: (data: MemberInput, imageFile?: File) => void;
 }
 
+export function containMemberFormSubmit(
+  event: Pick<FormEvent, "preventDefault" | "stopPropagation">,
+): void {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 export function useMemberForm(options: UseMemberFormOptions) {
   const { initial, initialImageFile, memberId, members, onSubmit } = options;
   const [draft, setDraft] = useState(() => initialMemberFormDraft(initial));
@@ -74,7 +81,7 @@ export function useMemberForm(options: UseMemberFormOptions) {
     }));
   };
   const submit = (event: FormEvent) => {
-    event.preventDefault();
+    containMemberFormSubmit(event);
     const result = memberFormPayload(draft, !(draft.gender === "male" && memberId));
     if (!result.ok) return setError(result.error);
     onSubmit(result.payload, imageFile);

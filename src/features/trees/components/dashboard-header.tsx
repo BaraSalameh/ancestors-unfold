@@ -4,9 +4,7 @@ import { Badge } from "@/shared/ui/badge";
 import type { Branch, CurrentTree, DashboardInsights, Statistics } from "../pages/dashboard-types";
 import type { DashboardTreeControls } from "../client/use-dashboard-tree-controls";
 import type { ContributorAccountDeletionController } from "../client/use-contributor-account-deletion";
-import type { DashboardInvitationsController } from "../client/use-dashboard-invitations";
 import type { OwnershipTransferController } from "../client/use-ownership-transfer";
-import type { ContributorRemovalController } from "../client/use-contributor-removal";
 import type { OwnershipTransfer } from "../pages/dashboard-types";
 import { DashboardStat } from "./dashboard-components";
 import { DashboardHeaderActions } from "./dashboard-header-actions";
@@ -19,9 +17,7 @@ export function DashboardHeader({
   insights,
   treeControls,
   accountDeletion,
-  invitation,
   transfer,
-  removal,
   ownershipTransfer,
 }: {
   tree: CurrentTree;
@@ -30,9 +26,7 @@ export function DashboardHeader({
   insights: DashboardInsights;
   treeControls: DashboardTreeControls;
   accountDeletion: ContributorAccountDeletionController;
-  invitation: DashboardInvitationsController;
   transfer: OwnershipTransferController;
-  removal: ContributorRemovalController;
   ownershipTransfer: OwnershipTransfer | null;
 }) {
   const { t, lang } = useI18n();
@@ -80,9 +74,7 @@ export function DashboardHeader({
             tree={tree}
             treeControls={treeControls}
             accountDeletion={accountDeletion}
-            invitation={invitation}
             transfer={transfer}
-            removal={removal}
             ownershipTransfer={ownershipTransfer}
           />
         </div>

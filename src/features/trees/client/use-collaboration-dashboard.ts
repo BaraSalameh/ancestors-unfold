@@ -9,9 +9,12 @@ import type {
   OwnershipTransfer,
   Statistics,
 } from "../pages/dashboard-types";
+import {
+  invalidateDashboardCache,
+  readDashboardCache,
+  writeDashboardCache,
+} from "./dashboard-cache";
 
-let dashboardCache: DashboardData | undefined;
-let dashboardCacheUpdatedAt = 0;
 const DASHBOARD_STALE_MS = 60_000;
 
 async function getJson<Value>(url: string): Promise<Value> {
@@ -43,17 +46,17 @@ export function useCollaborationDashboard(lang: string) {
   const load = useCallback(
     async (force = false) => {
       setError(false);
-      if (!force && dashboardCache) {
-        setData(dashboardCache);
-        if (Date.now() - dashboardCacheUpdatedAt < DASHBOARD_STALE_MS) return;
+      const cached = readDashboardCache();
+      if (!force && cached.data) {
+        setData(cached.data);
+        if (Date.now() - cached.updatedAt < DASHBOARD_STALE_MS) return;
       }
       loadInFlight.current ??= fetchDashboard(lang).finally(() => {
         loadInFlight.current = undefined;
       });
       try {
         const next = await loadInFlight.current;
-        dashboardCache = next;
-        dashboardCacheUpdatedAt = Date.now();
+        writeDashboardCache(next);
         if (mounted.current) setData(next);
       } catch (requestError) {
         if (mounted.current) setError(true);
@@ -65,13 +68,14 @@ export function useCollaborationDashboard(lang: string) {
   useEffect(() => {
     mounted.current = true;
     void load().catch(() => {
-      if (mounted.current && !dashboardCache) setData(undefined);
+      if (mounted.current && !readDashboardCache().data) setData(undefined);
     });
     const refreshWhenVisible = () => {
+      const cached = readDashboardCache();
       if (
         shouldRefreshDashboard(
           document.visibilityState,
-          dashboardCacheUpdatedAt,
+          cached.updatedAt,
           Date.now(),
           DASHBOARD_STALE_MS,
         )
@@ -88,8 +92,5 @@ export function useCollaborationDashboard(lang: string) {
   const updateTree = (tree: CurrentTree) => {
     setData((current) => (current ? { ...current, tree } : current));
   };
-  const invalidate = () => {
-    dashboardCache = undefined;
-  };
-  return { data, error, load, updateTree, invalidate };
+  return { data, error, load, updateTree, invalidate: invalidateDashboardCache };
 }

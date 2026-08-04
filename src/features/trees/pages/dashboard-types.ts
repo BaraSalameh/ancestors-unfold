@@ -6,6 +6,7 @@ export interface CurrentTree {
   name_en: string | null;
   name_ar: string | null;
   created_at: string;
+  version: number;
   role: "owner" | "contributor";
   affiliation_status: "active" | "read_only" | "removed";
   assigned_branch_id: string | null;
@@ -40,7 +41,12 @@ export interface Branch {
   id: string;
   name_en: string;
   name_ar: string | null;
+  root_family_member_id: string | null;
+  parent_branch_id: string | null;
+  position_label: string | null;
   status: string;
+  member_ids: string[];
+  member_count: number;
   contributor_user_id: string | null;
   contributor_name_en: string | null;
   contributor_name_ar: string | null;
@@ -48,6 +54,7 @@ export interface Branch {
 
 export interface Invitation {
   id: string;
+  branch_id: string;
   invited_name_en: string;
   invited_name_ar: string;
   invited_email: string;
@@ -92,7 +99,6 @@ export interface DashboardQualityInsights {
   missing_name_en: number;
   missing_name_ar: number;
   missing_birth_date: number;
-  missing_citizenship: number;
   missing_branch: number;
   missing_image: number;
   unknown_placeholders: number;

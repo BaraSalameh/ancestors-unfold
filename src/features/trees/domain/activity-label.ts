@@ -34,6 +34,7 @@ const activityLabels: Record<string, TranslationKey> = {
   branch_updated: "activity_branch_updated",
   branch_activated: "activity_branch_activated",
   branch_deactivated: "activity_branch_deactivated",
+  branch_deleted: "activity_branch_deleted",
   invitation_sent: "activity_invitation_sent",
   invitation_resent: "activity_invitation_resent",
   invitation_cancelled: "activity_invitation_cancelled",

@@ -15,10 +15,12 @@ import type { MotherPickerState } from "./use-tree-edge-interactions";
 
 export function useFamilyTreeState({
   chronologicalPeriod,
+  initialBranchId,
   previewType,
   readOnly,
 }: {
   chronologicalPeriod: ChronologicalPeriod;
+  initialBranchId?: string;
   previewType: TreePreviewType;
   readOnly: boolean;
 }) {
@@ -33,8 +35,10 @@ export function useFamilyTreeState({
   >({ lineage: new Set(), chronological: new Set() });
   const [query, setQuery] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
-  const [selectedSubfamilyId, setSelectedSubfamilyId] = useState<string | null>(null);
-  const [subfamilyFilterEnabled, setSubfamilyFilterEnabled] = useState(false);
+  const [selectedSubfamilyId, setSelectedSubfamilyId] = useState<string | null>(
+    initialBranchId ?? null,
+  );
+  const [subfamilyFilterEnabled, setSubfamilyFilterEnabled] = useState(Boolean(initialBranchId));
   const [generationYear, setGenerationYear] = useState("");
   const [periodDraft, setPeriodDraft] = useState(String(chronologicalPeriod));
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
@@ -45,6 +49,10 @@ export function useFamilyTreeState({
     subfamilies: false,
   });
   const flow = useReactFlow();
+  useEffect(() => {
+    setSelectedSubfamilyId(initialBranchId ?? null);
+    setSubfamilyFilterEnabled(Boolean(initialBranchId));
+  }, [initialBranchId]);
   const viewportRef = useRef(viewport);
   const refs = {
     canvasRef: useRef<HTMLDivElement>(null),

@@ -23,6 +23,7 @@ const SAMPLE: FamilyMember[] = createSampleFamily();
 let state: FamilyMember[] = [];
 let subfamilies: SubFamily[] = [];
 let accessScope: TreeAccessScope = "preview";
+let assignedBranchId: string | undefined;
 const listeners = new Set<() => void>();
 type DraftSnapshot = { members: FamilyMember[]; stagedImages: Map<string, File> };
 let past: DraftSnapshot[] = [];
@@ -74,6 +75,7 @@ async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
       return;
     remoteVersion = snapshot.version;
     accessScope = snapshot.access_scope;
+    assignedBranchId = snapshot.assigned_branch_id;
     state = cloneMembers(snapshot.members);
     subfamilies = cloneSubfamilies(snapshot.subfamilies);
     baselineMembers = cloneMembers(state);
@@ -319,6 +321,7 @@ export const familyStore = {
     activeTreeId = treeId;
     activeAccessMode = accessMode;
     accessScope = "preview";
+    assignedBranchId = undefined;
     past = [];
     future = [];
     remoteVersion = 1;
@@ -369,15 +372,12 @@ export const familyStore = {
   deleteTreeData(treeId: string): void {
     void treeClient.deleteTree(treeId);
   },
-  getAll(): FamilyMember[] {
-    return state;
-  },
+  getAll: (): FamilyMember[] => state,
   canManageSubfamilies(): boolean {
     return treeAccessPolicy(accessScope, activeAccessMode).canManageSubfamilies;
   },
-  getAccessScope(): TreeAccessScope {
-    return accessScope;
-  },
+  getAccessScope: (): TreeAccessScope => accessScope,
+  getAssignedBranchId: (): string | undefined => assignedBranchId,
   canEditActiveTree(): boolean {
     return canEditActiveTree();
   },

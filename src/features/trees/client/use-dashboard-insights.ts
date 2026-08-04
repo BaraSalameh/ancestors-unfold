@@ -7,7 +7,6 @@ const qualitySchema = z.object({
   missing_name_en: z.number(),
   missing_name_ar: z.number(),
   missing_birth_date: z.number(),
-  missing_citizenship: z.number(),
   missing_branch: z.number(),
   missing_image: z.number(),
   unknown_placeholders: z.number(),

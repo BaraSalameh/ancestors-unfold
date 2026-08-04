@@ -17,7 +17,6 @@ const qualityMetrics = [
   ["missing_name_en", "analysis_missing_name_en"],
   ["missing_name_ar", "analysis_missing_name_ar"],
   ["missing_birth_date", "analysis_missing_birth"],
-  ["missing_citizenship", "analysis_missing_citizenship"],
   ["missing_branch", "analysis_missing_branch"],
   ["missing_image", "analysis_missing_image"],
   ["unknown_placeholders", "analysis_unknown_placeholders"],

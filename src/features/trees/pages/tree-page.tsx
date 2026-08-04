@@ -6,7 +6,7 @@ import { useI18n } from "@/shared/i18n";
 import { TreeLoadingIndicator } from "@/shared/ui/page-skeletons";
 
 export function TreePage() {
-  const { mode, preview, period } = useSearch({ from: "/tree/$id" });
+  const { mode, preview, period, branchId } = useSearch({ from: "/tree/$id" });
   const { id } = useParams({ from: "/tree/$id" });
   const { t } = useI18n();
   familyStore.activateTree(id, mode);
@@ -23,6 +23,8 @@ export function TreePage() {
         </div>
       </div>
     );
+  const selectedBranchId =
+    familyStore.getAccessScope() === "branch" ? familyStore.getAssignedBranchId() : branchId;
   return (
     <div className="h-[calc(100vh-3.5rem)] w-full">
       <FamilyTree
@@ -31,6 +33,7 @@ export function TreePage() {
         preview={mode === "preview" ? (preview ?? "lineage") : "lineage"}
         chronologicalPeriod={period ?? 10}
         accessMode={mode}
+        initialBranchId={selectedBranchId}
       />
     </div>
   );

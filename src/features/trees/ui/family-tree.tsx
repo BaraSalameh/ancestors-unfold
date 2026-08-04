@@ -16,6 +16,7 @@ export { SubfamilyPanel };
 
 interface FamilyTreeProps {
   accessMode?: TreeAccessMode;
+  initialBranchId?: string;
   chronologicalPeriod?: ChronologicalPeriod;
   overviewMode?: boolean;
   preview?: TreePreviewType;
@@ -28,8 +29,14 @@ function Inner({
   preview = "lineage",
   chronologicalPeriod = DEFAULT_CHRONOLOGICAL_PERIOD,
   accessMode = "edit",
+  initialBranchId,
 }: FamilyTreeProps) {
-  const state = useFamilyTreeState({ chronologicalPeriod, previewType: preview, readOnly });
+  const state = useFamilyTreeState({
+    chronologicalPeriod,
+    initialBranchId,
+    previewType: preview,
+    readOnly,
+  });
   const projection = useFamilyTreeProjection({
     accessMode,
     chronologicalPeriod,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { contributorInvitationMail } from "./email";
+import { branchDeactivationCodeMail, contributorInvitationMail } from "./email";
 
 const originalOrigin = process.env.PUBLIC_ORIGIN;
 
@@ -31,5 +31,26 @@ describe("contributor invitation email", () => {
     expect(mail.html).toContain("Family &lt;Tree&gt;");
     expect(mail.html).toContain("Branch &quot;One&quot;");
     expect(mail.html).not.toContain("Family <Tree>");
+  });
+});
+
+describe("branch deactivation email", () => {
+  it("includes localized names and instructions in English and Arabic", () => {
+    const mail = branchDeactivationCodeMail(
+      "owner@example.test",
+      "123456",
+      "Main Branch",
+      "الفرع الرئيسي",
+      "Family Tree",
+      "شجرة العائلة",
+    );
+
+    expect(mail.subject).toContain("Confirm branch deactivation");
+    expect(mail.subject).toContain("تأكيد تعطيل الفرع");
+    expect(mail.text).toContain("Main Branch");
+    expect(mail.text).toContain("الفرع الرئيسي");
+    expect(mail.html).toContain('<div dir="rtl">');
+    expect(mail.html).toContain("شجرة العائلة");
+    expect(mail.text).toContain("123456");
   });
 });

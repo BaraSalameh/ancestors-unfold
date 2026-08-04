@@ -22,3 +22,8 @@ export const contributorRemovalCodeHash = (challengeId: string, code: string) =>
   createHmac("sha256", deliverySecret())
     .update(`contributor-removal:${challengeId}:${code}`)
     .digest();
+
+export const branchDeactivationCodeHash = (challengeId: string, code: string) =>
+  createHmac("sha256", deliverySecret())
+    .update(`branch-deactivation:${challengeId}:${code}`)
+    .digest();

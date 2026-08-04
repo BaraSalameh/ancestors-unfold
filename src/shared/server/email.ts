@@ -108,6 +108,30 @@ export function contributorRemovalCodeMail(
   };
 }
 
+export function branchDeactivationCodeMail(
+  to: string,
+  code: string,
+  branchNameEn: string | null,
+  branchNameAr: string | null,
+  treeNameEn: string | null,
+  treeNameAr: string | null,
+): Mail {
+  const branchEn = branchNameEn || branchNameAr || "branch";
+  const branchAr = branchNameAr || branchNameEn || "الفرع";
+  const treeEn = treeNameEn || treeNameAr || "family tree";
+  const treeAr = treeNameAr || treeNameEn || "شجرة العائلة";
+  const safeCode = escapeHtml(code);
+  return {
+    to,
+    subject: "Confirm branch deactivation | تأكيد تعطيل الفرع",
+    text: `Use code ${code} to deactivate the ${branchEn} branch of ${treeEn}. It expires in 15 minutes.\n\nاستخدم الرمز ${code} لتأكيد تعطيل فرع ${branchAr} في شجرة ${treeAr}. تنتهي صلاحية الرمز خلال 15 دقيقة.`,
+    html: layout(
+      "Confirm branch deactivation | تأكيد تعطيل الفرع",
+      `<p>Use this code to deactivate the <strong>${escapeHtml(branchEn)}</strong> branch of <strong>${escapeHtml(treeEn)}</strong>:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${safeCode}</p><p>It expires in 15 minutes.</p><div dir="rtl"><p>استخدم هذا الرمز لتأكيد تعطيل فرع <strong>${escapeHtml(branchAr)}</strong> في شجرة <strong>${escapeHtml(treeAr)}</strong>:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${safeCode}</p><p>تنتهي صلاحية الرمز خلال 15 دقيقة.</p></div>`,
+    ),
+  };
+}
+
 export function ownershipTransferRequestedMail(
   to: string,
   treeName: string,

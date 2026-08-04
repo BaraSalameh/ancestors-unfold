@@ -1,37 +1,29 @@
 import { useI18n } from "@/shared/i18n";
 import type { DashboardData, DashboardInsights } from "../pages/dashboard-types";
-import type { DashboardInvitationsController } from "../client/use-dashboard-invitations";
 import type { DashboardTreeControls } from "../client/use-dashboard-tree-controls";
 import type { OwnershipTransferController } from "../client/use-ownership-transfer";
-import type { ContributorRemovalController } from "../client/use-contributor-removal";
 import type { ContributorAccountDeletionController } from "../client/use-contributor-account-deletion";
-import { InviteDialog } from "./dashboard-invite-dialog";
 import { OwnershipTransferDialog } from "./ownership-transfer-dialog";
-import { ContributorRemovalDialog } from "./contributor-removal-dialog";
 import { TreeRenameDialog } from "./tree-rename-dialog";
 import { ContributorAccountDeletionDialog } from "./contributor-account-deletion-dialog";
 import { DashboardHeader } from "./dashboard-header";
-import { AuthenticityCard, BranchesCard, InvitationsCard } from "./dashboard-cards";
+import { AuthenticityCard, BranchesCard } from "./dashboard-cards";
 import { OwnershipTransferPrompt, OwnershipTransferStatus } from "./dashboard-components";
 import { NeedsAttentionCard, RecentActivityCard } from "./dashboard-work-cards";
 
 interface DashboardLoadedProps {
   data: DashboardData;
   insights: DashboardInsights;
-  invitation: DashboardInvitationsController;
   treeControls: DashboardTreeControls;
   transfer: OwnershipTransferController;
-  removal: ContributorRemovalController;
   accountDeletion: ContributorAccountDeletionController;
 }
 
 export function DashboardLoaded({
   data,
   insights,
-  invitation,
   treeControls,
   transfer,
-  removal,
   accountDeletion,
 }: DashboardLoadedProps) {
   const { lang } = useI18n();
@@ -47,9 +39,7 @@ export function DashboardLoaded({
         insights={insights}
         treeControls={treeControls}
         accountDeletion={accountDeletion}
-        invitation={invitation}
         transfer={transfer}
-        removal={removal}
         ownershipTransfer={ownershipTransfer}
       />
       <section className="mx-auto grid max-w-7xl gap-5 px-4 py-8 sm:px-6 lg:grid-cols-3">
@@ -77,29 +67,20 @@ export function DashboardLoaded({
           )}
           <NeedsAttentionCard data={data} insights={insights} />
           <BranchesCard data={data} insights={insights} local={local} />
-          {data.tree.role === "owner" &&
-            data.invitations.some((item) => item.status === "pending") && (
-              <InvitationsCard data={data} controller={invitation} local={local} />
-            )}
         </div>
         <div className="space-y-5">
           <RecentActivityCard data={data} />
           <AuthenticityCard data={data} local={local} />
         </div>
       </section>
-      <InviteDialog
-        open={invitation.inviteOpen}
-        onOpenChange={invitation.setInviteOpen}
-        treeId={data.tree.id}
-        onSent={invitation.sent}
-      />
       <OwnershipTransferDialog
         controller={transfer}
         transfer={ownershipTransfer}
-        branches={removal.removableBranches}
+        branches={data.branches.filter(
+          (branch) => branch.status === "active" && Boolean(branch.contributor_user_id),
+        )}
         local={local}
       />
-      <ContributorRemovalDialog controller={removal} local={local} />
       <TreeRenameDialog controller={treeControls} />
       <ContributorAccountDeletionDialog controller={accountDeletion} />
     </main>

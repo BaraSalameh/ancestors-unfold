@@ -54,7 +54,7 @@ describe("atomic father and spouse creation", () => {
             name_en: "New wife",
             name_ar: "",
             gender: "female",
-            citizen_status: "resident",
+            citizen_status: "non_resident",
           },
           divorced: true,
         },
@@ -73,6 +73,9 @@ describe("atomic father and spouse creation", () => {
     expect(father.spouse_ids?.[0]).toBe("mother");
     expect(father.divorced_from).toHaveLength(1);
     expect(state.find(({ id }) => id === "mother")?.spouse_id).toBe(father.id);
+    expect(state.find(({ name_en }) => name_en === "New wife")?.citizen_status).toBe(
+      "non_resident",
+    );
     expect(state.find(({ id }) => id === father.divorced_from?.[0])?.divorced_from).toContain(
       father.id,
     );

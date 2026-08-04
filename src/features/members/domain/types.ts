@@ -52,6 +52,7 @@ export interface SubFamily {
   name_ar: string;
   linked_male_id?: string;
   parent_subfamily_id?: string;
+  status?: "active" | "inactive";
   notes?: string;
   attachments?: SubFamilyAttachment[];
   color?: string;

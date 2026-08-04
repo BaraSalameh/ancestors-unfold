@@ -50,7 +50,6 @@ function addFatherWithSpouses(
           ...staged.input,
           id: wifeId,
           gender: "female",
-          citizen_status: "resident",
           spouse_id: fatherId,
           created_at: now,
           updated_at: now,

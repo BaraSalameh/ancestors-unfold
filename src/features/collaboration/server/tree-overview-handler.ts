@@ -44,11 +44,18 @@ export async function handleTreeOverviewRequest(
       [branches[1], session.user_id],
     );
     return client.query(
-      `SELECT b.id,b.name_en,b.name_ar,b.linked_male_id root_family_member_id,b.status,
+      `SELECT b.id,b.name_en,b.name_ar,b.linked_male_id root_family_member_id,
+        b.parent_subfamily_id parent_branch_id,b.position_label,b.status,
+        COALESCE(m.member_ids,'[]'::json) member_ids,COALESCE(m.member_count,0)::int member_count,
         g.user_id contributor_user_id,u.full_name_en contributor_name_en,u.full_name_ar contributor_name_ar
        FROM app.subfamilies b LEFT JOIN app.branch_grants g
         ON g.tree_id=b.tree_id AND g.root_subfamily_id=b.id AND g.role='branch_editor' AND g.revoked_at IS NULL
        LEFT JOIN app.users u ON u.id=g.user_id
+       LEFT JOIN LATERAL (
+         SELECT json_agg(fm.id ORDER BY fm.name_en,fm.id) member_ids,count(*) member_count
+         FROM app.family_members fm
+         WHERE fm.tree_id=b.tree_id AND fm.subfamily_id=b.id AND fm.deleted_at IS NULL
+       ) m ON true
        WHERE b.tree_id=$1 AND b.deleted_at IS NULL
          AND ($2::boolean OR g.user_id=$3)
        ORDER BY b.created_at`,

@@ -1,3 +1,3 @@
 export { SubfamilyPanel } from "./components/subfamily-panel";
+export { SubfamilyAttachments } from "./components/subfamily-attachments";
 export { contributorSubfamilyAccess } from "./domain/access";
-export { SubfamiliesPage } from "./pages/subfamilies-page";

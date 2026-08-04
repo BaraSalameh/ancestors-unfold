@@ -1,16 +1,14 @@
-import { AlertTriangle, RotateCw, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { useI18n } from "@/shared/i18n";
 import type { DashboardData, DashboardInsights } from "../pages/dashboard-types";
-import type { DashboardInvitationsController } from "../client/use-dashboard-invitations";
 import { AuthenticityRoadmap } from "./authenticity-roadmap";
 import { DashboardFact } from "./dashboard-components";
 import { canEditDashboardTree, dashboardBranches } from "../pages/dashboard-projections";
 
-type InvitationController = DashboardInvitationsController;
 type Local = (en?: string | null, ar?: string | null) => string;
 
 export function BranchesCard({
@@ -103,66 +101,6 @@ export function BranchesCard({
             </div>
           );
         })}
-      </CardContent>
-    </Card>
-  );
-}
-
-export function InvitationsCard({
-  data,
-  controller,
-  local,
-}: {
-  data: DashboardData;
-  controller: InvitationController;
-  local: Local;
-}) {
-  const { t } = useI18n();
-  const pending = data.invitations.filter((item) => item.status === "pending");
-  return (
-    <Card id="pending-invitations" className="scroll-mt-20">
-      <CardHeader>
-        <CardTitle>{t("pending_invitations")}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {pending.length === 0 && (
-          <p className="text-sm text-muted-foreground">{t("no_pending_invitations")}</p>
-        )}
-        {pending.map((item) => (
-          <div key={item.id} className="rounded-lg border p-4">
-            <div className="flex justify-between gap-3">
-              <div>
-                <p className="font-medium">{local(item.invited_name_en, item.invited_name_ar)}</p>
-                <p className="text-sm text-muted-foreground" dir="ltr">
-                  {item.invited_email}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <Badge variant="outline">{item.status}</Badge>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  loading={controller.invitationAction === `${item.id}:resend`}
-                  disabled={Boolean(controller.invitationAction)}
-                  onClick={() => void controller.act(item.id, "resend")}
-                >
-                  <RotateCw className="me-1 h-3.5 w-3.5" />
-                  {t("resend_invitation")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  loading={controller.invitationAction === `${item.id}:cancel`}
-                  disabled={Boolean(controller.invitationAction)}
-                  onClick={() => void controller.act(item.id, "cancel")}
-                >
-                  <X className="me-1 h-3.5 w-3.5" />
-                  {t("cancel_invitation")}
-                </Button>
-              </div>
-            </div>
-          </div>
-        ))}
       </CardContent>
     </Card>
   );

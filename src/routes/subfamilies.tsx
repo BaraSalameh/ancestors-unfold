@@ -1,9 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { SubfamiliesPage } from "@/features/subfamilies";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { z } from "zod";
 
 export const Route = createFileRoute("/subfamilies")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    treeId: typeof search.treeId === "string" ? search.treeId : undefined,
+  validateSearch: z.object({
+    treeId: z.string().uuid().optional().catch(undefined),
+    branchId: z.string().uuid().optional().catch(undefined),
   }),
-  component: SubfamiliesPage,
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: "/branches", search });
+  },
 });

@@ -32,7 +32,6 @@ const quality: QualityReportData = {
   missing_name_en: 0,
   missing_name_ar: 1,
   missing_birth_date: 2,
-  missing_citizenship: 0,
   missing_branch: 3,
   missing_image: 4,
   unknown_placeholders: 0,

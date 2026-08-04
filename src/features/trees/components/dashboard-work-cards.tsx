@@ -45,6 +45,15 @@ function AttentionIcon({ severity }: Pick<AttentionItem, "severity">) {
 
 function AttentionAction({ item, data }: { item: AttentionItem; data: DashboardData }) {
   const { t } = useI18n();
+  if (item.id === "pending_invitations" || item.id === "inactive_branches") {
+    return (
+      <Button asChild variant="ghost" size="sm">
+        <Link to="/branches" search={{ treeId: data.tree.id }}>
+          {t("review")}
+        </Link>
+      </Button>
+    );
+  }
   if (item.analysis) {
     const branchId = data.tree.role === "contributor" ? data.tree.assigned_branch_id : undefined;
     return (

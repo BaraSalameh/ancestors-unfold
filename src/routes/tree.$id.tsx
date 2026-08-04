@@ -3,6 +3,7 @@ import { chronologicalPeriodOrDefault, TreePage } from "@/features/trees";
 
 interface TreeSearch {
   mode: "edit" | "view" | "preview";
+  branchId?: string;
   preview?: "lineage" | "chronological";
   period?: number;
 }
@@ -22,9 +23,17 @@ export const Route = createFileRoute("/tree/$id")({
           ? ("lineage" as const)
           : undefined;
     const period = chronologicalPeriodOrDefault(search.period);
+    const branchId =
+      typeof search.branchId === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        search.branchId,
+      )
+        ? search.branchId
+        : undefined;
     return {
       mode,
       period,
+      ...(branchId ? { branchId } : {}),
       ...(preview ? { preview } : {}),
     };
   },

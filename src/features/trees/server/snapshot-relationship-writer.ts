@@ -36,7 +36,7 @@ export async function writeSnapshotRelationships(
   const pairs = snapshotSpousePairs(editablePayloadMembers, map);
   await writeSpouseRelationships(client, treeId, userId, pairs);
   await linkSnapshotSubfamilies(client, snapshot, isBranchEditor, map, sfMap);
-  await writeExternalChildren(client, treeId, editablePayloadMembers, map, sfMap);
+  await writeExternalChildren(client, treeId, editablePayloadMembers, map);
 }
 
 async function clearSnapshotRelationships(
@@ -159,14 +159,10 @@ async function linkSnapshotSubfamilies(
   sfMap: Map<string, string>,
 ): Promise<void> {
   for (const sf of isBranchEditor ? [] : (snapshot.subfamilies ?? []))
-    await client.query(
-      "UPDATE app.subfamilies SET parent_subfamily_id=$1,linked_male_id=$2 WHERE id=$3",
-      [
-        sf.parent_subfamily_id ? (sfMap.get(sf.parent_subfamily_id) ?? null) : null,
-        sf.linked_male_id ? (map.get(sf.linked_male_id) ?? null) : null,
-        sfMap.get(sf.id),
-      ],
-    );
+    await client.query("UPDATE app.subfamilies SET linked_male_id=$1 WHERE id=$2", [
+      sf.linked_male_id ? (map.get(sf.linked_male_id) ?? null) : null,
+      sfMap.get(sf.id),
+    ]);
 }
 
 async function writeExternalChildren(
@@ -174,14 +170,8 @@ async function writeExternalChildren(
   treeId: string,
   members: SnapshotMember[],
   map: Map<string, string>,
-  sfMap: Map<string, string>,
 ): Promise<void> {
   for (const m of members) {
-    if (m.subfamily_id && sfMap.get(m.subfamily_id))
-      await client.query("UPDATE app.family_members SET subfamily_id=$1 WHERE id=$2", [
-        sfMap.get(m.subfamily_id),
-        map.get(m.id),
-      ]);
     for (const x of m.external_children ?? [])
       await client.query(
         `INSERT INTO app.external_children(tree_id,mother_id,name,other_parent_name,birth_year,notes)

@@ -176,7 +176,7 @@ export function TreeLoadingIndicator({ label }: { label: string }) {
   );
 }
 
-export function SubfamiliesPageSkeleton({ label }: { label: string }) {
+function SubfamiliesPageSkeleton({ label }: { label: string }) {
   return (
     <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-6xl flex-col gap-4 px-4 py-6">
       <LoadingStatus label={label} />

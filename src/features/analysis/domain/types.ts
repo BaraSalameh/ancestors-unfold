@@ -115,7 +115,6 @@ export type QualityReportData = {
   missing_name_en: number;
   missing_name_ar: number;
   missing_birth_date: number;
-  missing_citizenship: number;
   missing_branch: number;
   missing_image: number;
   unknown_placeholders: number;

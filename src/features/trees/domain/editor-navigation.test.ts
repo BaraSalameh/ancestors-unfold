@@ -7,6 +7,7 @@ describe("tree editor navigation", () => {
     ["/edit/member-id", {}],
     ["/member/member-id", {}],
     ["/subfamilies", {}],
+    ["/branches", {}],
     ["/tree/tree-id", { mode: "edit" }],
     ["/tree/tree-id/add", {}],
   ])("keeps %s inside the active draft workspace", (pathname, search) => {

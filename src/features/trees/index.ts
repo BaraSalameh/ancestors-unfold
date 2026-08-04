@@ -21,5 +21,6 @@ export {
 export { routeParentEdges } from "./domain/route-edges";
 export { computeWivesByHusband, wifeColorFor } from "./domain/wife-colors";
 export { CollaborationDashboard } from "./pages/collaboration-dashboard";
+export { BranchesPage } from "./pages/branches-page";
 export { TreePage } from "./pages/tree-page";
 export { FamilyTree, SubfamilyPanel } from "./ui/family-tree";

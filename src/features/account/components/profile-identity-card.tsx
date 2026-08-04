@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/features/auth";
@@ -38,6 +39,7 @@ const profileUnchanged = (
 export function ProfileIdentityCard() {
   const { user, updateProfile } = useAuth();
   const { t } = useI18n();
+  const navigate = useNavigate();
   const initial = profileDraft(user);
   const [fullNameEn, setFullNameEn] = useState(initial.fullNameEn);
   const [fullNameAr, setFullNameAr] = useState(initial.fullNameAr);
@@ -57,9 +59,13 @@ export function ProfileIdentityCard() {
     if (busy || !fullNameEn.trim() || !fullNameAr.trim() || !gender) return;
     setBusy(true);
     setError(null);
+    const isCompletingProfile = user?.gender === null;
     try {
       await updateProfile(fullNameEn.trim(), fullNameAr.trim(), gender);
       toast.success(t("profile_name_updated"));
+      if (isCompletingProfile) {
+        await navigate({ to: "/", replace: true });
+      }
     } catch (caught) {
       setError(profileErrorMessage(caught, t));
     } finally {

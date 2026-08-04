@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import {
   Copy,
-  MailPlus,
+  GitBranch,
   MoreHorizontal,
   Pencil,
   ShieldCheck,
@@ -25,9 +25,7 @@ import { canUseOwnerTreeControls } from "../pages/dashboard-owner-controls";
 import type { CurrentTree } from "../pages/dashboard-types";
 import type { DashboardTreeControls } from "../client/use-dashboard-tree-controls";
 import type { ContributorAccountDeletionController } from "../client/use-contributor-account-deletion";
-import type { DashboardInvitationsController } from "../client/use-dashboard-invitations";
 import type { OwnershipTransferController } from "../client/use-ownership-transfer";
-import type { ContributorRemovalController } from "../client/use-contributor-removal";
 import type { OwnershipTransfer } from "../pages/dashboard-types";
 import { DashboardActionTooltip } from "./dashboard-components";
 import { canEditDashboardTree } from "../pages/dashboard-projections";
@@ -36,9 +34,7 @@ type HeaderActionsProps = {
   tree: CurrentTree;
   treeControls: DashboardTreeControls;
   accountDeletion: ContributorAccountDeletionController;
-  invitation: DashboardInvitationsController;
   transfer: OwnershipTransferController;
-  removal: ContributorRemovalController;
   ownershipTransfer: OwnershipTransfer | null;
 };
 
@@ -55,15 +51,11 @@ function TreeActionsTrigger() {
 }
 
 function OwnerTreeActions({
+  tree,
   treeControls,
-  invitation,
   transfer,
-  removal,
   ownershipTransfer,
-}: Pick<
-  HeaderActionsProps,
-  "treeControls" | "invitation" | "transfer" | "removal" | "ownershipTransfer"
->) {
+}: Pick<HeaderActionsProps, "tree" | "treeControls" | "transfer" | "ownershipTransfer">) {
   const { t } = useI18n();
   return (
     <DropdownMenu>
@@ -71,20 +63,15 @@ function OwnerTreeActions({
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel>{t("tree_actions")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/branches" search={{ treeId: tree.id }}>
+            <GitBranch aria-hidden="true" />
+            {t("manage_branches")}
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={treeControls.openRename}>
           <TextCursorInput aria-hidden="true" />
           {t("rename")}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => invitation.setInviteOpen(true)}>
-          <MailPlus aria-hidden="true" />
-          {t("invite_contributor")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={removal.removableBranches.length === 0}
-          onSelect={() => removal.setOpen(true)}
-        >
-          <Trash2 aria-hidden="true" />
-          {t("remove_contributor")}
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={Boolean(ownershipTransfer?.verified)}
@@ -108,14 +95,22 @@ function OwnerTreeActions({
 }
 
 function ContributorTreeActions({
+  tree,
   treeControls,
   accountDeletion,
-}: Pick<HeaderActionsProps, "treeControls" | "accountDeletion">) {
+}: Pick<HeaderActionsProps, "tree" | "treeControls" | "accountDeletion">) {
   const { t } = useI18n();
   return (
     <DropdownMenu>
       <TreeActionsTrigger />
       <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuItem asChild>
+          <Link to="/branches" search={{ treeId: tree.id }}>
+            <GitBranch aria-hidden="true" />
+            {t("branches")}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void treeControls.copyPreview()}>
           <Copy aria-hidden="true" />
           {t("copy_preview_link")}
@@ -183,9 +178,7 @@ export function DashboardHeaderActions({
   tree,
   treeControls,
   accountDeletion,
-  invitation,
   transfer,
-  removal,
   ownershipTransfer,
 }: HeaderActionsProps) {
   const { t } = useI18n();
@@ -203,15 +196,18 @@ export function DashboardHeaderActions({
         )}
         {canUseOwnerTreeControls(tree.role) && (
           <OwnerTreeActions
+            tree={tree}
             treeControls={treeControls}
-            invitation={invitation}
             transfer={transfer}
-            removal={removal}
             ownershipTransfer={ownershipTransfer}
           />
         )}
         {tree.role === "contributor" && (
-          <ContributorTreeActions treeControls={treeControls} accountDeletion={accountDeletion} />
+          <ContributorTreeActions
+            tree={tree}
+            treeControls={treeControls}
+            accountDeletion={accountDeletion}
+          />
         )}
       </div>
     </TooltipProvider>

@@ -18,12 +18,10 @@ export function Header() {
   const persistence = useFamilyPersistence();
   const isTreeEdit = location.pathname.startsWith("/tree/") && location.search.mode === "edit";
   const isTreePreview = isPublicPreviewRoute(location.pathname, location.search);
-  const activeTreeId = location.pathname.match(/^\/tree\/([^/]+)/)?.[1];
-  const isAuthPage = location.pathname === "/auth";
   const isTreeWorkspace =
     isTreeEdit ||
     /^\/(edit|member|add)\//.test(location.pathname) ||
-    location.pathname === "/subfamilies";
+    location.pathname === "/branches";
 
   useTreeNavigationBlocker(isTreeWorkspace, persistence.dirty, t("unsaved_changes_warning"));
 
@@ -34,21 +32,6 @@ export function Header() {
           <TreePine className="h-5 w-5 text-primary" />
           <span className="hidden sm:inline">{t("app_name")}</span>
         </Link>
-
-        {!isTreePreview && !isAuthPage && (
-          <nav className="ms-2 hidden items-center gap-1 md:flex">
-            {isTreeEdit && (
-              <Link
-                to="/subfamilies"
-                search={{ treeId: activeTreeId }}
-                className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                activeProps={{ className: "bg-accent text-accent-foreground" }}
-              >
-                {t("subfamilies_nav")}
-              </Link>
-            )}
-          </nav>
-        )}
 
         <div className="ms-auto flex items-center gap-1">
           {isTreeWorkspace && familyStore.canEditActiveTree() && (

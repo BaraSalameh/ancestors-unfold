@@ -4,11 +4,15 @@ import { ApiClientError, apiRequest } from "@/shared/api/client";
 export interface TreeSnapshot {
   version: number;
   access_scope: "tree" | "branch" | "preview";
+  assigned_branch_id?: string;
   members: FamilyMember[];
   subfamilies: SubFamily[];
 }
 
-export interface SaveTreeSnapshot extends Omit<TreeSnapshot, "version" | "access_scope"> {
+export interface SaveTreeSnapshot extends Omit<
+  TreeSnapshot,
+  "version" | "access_scope" | "assigned_branch_id"
+> {
   batchId: string;
   expectedVersion: number;
 }
