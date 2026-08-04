@@ -334,3 +334,66 @@ export const schemas = {
 };
 
 export type SnapshotInput = z.infer<(typeof schemas)["snapshot"]>;
+
+export const familyCsvPreviewSchema = z
+  .object({
+    csv: z
+      .string()
+      .min(1)
+      .max(10 * 1024 * 1024),
+  })
+  .strict();
+
+const sourceIdMappingSchema = z
+  .object({ sourceId: z.string().min(1).max(200), targetId: z.string().uuid() })
+  .strict();
+
+export const familyCsvApplySchema = schemas.snapshot
+  .extend({
+    batchId: z.string().uuid(),
+    sourceMemberIds: z.array(sourceIdMappingSchema).max(10_000),
+    sourceBranchIds: z.array(sourceIdMappingSchema).max(2_000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const uuid = z.string().uuid();
+    const check = (candidate: string | undefined, path: Array<string | number>) => {
+      if (candidate && !uuid.safeParse(candidate).success)
+        context.addIssue({ code: z.ZodIssueCode.custom, message: "Expected UUID", path });
+    };
+    value.members.forEach((member, index) => {
+      check(member.id, ["members", index, "id"]);
+      check(member.father_id, ["members", index, "father_id"]);
+      check(member.mother_id, ["members", index, "mother_id"]);
+      check(member.spouse_id, ["members", index, "spouse_id"]);
+      check(member.subfamily_id, ["members", index, "subfamily_id"]);
+      member.spouse_ids?.forEach((id, spouseIndex) =>
+        check(id, ["members", index, "spouse_ids", spouseIndex]),
+      );
+      member.divorced_from?.forEach((id, spouseIndex) =>
+        check(id, ["members", index, "divorced_from", spouseIndex]),
+      );
+    });
+    value.subfamilies.forEach((branch, index) => {
+      check(branch.id, ["subfamilies", index, "id"]);
+      check(branch.linked_male_id, ["subfamilies", index, "linked_male_id"]);
+      check(branch.parent_subfamily_id, ["subfamilies", index, "parent_subfamily_id"]);
+    });
+    for (const [field, mappings] of [
+      ["sourceMemberIds", value.sourceMemberIds],
+      ["sourceBranchIds", value.sourceBranchIds],
+    ] as const) {
+      const sources = new Set<string>();
+      const targets = new Set<string>();
+      mappings.forEach((mapping, index) => {
+        if (sources.has(mapping.sourceId) || targets.has(mapping.targetId))
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Import mappings must be one-to-one",
+            path: [field, index],
+          });
+        sources.add(mapping.sourceId);
+        targets.add(mapping.targetId);
+      });
+    }
+  });

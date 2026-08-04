@@ -110,6 +110,7 @@ export function removeSpouseAttachment(
   husbandId: string,
   wifeId: string,
   updatedAt: string,
+  preserveWife = false,
 ): FamilyMember[] {
   const husband = members.find((member) => member.id === husbandId);
   const wife = members.find((member) => member.id === wifeId);
@@ -140,7 +141,7 @@ export function removeSpouseAttachment(
     return member;
   });
 
-  return isIndependentChild ? detached : removeMember(detached, wifeId);
+  return isIndependentChild || preserveWife ? detached : removeMember(detached, wifeId);
 }
 
 export function isDescendant(

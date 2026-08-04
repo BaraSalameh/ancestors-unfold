@@ -21,12 +21,16 @@ export async function writeSnapshotMembers(
   existingMemberIds: Set<string>,
   allowedMembers: Set<string>,
   editableIds: Set<string>,
+  sourceMemberIds: ReadonlyMap<string, string> = new Map(),
+  sourceBranchIds: ReadonlyMap<string, string> = new Map(),
 ): Promise<SnapshotEntityMaps> {
   const { memberIds, subfamilyIds } = await prepareSnapshotMembers(
     client,
     treeId,
+    batchId,
     snapshot,
     isBranchEditor,
+    sourceBranchIds,
   );
   await upsertSnapshotMembers(
     client,
@@ -39,6 +43,7 @@ export async function writeSnapshotMembers(
     existingMemberIds,
     memberIds,
     subfamilyIds,
+    sourceMemberIds,
   );
   if (isBranchEditor)
     await attachNewBranchMembers(
@@ -53,11 +58,15 @@ export async function writeSnapshotMembers(
   return { memberIds, subfamilyIds };
 }
 
+// Snapshot preparation branches across full-tree and scoped editor persistence rules.
+// eslint-disable-next-line complexity
 async function prepareSnapshotMembers(
   client: PoolClient,
   treeId: string,
+  batchId: string,
   snapshot: SnapshotInput,
   isBranchEditor: boolean,
+  sourceBranchIds: ReadonlyMap<string, string>,
 ): Promise<SnapshotEntityMaps> {
   const memberIds = new Map<string, string>(),
     subfamilyIds = new Map<string, string>();
@@ -86,6 +95,11 @@ async function prepareSnapshotMembers(
         ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,notes=excluded.notes,color=excluded.color,deleted_at=NULL`,
       [id, treeId, sf.name_en, sf.name_ar || null, sf.notes || null, sf.color || null],
     );
+    await client.query(
+      `INSERT INTO app.import_id_map(import_batch_id,entity_type,source_id,target_id,status)
+       VALUES($1,'subfamily',$2,$3,'mapped') ON CONFLICT DO NOTHING`,
+      [batchId, sourceBranchIds.get(sf.id) ?? sf.id, id],
+    );
   }
   return { memberIds, subfamilyIds };
 }
@@ -101,6 +115,7 @@ async function upsertSnapshotMembers(
   existingMemberIds: Set<string>,
   memberIds: Map<string, string>,
   subfamilyIds: Map<string, string>,
+  sourceMemberIds: ReadonlyMap<string, string>,
 ): Promise<void> {
   for (const m of editablePayloadMembers) {
     const id = /^[0-9a-f]{8}-/.test(m.id) ? m.id : randomUUID();
@@ -137,7 +152,7 @@ async function upsertSnapshotMembers(
     );
     await client.query(
       `INSERT INTO app.import_id_map(import_batch_id,entity_type,source_id,target_id,status) VALUES($1,'member',$2,$3,'mapped') ON CONFLICT DO NOTHING`,
-      [batchId, m.id, id],
+      [batchId, sourceMemberIds.get(m.id) ?? m.id, id],
     );
   }
 }
