@@ -82,6 +82,11 @@ export const analysisReportSchema = z
   })
   .strict();
 
+export const analysisExcludeWivesQuerySchema = z
+  .enum(["true", "false"])
+  .nullable()
+  .transform((value) => value === "true");
+
 export const analysisExportSchema = analysisQueryDefinitionSchema.extend({
   format: z.enum(["csv", "json"]),
 });

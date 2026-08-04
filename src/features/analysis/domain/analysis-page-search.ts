@@ -11,6 +11,10 @@ export const analysisTabs = [
 ] as const;
 export type AnalysisTab = (typeof analysisTabs)[number];
 
+export function analysisExcludeWivesDisabled(tab: AnalysisTab) {
+  return tab === "relationships" || tab === "quality";
+}
+
 const analysisMissingFields = [
   "name_en",
   "name_ar",

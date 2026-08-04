@@ -12,6 +12,7 @@ const qualitySchema = z.object({
   missing_image: z.number(),
   unknown_placeholders: z.number(),
   no_parents_recorded: z.number(),
+  missing_parent: z.number(),
   possible_duplicate_groups: z.number(),
   contradictory_dates: z.number(),
   graph_cycles: z.number(),

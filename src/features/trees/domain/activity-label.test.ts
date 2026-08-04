@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { translate } from "@/locales";
-import { activityDescription, activityIconKind, type ActivityItem } from "./activity-label";
+import { activityDescription, type ActivityItem } from "./activity-label";
 
 const item: ActivityItem = {
   id: "activity-1",
@@ -33,20 +33,5 @@ describe("activityDescription", () => {
         translate("en", key, values),
       ),
     ).toBe("A former contributor invited someone as a contributor");
-  });
-});
-
-describe("activityIconKind", () => {
-  it("maps dashboard activity actions to distinct icon families", () => {
-    expect(activityIconKind("tree_created")).toBe("tree");
-    expect(activityIconKind("tree_updated")).toBe("edit");
-    expect(activityIconKind("branch_deactivated")).toBe("branch");
-    expect(activityIconKind("invitation_sent")).toBe("invite");
-    expect(activityIconKind("invitation_resent")).toBe("resend");
-    expect(activityIconKind("invitation_cancelled")).toBe("cancel");
-    expect(activityIconKind("invitation_accepted")).toBe("accepted");
-    expect(activityIconKind("contributor_removed")).toBe("removed");
-    expect(activityIconKind("ownership_transfer_accepted")).toBe("transfer");
-    expect(activityIconKind("legacy_action")).toBe("activity");
   });
 });

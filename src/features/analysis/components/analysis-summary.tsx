@@ -1,7 +1,8 @@
-import { CalendarDays, HeartPulse, UserRoundCheck, UsersRound } from "lucide-react";
+import { CalendarDays, GitBranch, HeartPulse, UserRoundCheck, UsersRound } from "lucide-react";
 import { useI18n } from "@/shared/i18n";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
 import type { SummaryData } from "../domain/types";
+import { overviewAgeBands } from "../domain/summary-projection";
 import { AnalysisBars } from "./analysis-bars";
 
 function SummaryStat({
@@ -26,10 +27,54 @@ function SummaryStat({
   );
 }
 
+function DeathDecadeBars({ items }: { items: SummaryData["death_decades"] }) {
+  const { t } = useI18n();
+  return (
+    <AnalysisBars
+      items={items}
+      label={(key) => (key === "unknown" ? t("analysis_unknown") : key)}
+    />
+  );
+}
+
+function OverviewHeadline({ summary }: { summary: SummaryData }) {
+  const { t } = useI18n();
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <SummaryStat
+        label={t("analysis_total_members")}
+        value={summary.total}
+        icon={<UsersRound className="h-5 w-5" />}
+      />
+      <SummaryStat
+        label={t("living")}
+        value={summary.living}
+        icon={<HeartPulse className="h-5 w-5" />}
+      />
+      <SummaryStat
+        label={t("deceased")}
+        value={summary.deceased}
+        icon={<CalendarDays className="h-5 w-5" />}
+      />
+      <SummaryStat
+        label={t("analysis_adults")}
+        value={summary.living_adults}
+        icon={<UserRoundCheck className="h-5 w-5" />}
+      />
+      <SummaryStat
+        label={t("analysis_generation_depth")}
+        value={summary.maximum_generation_depth}
+        icon={<GitBranch className="h-5 w-5" />}
+      />
+    </div>
+  );
+}
+
 export function AnalysisSummary({ summary }: { summary: SummaryData }) {
   const { t, lang } = useI18n();
   const ageLabel = (key: string) => {
     if (key === "unknown") return t("analysis_unknown");
+    if (key === "60_plus") return "60+";
     const start = Number(key);
     return Number.isFinite(start) ? `${start}–${start + 9}` : key;
   };
@@ -39,28 +84,7 @@ export function AnalysisSummary({ summary }: { summary: SummaryData }) {
       : "—";
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryStat
-          label={t("analysis_total_members")}
-          value={summary.total}
-          icon={<UsersRound className="h-5 w-5" />}
-        />
-        <SummaryStat
-          label={t("living")}
-          value={summary.living}
-          icon={<HeartPulse className="h-5 w-5" />}
-        />
-        <SummaryStat
-          label={t("deceased")}
-          value={summary.deceased}
-          icon={<CalendarDays className="h-5 w-5" />}
-        />
-        <SummaryStat
-          label={t("analysis_adults")}
-          value={summary.adults}
-          icon={<UserRoundCheck className="h-5 w-5" />}
-        />
-      </div>
+      <OverviewHeadline summary={summary} />
       <div className="grid gap-5 lg:grid-cols-3">
         <Card>
           <CardHeader>
@@ -90,7 +114,7 @@ export function AnalysisSummary({ summary }: { summary: SummaryData }) {
             <CardDescription>{t("analysis_age_bands_description")}</CardDescription>
           </CardHeader>
           <CardContent>
-            <AnalysisBars items={summary.age_bands} label={ageLabel} />
+            <AnalysisBars items={overviewAgeBands(summary.age_bands)} label={ageLabel} />
           </CardContent>
         </Card>
         <Card>
@@ -138,7 +162,7 @@ export function AnalysisSummary({ summary }: { summary: SummaryData }) {
             <CardDescription>{t("analysis_deaths_by_decade_description")}</CardDescription>
           </CardHeader>
           <CardContent>
-            <AnalysisBars items={summary.death_decades} label={(key) => key} />
+            <DeathDecadeBars items={summary.death_decades} />
           </CardContent>
         </Card>
       </div>

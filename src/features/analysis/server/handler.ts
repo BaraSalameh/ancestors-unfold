@@ -3,6 +3,7 @@ import { parseBody, ApiError } from "@/server/security";
 import { jsonResponse } from "@/shared/http/response";
 import { serverConfig } from "@/shared/server/config";
 import {
+  analysisExcludeWivesQuerySchema,
   analysisExportSchema,
   analysisReportSchema,
   memberPageSchema,
@@ -34,6 +35,12 @@ function requestedBranch(url: URL) {
   return branchId;
 }
 
+function requestedExcludeWives(url: URL) {
+  const parsed = analysisExcludeWivesQuerySchema.safeParse(url.searchParams.get("excludeWives"));
+  if (!parsed.success) throw new ApiError("INVALID_INPUT", 400);
+  return parsed.data;
+}
+
 export async function handleAnalysisRequest(
   request: Request,
   url: URL,
@@ -52,7 +59,17 @@ export async function handleAnalysisRequest(
   const [, treeId, action = "summary"] = route;
   if (!uuid.test(treeId)) throw new ApiError("INVALID_INPUT", 400);
   const branchId = requestedBranch(url);
-  return handleTreeAnalysisRequest(request, session, requestId, treeId, action, branchId);
+  const excludeWives =
+    action === "summary" || action === "query" ? requestedExcludeWives(url) : false;
+  return handleTreeAnalysisRequest(
+    request,
+    session,
+    requestId,
+    treeId,
+    action,
+    branchId,
+    excludeWives,
+  );
 }
 
 async function handleSavedViewRequest(
@@ -96,14 +113,17 @@ async function handleTreeAnalysisRequest(
   treeId: string,
   action: string,
   branchId: string | null,
+  excludeWives: boolean,
 ): Promise<Response | undefined> {
   if (action === "catalog" && request.method === "GET")
     return json(await analysisCatalog(session, requestId, treeId));
   if (action === "summary" && request.method === "GET")
-    return json(await analysisSummary(session, requestId, treeId, branchId));
+    return json(await analysisSummary(session, requestId, treeId, branchId, excludeWives));
   if (action === "query" && request.method === "POST") {
     const input = await parseBody(request, analysisReportSchema);
-    return json(await analysisReport(session, requestId, treeId, branchId, input.report));
+    return json(
+      await analysisReport(session, requestId, treeId, branchId, input.report, excludeWives),
+    );
   }
   if (action === "members" && request.method === "POST") {
     const input = await parseBody(request, memberPageSchema);

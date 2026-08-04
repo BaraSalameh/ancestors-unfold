@@ -43,6 +43,7 @@ const quality: DashboardQualityInsights = {
   missing_image: 10,
   unknown_placeholders: 0,
   no_parents_recorded: 0,
+  missing_parent: 0,
   possible_duplicate_groups: 2,
   contradictory_dates: 1,
   graph_cycles: 1,

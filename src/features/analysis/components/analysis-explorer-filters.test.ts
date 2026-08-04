@@ -36,24 +36,22 @@ describe("analysis explorer filters", () => {
     direction: "asc",
   };
 
-  it("renders a disabled clear action when filters are empty", () => {
+  it("renders a disabled clear action without duplicating the shared wife control", () => {
     const markup = renderFilters("en", definition);
 
     expect(markup).toContain("Clear filters");
-    expect(markup).toContain("Exclude wives");
-    expect(markup).toContain('id="analysis-exclude-wives"');
+    expect(markup).not.toContain("Exclude wives");
+    expect(markup).not.toContain('id="analysis-exclude-wives"');
     expect(markup).toContain('disabled=""');
   });
 
-  it("renders checked wife exclusion and Arabic labels", () => {
+  it("treats shared wife exclusion as active while leaving its control outside the panel", () => {
     const markup = renderFilters("ar", {
       ...definition,
       filters: { excludeWives: true },
     });
 
-    expect(markup).toContain("مسح عوامل التصفية");
-    expect(markup).toContain("استبعاد الزوجات");
-    expect(markup).toContain('checked=""');
+    expect(markup).not.toContain('id="analysis-exclude-wives"');
     expect(markup).not.toContain('disabled=""');
   });
 });

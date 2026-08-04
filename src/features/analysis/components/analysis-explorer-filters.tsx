@@ -45,33 +45,6 @@ function FilterHeader({
   );
 }
 
-function ExcludeWivesFilter({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="flex items-end">
-      <Label
-        htmlFor="analysis-exclude-wives"
-        className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md border px-3"
-      >
-        <input
-          id="analysis-exclude-wives"
-          type="checkbox"
-          className="h-4 w-4 accent-primary"
-          checked={checked}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-        <span>{t("analysis_exclude_wives")}</span>
-      </Label>
-    </div>
-  );
-}
-
 export function AnalysisFilterPanel({
   definition,
   branches,
@@ -159,10 +132,6 @@ export function AnalysisFilterPanel({
             ["1", "1"],
             ["2", "2"],
           ]}
-        />
-        <ExcludeWivesFilter
-          checked={definition.filters.excludeWives === true}
-          onChange={(checked) => patchFilters({ excludeWives: checked ? true : undefined })}
         />
         <MissingFieldFilter
           value={definition.filters.missingFields?.[0] ?? ""}

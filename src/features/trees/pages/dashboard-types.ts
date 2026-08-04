@@ -97,6 +97,7 @@ export interface DashboardQualityInsights {
   missing_image: number;
   unknown_placeholders: number;
   no_parents_recorded: number;
+  missing_parent: number;
   possible_duplicate_groups: number;
   contradictory_dates: number;
   graph_cycles: number;

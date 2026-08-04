@@ -81,11 +81,49 @@ export type SummaryData = {
   average_age: number | null;
   median_age: number | null;
   average_lifespan: number | null;
+  maximum_generation_depth: number;
   oldest_member: AnalysisMemberHighlight | null;
   youngest_member: AnalysisMemberHighlight | null;
   age_bands: DistributionItem[];
   birth_decades: DistributionItem[];
   death_decades: DistributionItem[];
+};
+
+export type RelationshipReportData = {
+  total_members: number;
+  parent_links: number;
+  zero_parents: number;
+  one_parent: number;
+  two_parents: number;
+  roots: number;
+  leaves: number;
+  no_children_recorded: number;
+  largest_recorded_child_count: number;
+  unions: number;
+  active_unions: number;
+  divorced_unions: number;
+  maximum_generation_depth: number;
+  married_males: number;
+  divorced_males: number;
+  single_males_18_24: number;
+  single_males_25_plus: number;
+  married_males_no_children: number;
+};
+
+export type QualityReportData = {
+  total: number;
+  missing_name_en: number;
+  missing_name_ar: number;
+  missing_birth_date: number;
+  missing_citizenship: number;
+  missing_branch: number;
+  missing_image: number;
+  unknown_placeholders: number;
+  no_parents_recorded: number;
+  missing_parent: number;
+  possible_duplicate_groups: number;
+  contradictory_dates: number;
+  graph_cycles: number;
 };
 
 export type AnalysisMemberHighlight = {
@@ -96,6 +134,37 @@ export type AnalysisMemberHighlight = {
 };
 
 export type DistributionItem = { key: string; count: number };
+
+export type BranchReportRow = {
+  id: string;
+  name_en: string;
+  name_ar: string | null;
+  total: number;
+  living: number;
+  deceased: number;
+  male: number;
+  female: number;
+  adults: number;
+  minors: number;
+  unknown_age: number;
+  age_0_9: number;
+  age_10_17: number;
+  age_18_19: number;
+  age_20_29: number;
+  age_30_39: number;
+  age_40_49: number;
+  age_50_59: number;
+  age_60_69: number;
+  age_70_plus: number;
+  age_18_29: number;
+  age_30_44: number;
+  age_45_59: number;
+  age_60_74: number;
+  age_75_plus: number;
+  resident: number;
+  non_resident: number;
+  completeness_percent: number;
+};
 
 export type AnalysisMember = {
   id: string;

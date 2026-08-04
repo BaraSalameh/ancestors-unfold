@@ -43,8 +43,15 @@ async function analysisJson<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-const branchQuery = (branchId: string | null) =>
-  branchId ? `?branchId=${encodeURIComponent(branchId)}` : "";
+export function analysisScopeQuery(branchId: string | null, excludeWives = false) {
+  const parameters = new URLSearchParams();
+  if (branchId) parameters.set("branchId", branchId);
+  if (excludeWives) parameters.set("excludeWives", "true");
+  const query = parameters.toString();
+  return query ? `?${query}` : "";
+}
+
+const branchQuery = (branchId: string | null) => analysisScopeQuery(branchId);
 
 export const getAnalysisTree = (signal?: AbortSignal) =>
   analysisJson<AnalysisTree>("/api/tree/current", { signal });
@@ -52,23 +59,32 @@ export const getAnalysisCatalog = (treeId: string, signal?: AbortSignal) =>
   analysisJson<AnalysisEnvelope<AnalysisCatalog>>(`/api/trees/${treeId}/analysis/catalog`, {
     signal,
   });
-export const getAnalysisSummary = (treeId: string, branchId: string | null, signal?: AbortSignal) =>
+export const getAnalysisSummary = (
+  treeId: string,
+  branchId: string | null,
+  excludeWives = false,
+  signal?: AbortSignal,
+) =>
   analysisJson<AnalysisEnvelope<SummaryData>>(
-    `/api/trees/${treeId}/analysis/summary${branchQuery(branchId)}`,
+    `/api/trees/${treeId}/analysis/summary${analysisScopeQuery(branchId, excludeWives)}`,
     { signal },
   );
 export const getAnalysisReport = <T>(
   treeId: string,
   branchId: string | null,
   report: "branches" | "relationships" | "quality",
+  excludeWives = false,
   signal?: AbortSignal,
 ) =>
-  analysisJson<AnalysisEnvelope<T>>(`/api/trees/${treeId}/analysis/query${branchQuery(branchId)}`, {
-    method: "POST",
-    signal,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ report }),
-  });
+  analysisJson<AnalysisEnvelope<T>>(
+    `/api/trees/${treeId}/analysis/query${analysisScopeQuery(branchId, excludeWives)}`,
+    {
+      method: "POST",
+      signal,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ report }),
+    },
+  );
 
 export const getAnalysisMembers = (
   treeId: string,

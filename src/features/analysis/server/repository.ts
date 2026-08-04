@@ -3,11 +3,14 @@ import type {
   AnalysisMember,
   AnalysisQueryDefinition,
   AnalysisScope,
+  BranchReportRow,
   SummaryData,
 } from "../domain/types";
 import type { MemberPageInput } from "../domain/schemas";
 import type { AnalysisCursor } from "../domain/projection";
+import { effectiveBranchAssignmentCtes } from "./branch-assignment-sql";
 import { addAnalysisSqlValue as addValue, memberFilterSql as filterSql } from "./member-filter-sql";
+import { excludeMarriageOnlyWivesSql } from "./wife-filter-sql";
 
 const scopedMembersCte = `
   scoped_ids AS (
@@ -32,9 +35,33 @@ const scopeValues = (scope: AnalysisScope) => [scope.treeId, scope.branchId, sco
 export async function readAnalysisSummary(
   client: PoolClient,
   scope: AnalysisScope,
+  excludeWives = false,
 ): Promise<SummaryData> {
   const result = await client.query<SummaryData>(
-    `WITH ${scopedMembersCte}, totals AS (
+    `WITH RECURSIVE ${scopedMembersCte}, report_members AS (
+      SELECT member.* FROM scoped_members member
+      WHERE NOT $4::boolean OR ${excludeMarriageOnlyWivesSql}
+    ), summary_ids AS (
+      SELECT id FROM report_members
+    ), summary_roots AS (
+      SELECT member.id FROM summary_ids member
+      WHERE NOT EXISTS (
+        SELECT 1 FROM app.parent_child_relationships relationship
+        JOIN summary_ids parent ON parent.id=relationship.parent_id
+        WHERE relationship.tree_id=$1 AND relationship.child_id=member.id
+          AND relationship.deleted_at IS NULL
+      )
+    ), summary_walk(member_id,depth,path) AS (
+      SELECT id,0,ARRAY[id] FROM summary_roots
+      UNION ALL
+      SELECT relationship.child_id,walk.depth+1,walk.path||relationship.child_id
+      FROM summary_walk walk
+      JOIN app.parent_child_relationships relationship
+        ON relationship.parent_id=walk.member_id
+      JOIN summary_ids child ON child.id=relationship.child_id
+      WHERE relationship.tree_id=$1 AND relationship.deleted_at IS NULL
+        AND walk.depth<100 AND NOT relationship.child_id=ANY(walk.path)
+    ), totals AS (
       SELECT count(*)::integer total,
         count(*) FILTER (WHERE NOT is_deceased)::integer living,
         count(*) FILTER (WHERE is_deceased)::integer deceased,
@@ -49,79 +76,50 @@ export async function readAnalysisSummary(
         round(avg(lifecycle_age)::numeric,1)::float8 average_age,
         round((percentile_cont(0.5) WITHIN GROUP (ORDER BY lifecycle_age))::numeric,1)::float8 median_age,
         round(avg(lifecycle_age) FILTER (WHERE death_date IS NOT NULL)::numeric,1)::float8 average_lifespan
-      FROM scoped_members
+      FROM report_members
     ), living_age_stats AS (
       SELECT max((lifecycle_age/10)*10)::integer max_band,
         count(*) FILTER (WHERE lifecycle_age IS NULL)::integer unknown_count
-      FROM scoped_members WHERE NOT is_deceased
+      FROM report_members WHERE NOT is_deceased
     ), age_bands AS (
       SELECT band::text key,
         count(m.id) FILTER (WHERE (m.lifecycle_age/10)*10=band)::integer count,
         band sort_order
       FROM living_age_stats stats
       CROSS JOIN LATERAL generate_series(0,stats.max_band,10) band
-      LEFT JOIN scoped_members m ON NOT m.is_deceased AND m.lifecycle_age IS NOT NULL
+      LEFT JOIN report_members m ON NOT m.is_deceased AND m.lifecycle_age IS NOT NULL
       GROUP BY band
       UNION ALL
       SELECT 'unknown',unknown_count,2147483647 FROM living_age_stats
     ), birth_decades AS (
       SELECT ((extract(year FROM birth_date)::integer/10)*10)::text key,count(*)::integer count
-      FROM scoped_members WHERE birth_date IS NOT NULL GROUP BY 1 ORDER BY 1
+      FROM report_members WHERE birth_date IS NOT NULL GROUP BY 1 ORDER BY 1
     ), death_decades AS (
       SELECT ((extract(year FROM death_date)::integer/10)*10)::text key,count(*)::integer count
-      FROM scoped_members WHERE death_date IS NOT NULL GROUP BY 1 ORDER BY 1
+      FROM report_members WHERE is_deceased AND death_date IS NOT NULL GROUP BY 1
+      UNION ALL
+      SELECT 'unknown',count(*)::integer FROM report_members
+      WHERE is_deceased AND death_date IS NULL
     )
     SELECT t.*,
+      (SELECT coalesce(max(depth),0)::integer FROM summary_walk) maximum_generation_depth,
       (SELECT jsonb_build_object('id',id,'name_en',coalesce(name_en,''),'name_ar',coalesce(name_ar,''),'age',lifecycle_age)
-       FROM scoped_members WHERE NOT is_deceased AND lifecycle_age IS NOT NULL
+       FROM report_members WHERE NOT is_deceased AND lifecycle_age IS NOT NULL
        ORDER BY lifecycle_age DESC,id LIMIT 1) oldest_member,
       (SELECT jsonb_build_object('id',id,'name_en',coalesce(name_en,''),'name_ar',coalesce(name_ar,''),'age',lifecycle_age)
-       FROM scoped_members WHERE lifecycle_age IS NOT NULL ORDER BY lifecycle_age,id LIMIT 1) youngest_member,
+       FROM report_members WHERE lifecycle_age IS NOT NULL ORDER BY lifecycle_age,id LIMIT 1) youngest_member,
       coalesce((SELECT jsonb_agg(jsonb_build_object('key',key,'count',count) ORDER BY sort_order) FROM age_bands),'[]') age_bands,
       coalesce((SELECT jsonb_agg(jsonb_build_object('key',key,'count',count) ORDER BY key) FROM birth_decades),'[]') birth_decades,
       coalesce((SELECT jsonb_agg(jsonb_build_object('key',key,'count',count) ORDER BY key) FROM death_decades),'[]') death_decades
     FROM totals t`,
-    scopeValues(scope),
+    [...scopeValues(scope), excludeWives],
   );
   return result.rows[0];
 }
 
 const memberAnalysisCtes = `
   ${scopedMembersCte},
-  branch_tree(id,name_en,name_ar,parent_subfamily_id,linked_male_id,depth) AS (
-    SELECT b.id,b.name_en,b.name_ar,b.parent_subfamily_id,b.linked_male_id,0
-    FROM app.subfamilies b
-    WHERE b.tree_id=$1 AND b.deleted_at IS NULL AND b.parent_subfamily_id IS NULL
-    UNION ALL
-    SELECT b.id,b.name_en,b.name_ar,b.parent_subfamily_id,b.linked_male_id,parent.depth+1
-    FROM app.subfamilies b JOIN branch_tree parent ON parent.id=b.parent_subfamily_id
-    WHERE b.tree_id=$1 AND b.deleted_at IS NULL
-  ), branch_lineage(branch_id,member_id,path) AS (
-    SELECT id,linked_male_id,ARRAY[linked_male_id]
-    FROM branch_tree WHERE linked_male_id IS NOT NULL
-    UNION ALL
-    SELECT lineage.branch_id,relationship.child_id,lineage.path||relationship.child_id
-    FROM branch_lineage lineage
-    JOIN app.parent_child_relationships relationship ON relationship.parent_id=lineage.member_id
-    WHERE relationship.tree_id=$1 AND relationship.deleted_at IS NULL
-      AND NOT relationship.child_id=ANY(lineage.path)
-  ), branch_candidates AS (
-    SELECT member.id member_id,branch.id branch_id,branch.name_en,branch.name_ar,
-      branch.depth,true direct_assignment
-    FROM scoped_members member JOIN branch_tree branch ON branch.id=member.subfamily_id
-    UNION
-    SELECT lineage.member_id,branch.id,branch.name_en,branch.name_ar,
-      branch.depth,false direct_assignment
-    FROM branch_lineage lineage JOIN branch_tree branch ON branch.id=lineage.branch_id
-    JOIN scoped_ids scoped ON scoped.id=lineage.member_id
-  ), ranked_branches AS (
-    SELECT *,row_number() OVER (
-      PARTITION BY member_id ORDER BY direct_assignment DESC,depth DESC,branch_id
-    ) branch_rank
-    FROM branch_candidates
-  ), branch_assignment AS (
-    SELECT member_id,branch_id,name_en,name_ar FROM ranked_branches WHERE branch_rank=1
-  ),
+  ${effectiveBranchAssignmentCtes},
   parent_stats AS (
     SELECT r.child_id,count(DISTINCT r.parent_id)::integer parent_count,
       (max(r.parent_id::text) FILTER (WHERE r.parent_role='father'))::uuid father_id,
@@ -140,7 +138,7 @@ const memberAnalysisCtes = `
     JOIN scoped_ids s ON s.id=p.member_id WHERE p.tree_id=$1 GROUP BY p.member_id
   ), generation_walk(member_id,generation,path) AS (
     SELECT s.id,0,ARRAY[s.id] FROM scoped_ids s
-    WHERE $4::boolean AND NOT EXISTS (
+    WHERE NOT EXISTS (
       SELECT 1 FROM app.parent_child_relationships r JOIN scoped_ids p ON p.id=r.parent_id
       WHERE r.tree_id=$1 AND r.child_id=s.id AND r.deleted_at IS NULL
     )
@@ -216,12 +214,7 @@ export async function readAnalysisMembers(
   cursor: AnalysisCursor | null,
   exportLimit?: number,
 ) {
-  const needsGeneration =
-    exportLimit !== undefined ||
-    input.sort === "generation" ||
-    input.filters.minGeneration !== undefined ||
-    input.filters.maxGeneration !== undefined;
-  const values: unknown[] = [...scopeValues(scope), needsGeneration];
+  const values: unknown[] = scopeValues(scope);
   const filters = filterSql(input.filters, values);
   const limit = exportLimit ?? input.limit + 1;
   const limitParam = addValue(values, limit);
@@ -250,21 +243,53 @@ export async function readAnalysisMembers(
   };
 }
 
-export async function readBranchReport(client: PoolClient, scope: AnalysisScope) {
-  const result = await client.query(
-    `WITH branches AS (
+export async function readBranchReport(
+  client: PoolClient,
+  scope: AnalysisScope,
+  excludeWives = false,
+) {
+  const result = await client.query<BranchReportRow>(
+    `WITH ${scopedMembersCte}, branches AS (
        SELECT b.id,b.name_en,b.name_ar FROM app.subfamilies b
        WHERE b.tree_id=$1 AND b.deleted_at IS NULL AND ($2::uuid IS NULL OR b.id=$2)
+     ), branch_member_ids AS (
+       SELECT b.id branch_id,branch_member.member_id
+       FROM branches b
+       CROSS JOIN LATERAL app.branch_members_for_root($1,b.id) branch_member
+       UNION
+       SELECT b.id,wife_member.id
+       FROM branches b
+       CROSS JOIN LATERAL app.branch_members_for_root($1,b.id) branch_husband
+       JOIN app.family_members husband ON husband.id=branch_husband.member_id
+         AND husband.tree_id=$1 AND husband.deleted_at IS NULL AND husband.gender='male'
+       JOIN app.union_partners husband_link ON husband_link.member_id=husband.id
+         AND husband_link.tree_id=$1
+       JOIN app.unions marriage ON marriage.id=husband_link.union_id
+         AND marriage.tree_id=$1 AND marriage.deleted_at IS NULL
+       JOIN app.union_partners wife_link ON wife_link.union_id=marriage.id
+         AND wife_link.tree_id=$1 AND wife_link.member_id<>husband.id
+       JOIN app.family_members wife_member ON wife_member.id=wife_link.member_id
+         AND wife_member.tree_id=$1 AND wife_member.deleted_at IS NULL
+         AND wife_member.gender='female'
+       WHERE NOT $4::boolean AND NOT EXISTS (
+         SELECT 1 FROM app.parent_child_relationships family_parent
+         WHERE family_parent.tree_id=$1 AND family_parent.child_id=wife_member.id
+           AND family_parent.deleted_at IS NULL
+       )
      ), members AS (
-       SELECT b.id branch_id,m.*,
-         CASE WHEN m.birth_date IS NULL OR (m.is_deceased AND m.death_date IS NULL) THEN NULL
+       SELECT branch_member.branch_id,member.*,
+         CASE WHEN member.birth_date IS NULL
+             OR (member.is_deceased AND member.death_date IS NULL) THEN NULL
            ELSE extract(year FROM age(
-             CASE WHEN m.is_deceased THEN m.death_date ELSE current_date END,m.birth_date
+             CASE WHEN member.is_deceased THEN member.death_date ELSE current_date END,
+             member.birth_date
            ))::integer END age,
          EXISTS (SELECT 1 FROM app.parent_child_relationships r
-           WHERE r.tree_id=$1 AND r.child_id=m.id AND r.deleted_at IS NULL) has_parent
-       FROM branches b CROSS JOIN LATERAL app.branch_members_for_root($1,b.id) bm
-       JOIN app.family_members m ON m.id=bm.member_id AND m.tree_id=$1 AND m.deleted_at IS NULL
+           WHERE r.tree_id=$1 AND r.child_id=member.id AND r.deleted_at IS NULL) has_parent
+       FROM branch_member_ids branch_member
+       JOIN app.family_members member ON member.id=branch_member.member_id
+         AND member.tree_id=$1 AND member.deleted_at IS NULL
+       WHERE NOT $4::boolean OR ${excludeMarriageOnlyWivesSql}
      )
      SELECT b.id,b.name_en,b.name_ar,count(m.id)::integer total,
        count(m.id) FILTER (WHERE NOT m.is_deceased)::integer living,
@@ -274,6 +299,15 @@ export async function readBranchReport(client: PoolClient, scope: AnalysisScope)
        count(m.id) FILTER (WHERE m.age>=18)::integer adults,
        count(m.id) FILTER (WHERE m.age<18)::integer minors,
        count(m.id) FILTER (WHERE m.age IS NULL)::integer unknown_age,
+       count(m.id) FILTER (WHERE m.age>=0 AND m.age<10)::integer age_0_9,
+       count(m.id) FILTER (WHERE m.age>=10 AND m.age<18)::integer age_10_17,
+       count(m.id) FILTER (WHERE m.age>=18 AND m.age<20)::integer age_18_19,
+       count(m.id) FILTER (WHERE m.age>=20 AND m.age<30)::integer age_20_29,
+       count(m.id) FILTER (WHERE m.age>=30 AND m.age<40)::integer age_30_39,
+       count(m.id) FILTER (WHERE m.age>=40 AND m.age<50)::integer age_40_49,
+       count(m.id) FILTER (WHERE m.age>=50 AND m.age<60)::integer age_50_59,
+       count(m.id) FILTER (WHERE m.age>=60 AND m.age<70)::integer age_60_69,
+       count(m.id) FILTER (WHERE m.age>=70)::integer age_70_plus,
        count(m.id) FILTER (WHERE m.age>=18 AND m.age<30)::integer age_18_29,
        count(m.id) FILTER (WHERE m.age>=30 AND m.age<45)::integer age_30_44,
        count(m.id) FILTER (WHERE m.age>=45 AND m.age<60)::integer age_45_59,
@@ -286,52 +320,7 @@ export async function readBranchReport(client: PoolClient, scope: AnalysisScope)
        )::numeric/3)*100),0)::integer completeness_percent
      FROM branches b LEFT JOIN members m ON m.branch_id=b.id GROUP BY b.id,b.name_en,b.name_ar
      ORDER BY total DESC,b.name_en`,
-    [scope.treeId, scope.kind === "branch" ? scope.branchId : null],
+    [...scopeValues(scope), excludeWives],
   );
   return result.rows;
-}
-
-export async function readRelationshipReport(client: PoolClient, scope: AnalysisScope) {
-  const result = await client.query(
-    `WITH RECURSIVE ${scopedMembersCte}, parents AS (
-       SELECT r.child_id,count(*)::integer count FROM app.parent_child_relationships r
-       JOIN scoped_ids c ON c.id=r.child_id JOIN scoped_ids p ON p.id=r.parent_id
-       WHERE r.tree_id=$1 AND r.deleted_at IS NULL GROUP BY r.child_id
-     ), children AS (
-       SELECT r.parent_id,count(*)::integer count FROM app.parent_child_relationships r
-       JOIN scoped_ids p ON p.id=r.parent_id JOIN scoped_ids c ON c.id=r.child_id
-       WHERE r.tree_id=$1 AND r.deleted_at IS NULL GROUP BY r.parent_id
-     ), roots AS (
-       SELECT id FROM scoped_ids WHERE id NOT IN (SELECT child_id FROM parents)
-     ), walk(member_id,depth,path) AS (
-       SELECT id,0,ARRAY[id] FROM roots UNION ALL
-       SELECT r.child_id,w.depth+1,w.path||r.child_id FROM walk w
-       JOIN app.parent_child_relationships r ON r.parent_id=w.member_id
-       JOIN scoped_ids c ON c.id=r.child_id
-       WHERE r.tree_id=$1 AND r.deleted_at IS NULL AND w.depth<100 AND NOT r.child_id=ANY(w.path)
-     ), scoped_unions AS (
-       SELECT u.id,u.status FROM app.unions u
-       WHERE u.tree_id=$1 AND u.deleted_at IS NULL AND NOT EXISTS (
-         SELECT 1 FROM app.union_partners p WHERE p.union_id=u.id
-           AND p.member_id NOT IN (SELECT id FROM scoped_ids)
-       )
-     )
-     SELECT (SELECT count(*)::integer FROM scoped_ids) total_members,
-       (SELECT count(*)::integer FROM app.parent_child_relationships r
-        WHERE r.tree_id=$1 AND r.deleted_at IS NULL AND r.child_id IN (SELECT id FROM scoped_ids)
-          AND r.parent_id IN (SELECT id FROM scoped_ids)) parent_links,
-       (SELECT count(*)::integer FROM scoped_ids WHERE id NOT IN (SELECT child_id FROM parents)) zero_parents,
-       (SELECT count(*)::integer FROM parents WHERE count=1) one_parent,
-       (SELECT count(*)::integer FROM parents WHERE count>=2) two_parents,
-       (SELECT count(*)::integer FROM roots) roots,
-       (SELECT count(*)::integer FROM scoped_ids WHERE id NOT IN (SELECT parent_id FROM children)) leaves,
-       (SELECT count(*)::integer FROM scoped_ids WHERE id NOT IN (SELECT parent_id FROM children)) no_children_recorded,
-       (SELECT coalesce(max(count),0)::integer FROM children) largest_recorded_child_count,
-       (SELECT count(*)::integer FROM scoped_unions) unions,
-       (SELECT count(*)::integer FROM scoped_unions WHERE status='current') active_unions,
-       (SELECT count(*)::integer FROM scoped_unions WHERE status='divorced') divorced_unions,
-       (SELECT coalesce(max(depth),0)::integer FROM walk) maximum_generation_depth`,
-    scopeValues(scope),
-  );
-  return result.rows[0];
 }

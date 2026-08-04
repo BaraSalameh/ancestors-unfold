@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearAnalysisFilters, hasActiveAnalysisFilters } from "./filter-state";
+import { clearAnalysisFilters, hasActiveAnalysisFilters, withExcludeWives } from "./filter-state";
 import type { AnalysisQueryDefinition } from "./types";
 
 describe("analysis filter state", () => {
@@ -24,5 +24,17 @@ describe("analysis filter state", () => {
       direction: "desc",
       view: "explorer",
     });
+  });
+
+  it("stores wife exclusion only while the shared checkbox is checked", () => {
+    const definition: AnalysisQueryDefinition = {
+      filters: { search: "Khalil" },
+      sort: "name",
+      direction: "asc",
+    };
+
+    const checked = withExcludeWives(definition, true);
+    expect(checked.filters).toEqual({ search: "Khalil", excludeWives: true });
+    expect(withExcludeWives(checked, false).filters).toEqual({ search: "Khalil" });
   });
 });

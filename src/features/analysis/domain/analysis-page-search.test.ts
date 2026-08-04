@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { analysisPageSearchSchema, analysisPageState } from "./analysis-page-search";
+import {
+  analysisExcludeWivesDisabled,
+  analysisPageSearchSchema,
+  analysisPageState,
+} from "./analysis-page-search";
 
 describe("analysis dashboard deep links", () => {
   it("initializes branch quality reports", () => {
@@ -30,5 +34,14 @@ describe("analysis dashboard deep links", () => {
       }),
     );
     expect(state).toMatchObject({ tab: "overview", branchId: null, definition: { filters: {} } });
+  });
+
+  it("disables wife exclusion only for relationships and data quality", () => {
+    expect(analysisExcludeWivesDisabled("relationships")).toBe(true);
+    expect(analysisExcludeWivesDisabled("quality")).toBe(true);
+    expect(analysisExcludeWivesDisabled("overview")).toBe(false);
+    expect(analysisExcludeWivesDisabled("branches")).toBe(false);
+    expect(analysisExcludeWivesDisabled("explorer")).toBe(false);
+    expect(analysisExcludeWivesDisabled("saved")).toBe(false);
   });
 });

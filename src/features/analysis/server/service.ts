@@ -9,13 +9,14 @@ import {
   encodeAnalysisCursor,
 } from "../domain/projection";
 import type { AnalysisExportInput, MemberPageInput } from "../domain/schemas";
-import type { AnalysisQueryDefinition } from "../domain/types";
-import {
-  readAnalysisMembers,
-  readAnalysisSummary,
-  readBranchReport,
-  readRelationshipReport,
-} from "./repository";
+import type {
+  AnalysisQueryDefinition,
+  BranchReportRow,
+  QualityReportData,
+  RelationshipReportData,
+} from "../domain/types";
+import { readAnalysisMembers, readAnalysisSummary, readBranchReport } from "./repository";
+import { readRelationshipReport } from "./relationship-repository";
 import { readQualityReport } from "./quality-repository";
 import {
   createSavedView,
@@ -113,9 +114,10 @@ export const analysisSummary = (
   requestId: string,
   treeId: string,
   branchId: string | null,
+  excludeWives = false,
 ) =>
   runAnalysis(session, requestId, treeId, branchId, "summary", (client, scope) =>
-    readAnalysisSummary(client, scope),
+    readAnalysisSummary(client, scope, excludeWives),
   );
 
 export const analysisReport = (
@@ -124,12 +126,20 @@ export const analysisReport = (
   treeId: string,
   branchId: string | null,
   report: "branches" | "relationships" | "quality",
+  excludeWives = false,
 ) =>
-  runAnalysis(session, requestId, treeId, branchId, report, (client, scope) => {
-    if (report === "branches") return readBranchReport(client, scope);
-    if (report === "relationships") return readRelationshipReport(client, scope);
-    return readQualityReport(client, scope);
-  });
+  runAnalysis<BranchReportRow[] | RelationshipReportData | QualityReportData>(
+    session,
+    requestId,
+    treeId,
+    branchId,
+    report,
+    (client, scope) => {
+      if (report === "branches") return readBranchReport(client, scope, excludeWives);
+      if (report === "relationships") return readRelationshipReport(client, scope);
+      return readQualityReport(client, scope);
+    },
+  );
 
 export async function analysisMemberPage(
   session: AnalysisSession,

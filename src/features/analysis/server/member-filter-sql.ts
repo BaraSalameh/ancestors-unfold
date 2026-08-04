@@ -1,4 +1,5 @@
 import type { AnalysisFilters } from "../domain/types";
+import { excludeMarriageOnlyWivesSql } from "./wife-filter-sql";
 
 export function addAnalysisSqlValue(values: unknown[], value: unknown): string {
   values.push(value);
@@ -40,24 +41,6 @@ function addAgeAndDateFilters(filters: AnalysisFilters, values: unknown[], condi
     if (value) conditions.push(`${field}${operator}${addAnalysisSqlValue(values, value)}::${cast}`);
 }
 
-const excludeMarriageOnlyWives = `NOT (
-  member.gender='female'
-  AND EXISTS (
-    SELECT 1 FROM app.union_partners wife
-    JOIN app.unions marriage ON marriage.id=wife.union_id
-      AND marriage.tree_id=$1 AND marriage.deleted_at IS NULL
-    JOIN app.union_partners husband_link ON husband_link.union_id=wife.union_id
-      AND husband_link.member_id<>wife.member_id
-    JOIN scoped_members husband ON husband.id=husband_link.member_id AND husband.gender='male'
-    WHERE wife.tree_id=$1 AND wife.member_id=member.id
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM app.parent_child_relationships family_parent
-    WHERE family_parent.tree_id=$1 AND family_parent.child_id=member.id
-      AND family_parent.deleted_at IS NULL
-  )
-)`;
-
 const isWifeWithMaleSpouse = `(
   member.gender='female'
   AND EXISTS (
@@ -75,7 +58,7 @@ const isWifeWithMaleSpouse = `(
 function addRelationshipFilters(filters: AnalysisFilters, values: unknown[], conditions: string[]) {
   if (filters.parentCount !== undefined)
     conditions.push(`parent_count=${addAnalysisSqlValue(values, filters.parentCount)}::integer`);
-  if (filters.excludeWives) conditions.push(excludeMarriageOnlyWives);
+  if (filters.excludeWives) conditions.push(excludeMarriageOnlyWivesSql);
   if (filters.hasSpouse !== undefined)
     conditions.push(`has_spouse=${addAnalysisSqlValue(values, filters.hasSpouse)}::boolean`);
   if (filters.hasChildren !== undefined)

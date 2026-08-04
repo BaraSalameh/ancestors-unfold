@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { memberPageSchema, savedViewCreateSchema } from "./schemas";
+import {
+  analysisExcludeWivesQuerySchema,
+  memberPageSchema,
+  savedViewCreateSchema,
+} from "./schemas";
 
 const query = { filters: {}, sort: "name", direction: "asc", limit: 50 } as const;
 
@@ -35,5 +39,12 @@ describe("analysis query schema", () => {
         definition: { filters: { excludeWives: true }, sort: "name", direction: "asc" },
       }).definition.filters.excludeWives,
     ).toBe(true);
+  });
+
+  it("parses only explicit boolean query values for shared wife exclusion", () => {
+    expect(analysisExcludeWivesQuerySchema.parse("true")).toBe(true);
+    expect(analysisExcludeWivesQuerySchema.parse("false")).toBe(false);
+    expect(analysisExcludeWivesQuerySchema.parse(null)).toBe(false);
+    expect(() => analysisExcludeWivesQuerySchema.parse("1")).toThrow();
   });
 });

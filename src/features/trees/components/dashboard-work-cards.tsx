@@ -1,31 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import {
-  Activity,
-  AlertTriangle,
-  ArrowRightLeft,
-  CheckCircle2,
-  CircleAlert,
-  GitBranch,
-  Info,
-  MailPlus,
-  MailX,
-  Pencil,
-  RotateCw,
-  TreePine,
-  UserCheck,
-  UserMinus,
-  type LucideIcon,
-} from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, CircleAlert, Info, RotateCw } from "lucide-react";
 import { useI18n } from "@/shared/i18n";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Skeleton } from "@/shared/ui/skeleton";
-import {
-  activityDescription,
-  activityIconKind,
-  type ActivityIconKind,
-} from "../domain/activity-label";
+import { activityDescription } from "../domain/activity-label";
 import {
   dashboardAttentionItems,
   dashboardRelativeTime,
@@ -33,19 +13,6 @@ import {
   type AttentionItem,
 } from "../pages/dashboard-projections";
 import type { DashboardData, DashboardInsights } from "../pages/dashboard-types";
-
-const activityIcons: Record<ActivityIconKind, LucideIcon> = {
-  tree: TreePine,
-  edit: Pencil,
-  branch: GitBranch,
-  invite: MailPlus,
-  resend: RotateCw,
-  cancel: MailX,
-  accepted: UserCheck,
-  removed: UserMinus,
-  transfer: ArrowRightLeft,
-  activity: Activity,
-};
 
 function attentionLabel(item: AttentionItem, t: ReturnType<typeof useI18n>["t"]) {
   const labels = {
@@ -185,11 +152,10 @@ export function RecentActivityCard({ data }: { data: DashboardData }) {
           </div>
         ) : null}
         {data.activity.map((item) => {
-          const ActivityIcon = activityIcons[activityIconKind(item.actionType)];
           return (
             <div key={item.id} className="flex gap-3 border-b pb-3 last:border-0 last:pb-0">
-              <span className="mt-0.5 rounded-full bg-primary/10 p-1.5 text-primary">
-                <ActivityIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="mt-0.5 shrink-0 self-start rounded-full bg-primary/10 p-1.5 text-primary">
+                <Activity className="h-3.5 w-3.5" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{activityDescription(item, lang, t)}</p>

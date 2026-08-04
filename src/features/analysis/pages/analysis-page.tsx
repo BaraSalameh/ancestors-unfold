@@ -15,11 +15,18 @@ import {
   type AnalysisTree,
 } from "../client/analysis-api";
 import { AnalysisExplorer } from "../components/analysis-explorer";
+import { AnalysisExcludeWivesControl } from "../components/analysis-exclude-wives-control";
 import { AnalysisReport } from "../components/analysis-reports";
 import { AnalysisSavedViews } from "../components/analysis-saved-views";
 import { AnalysisSummary } from "../components/analysis-summary";
 import type { AnalysisEnvelope, AnalysisQueryDefinition, SummaryData } from "../domain/types";
-import { analysisPageState, analysisTabs, type AnalysisTab } from "../domain/analysis-page-search";
+import {
+  analysisExcludeWivesDisabled,
+  analysisPageState,
+  analysisTabs,
+  type AnalysisTab,
+} from "../domain/analysis-page-search";
+import { withExcludeWives } from "../domain/filter-state";
 
 const selectClass = "h-10 min-w-56 rounded-md border bg-background px-3 text-sm";
 
@@ -149,33 +156,48 @@ function AnalysisContent({
   activeTab,
   onDefinitionChange,
   onTabChange,
+  onExcludeWivesChange,
 }: {
   treeId: string;
   branchId: string | null;
   summary: AnalysisEnvelope<SummaryData> | undefined;
   branches: AnalysisCatalog["branches"];
   definition: AnalysisQueryDefinition;
-  activeTab: string;
+  activeTab: AnalysisTab;
   onDefinitionChange: (definition: AnalysisQueryDefinition) => void;
   onTabChange: (tab: AnalysisTab) => void;
+  onExcludeWivesChange: (checked: boolean) => void;
 }) {
   const { t } = useI18n();
+  const excludesWivesDisabled = analysisExcludeWivesDisabled(activeTab);
   return (
     <section className="mx-auto max-w-7xl px-4 py-7 sm:px-6">
       <Tabs value={activeTab} onValueChange={(value) => onTabChange(value as AnalysisTab)}>
-        <TabsList className="mb-5 h-auto w-full justify-start overflow-x-auto p-1">
-          {analysisTabLabels.map(([value, key]) => (
-            <TabsTrigger key={value} value={value}>
-              {t(key)}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <TabsList className="h-auto min-w-0 justify-start overflow-x-auto p-1">
+            {analysisTabLabels.map(([value, key]) => (
+              <TabsTrigger key={value} value={value}>
+                {t(key)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <AnalysisExcludeWivesControl
+            checked={!excludesWivesDisabled && definition.filters.excludeWives === true}
+            disabled={excludesWivesDisabled}
+            onChange={onExcludeWivesChange}
+          />
+        </div>
         <TabsContent value="overview">
           {summary ? <AnalysisSummary summary={summary.data} /> : <Skeleton className="h-96" />}
         </TabsContent>
         <TabsContent value="branches">
           <p className="mb-4 text-sm text-muted-foreground">{t("analysis_branch_overlap_note")}</p>
-          <AnalysisReport treeId={treeId} branchId={branchId} report="branches" />
+          <AnalysisReport
+            treeId={treeId}
+            branchId={branchId}
+            report="branches"
+            excludeWives={definition.filters.excludeWives === true}
+          />
         </TabsContent>
         <TabsContent value="relationships">
           <p className="mb-4 text-sm text-muted-foreground">
@@ -221,6 +243,7 @@ function AnalysisPageContent({ initial }: { initial: ReturnType<typeof analysisP
   });
   const treeId = tree.data?.id;
   const enabled = Boolean(treeId && tree.data?.analysis_enabled);
+  const excludeWives = definition.filters.excludeWives === true;
   const catalog = useQuery({
     queryKey: ["analysis-catalog", treeId],
     queryFn: ({ signal }) => getAnalysisCatalog(treeId!, signal),
@@ -228,8 +251,8 @@ function AnalysisPageContent({ initial }: { initial: ReturnType<typeof analysisP
     staleTime: 60_000,
   });
   const summary = useQuery({
-    queryKey: ["analysis-summary", treeId, branchId],
-    queryFn: ({ signal }) => getAnalysisSummary(treeId!, branchId, signal),
+    queryKey: ["analysis-summary", treeId, branchId, excludeWives],
+    queryFn: ({ signal }) => getAnalysisSummary(treeId!, branchId, excludeWives, signal),
     enabled,
     staleTime: 60_000,
   });
@@ -254,6 +277,9 @@ function AnalysisPageContent({ initial }: { initial: ReturnType<typeof analysisP
         activeTab={activeTab}
         onDefinitionChange={setDefinition}
         onTabChange={setActiveTab}
+        onExcludeWivesChange={(checked) =>
+          setDefinition((current) => withExcludeWives(current, checked))
+        }
       />
     </main>
   );
