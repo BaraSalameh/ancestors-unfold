@@ -14,6 +14,7 @@ import { enforceBranchSnapshotScope } from "./snapshot-branch-scope";
 import { writeSnapshotMembers } from "./snapshot-member-writer";
 import { writeSnapshotRelationships } from "./snapshot-relationship-writer";
 import {
+  countImportedSourceMappings,
   requireFamilyCsvImportManager,
   validateFamilyCsvAppend,
   validateSourceMappings,
@@ -136,8 +137,8 @@ export async function importSnapshot(
           treeId,
           s.user_id,
           JSON.stringify({
-            members: b.members?.length ?? 0,
-            branches: b.subfamilies?.length ?? 0,
+            members: countImportedSourceMappings(options.familyCsv.sourceMemberIds, "member"),
+            branches: countImportedSourceMappings(options.familyCsv.sourceBranchIds, "branch"),
           }),
         ],
       );

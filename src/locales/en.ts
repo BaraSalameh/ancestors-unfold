@@ -738,7 +738,7 @@ export const en = {
   family_csv_branches: "Branches",
   family_csv_preserve_connections: "Preserve linked accounts and branch access",
   family_csv_preserve_connections_desc:
-    "Map each existing linked record to its matching imported record. Each imported record can be selected once.",
+    "Optionally map an existing linked record to an imported record to preserve its account or branch access. Each imported record can be selected once.",
   family_csv_select_member: "Select imported member",
   family_csv_select_branch: "Select imported branch",
   family_csv_issues: "Import issues",

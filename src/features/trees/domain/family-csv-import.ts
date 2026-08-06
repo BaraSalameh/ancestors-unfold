@@ -53,14 +53,14 @@ type FamilyCsvSummary = {
   branches: number;
 };
 
-export type FamilyCsvPreview = {
+type FamilyCsvPreview = {
   members: FamilyMember[];
   subfamilies: SubFamily[];
   summary: FamilyCsvSummary;
   warnings: FamilyCsvIssue[];
 };
 
-export type RemappedFamilyCsvPreview = FamilyCsvPreview & {
+type RemappedFamilyCsvPreview = FamilyCsvPreview & {
   sourceMemberIds: Array<{ sourceId: string; targetId: string }>;
   sourceBranchIds: Array<{ sourceId: string; targetId: string }>;
 };

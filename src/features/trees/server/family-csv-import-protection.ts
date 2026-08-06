@@ -59,3 +59,13 @@ export function validateSourceMappings(
   validate(memberIds, memberMappings);
   validate(branchIds, branchMappings);
 }
+
+export function countImportedSourceMappings(
+  mappings: ReadonlyMap<string, string>,
+  entity: "member" | "branch",
+) {
+  let count = 0;
+  for (const [targetId, sourceId] of mappings)
+    if (sourceId !== `existing|${entity}|${targetId}`) count += 1;
+  return count;
+}

@@ -83,7 +83,7 @@ export function FamilyCsvImportDialog({
         await file.text(),
       );
       setPreview(response);
-      setMappings(suggestMappings(response));
+      setMappings({ linkedMembers: {}, grantedBranches: {} });
     } catch (caught) {
       const payload = caught instanceof ApiClientError ? caught.payload : undefined;
       const responseIssues = validationIssues(payload);
@@ -105,15 +105,20 @@ export function FamilyCsvImportDialog({
 
   const mappingComplete = useMemo(() => {
     if (!preview) return false;
-    const memberValues = Object.values(mappings.linkedMembers);
-    const branchValues = Object.values(mappings.grantedBranches);
+    const memberValues = Object.values(mappings.linkedMembers).filter(Boolean);
+    const branchValues = Object.values(mappings.grantedBranches).filter(Boolean);
     return (
-      preview.mappingRequirements.linkedMembers.every(
-        ({ target_member_id }) => mappings.linkedMembers[target_member_id],
-      ) &&
-      preview.mappingRequirements.grantedBranches.every(
-        ({ target_branch_id }) => mappings.grantedBranches[target_branch_id],
-      ) &&
+      preview.mappingRequirements.linkedMembers.every((requirement) => {
+        const selected = mappings.linkedMembers[requirement.target_member_id];
+        if (!selected) return true;
+        return preview.members.some(
+          (member) => member.id === selected && member.gender === requirement.gender,
+        );
+      }) &&
+      preview.mappingRequirements.grantedBranches.every((requirement) => {
+        const selected = mappings.grantedBranches[requirement.target_branch_id];
+        return !selected || preview.subfamilies.some((branch) => branch.id === selected);
+      }) &&
       new Set(memberValues).size === memberValues.length &&
       new Set(branchValues).size === branchValues.length
     );
@@ -353,30 +358,6 @@ function IssueList({ issues, onDownload }: { issues: FamilyCsvIssue[]; onDownloa
       </ul>
     </section>
   );
-}
-
-function suggestMappings(preview: FamilyCsvPreviewResponse): MappingState {
-  const linkedMembers: Record<string, string> = {};
-  for (const requirement of preview.mappingRequirements.linkedMembers) {
-    const matches = preview.members.filter(
-      (member) =>
-        member.gender === requirement.gender &&
-        ((requirement.name_en &&
-          member.name_en.toLocaleLowerCase() === requirement.name_en.toLocaleLowerCase()) ||
-          (requirement.name_ar && member.name_ar === requirement.name_ar)),
-    );
-    if (matches.length === 1) linkedMembers[requirement.target_member_id] = matches[0].id;
-  }
-  const grantedBranches: Record<string, string> = {};
-  for (const requirement of preview.mappingRequirements.grantedBranches) {
-    const matches = preview.subfamilies.filter(
-      (branch) =>
-        branch.name_en.toLocaleLowerCase() === requirement.name_en.toLocaleLowerCase() ||
-        (requirement.name_ar && branch.name_ar === requirement.name_ar),
-    );
-    if (matches.length === 1) grantedBranches[requirement.target_branch_id] = matches[0].id;
-  }
-  return { linkedMembers, grantedBranches };
 }
 
 function validationIssues(payload: unknown): FamilyCsvIssue[] {

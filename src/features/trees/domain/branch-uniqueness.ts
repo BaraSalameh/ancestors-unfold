@@ -5,7 +5,7 @@ export type BranchUniquenessInput = {
   linked_male_id?: string | null;
 };
 
-export type BranchConflict = {
+type BranchConflict = {
   code: "DUPLICATE_BRANCH_NAME" | "DUPLICATE_BRANCH_ROOT";
   column: "branch_name_en" | "branch_name_ar" | "linked_male_id";
   key: string;

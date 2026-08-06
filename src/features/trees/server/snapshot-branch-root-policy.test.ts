@@ -51,4 +51,37 @@ describe("snapshot branch-root deletion policy", () => {
       enforceSnapshotBranchRoots(client() as never, "tree", snapshot, "branch"),
     ).rejects.toMatchObject({ code: "BRANCH_ROOT_DELETE_BLOCKED" });
   });
+
+  it("rejects a submitted branch whose proposed root is female", async () => {
+    const snapshot: SnapshotInput = {
+      expectedVersion: 1,
+      members: [member, { ...member, id: "replacement", gender: "female" }],
+      subfamilies: [{ ...branch, linked_male_id: "replacement" }],
+    };
+    await expect(
+      enforceSnapshotBranchRoots(client() as never, "tree", snapshot, null),
+    ).rejects.toMatchObject({ code: "MEMBER_UNAVAILABLE", status: 409 });
+  });
+
+  it("rejects a submitted branch whose proposed root is missing", async () => {
+    const snapshot: SnapshotInput = {
+      expectedVersion: 1,
+      members: [member],
+      subfamilies: [{ ...branch, linked_male_id: "missing" }],
+    };
+    await expect(
+      enforceSnapshotBranchRoots(client() as never, "tree", snapshot, null),
+    ).rejects.toMatchObject({ code: "MEMBER_UNAVAILABLE", status: 409 });
+  });
+
+  it("allows replacing a branch root with another submitted male", async () => {
+    const snapshot: SnapshotInput = {
+      expectedVersion: 1,
+      members: [{ ...member, id: "replacement" }],
+      subfamilies: [{ ...branch, linked_male_id: "replacement" }],
+    };
+    await expect(
+      enforceSnapshotBranchRoots(client() as never, "tree", snapshot, null),
+    ).resolves.toBeUndefined();
+  });
 });

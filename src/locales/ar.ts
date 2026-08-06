@@ -720,7 +720,7 @@ export const ar = {
   family_csv_branches: "الفروع",
   family_csv_preserve_connections: "الحفاظ على الحسابات المرتبطة وصلاحيات الفروع",
   family_csv_preserve_connections_desc:
-    "اربط كل سجل حالي بالسجل المستورد المطابق. يمكن اختيار كل سجل مستورد مرة واحدة فقط.",
+    "يمكنك اختياريًا ربط سجل حالي بسجل مستورد للحفاظ على حسابه أو صلاحية الفرع. يمكن اختيار كل سجل مستورد مرة واحدة فقط.",
   family_csv_select_member: "اختر الفرد المستورد",
   family_csv_select_branch: "اختر الفرع المستورد",
   family_csv_issues: "مشكلات الاستيراد",

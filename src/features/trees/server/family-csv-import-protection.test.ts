@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import type { SnapshotInput } from "@/server/security";
 import {
+  countImportedSourceMappings,
   requireFamilyCsvImportManager,
   validateFamilyCsvAppend,
   validateSourceMappings,
@@ -95,5 +96,18 @@ describe("family CSV import protection", () => {
     expect(() => validateSourceMappings(snapshot, new Map(), new Map())).toThrow(
       "INVALID_IMPORT_MAPPING",
     );
+  });
+});
+
+describe("countImportedSourceMappings", () => {
+  it("excludes unchanged existing entities from import activity counts", () => {
+    const mappings = new Map([
+      ["existing", "existing|member|existing"],
+      ["imported", "P001"],
+      ["mapped-existing", "P002"],
+      ["draft", "draft|member|draft"],
+    ]);
+
+    expect(countImportedSourceMappings(mappings, "member")).toBe(3);
   });
 });
