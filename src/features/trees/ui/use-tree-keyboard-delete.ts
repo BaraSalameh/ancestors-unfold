@@ -45,6 +45,7 @@ export function useTreeKeyboardDelete({
           result.removed === 1 ? t("deleted") : t("members_deleted", { count: result.removed }),
         );
       }
+      if (result.blockedBranchRoots) toast.error(t("branch_root_delete_blocked"));
       if (result.skipped) toast.warning(t("members_delete_skipped", { count: result.skipped }));
       setDeletion(null);
     },

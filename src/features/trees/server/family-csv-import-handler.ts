@@ -10,23 +10,11 @@ import {
   parseFamilyCsv,
   remapFamilyCsvPreview,
   validateFamilyImportGraph,
+  familyCsvBranchConflictIssues,
 } from "../domain/family-csv-import";
 import { importSnapshot } from "./snapshot-repository";
 import { requireFamilyCsvImportManager } from "./family-csv-import-protection";
-
-type LinkedMemberRow = {
-  target_member_id: string;
-  name_en: string | null;
-  name_ar: string | null;
-  gender: "male" | "female";
-  role: string;
-};
-
-type GrantedBranchRow = {
-  target_branch_id: string;
-  name_en: string;
-  name_ar: string | null;
-};
+import { loadTreeBranches } from "./snapshot-branch-uniqueness";
 
 async function recordImportAttempt(request: Request, session: Session) {
   const rate = await enforceRateLimit(
@@ -50,33 +38,12 @@ async function previewContext(client: PoolClient, treeId: string, userId: string
     [treeId],
   );
   if (!tree.rowCount) throw new ApiError("NOT_FOUND", 404);
-  const linkedMembers = await client.query<LinkedMemberRow>(
-    `SELECT membership.family_member_id target_member_id,
-            family_member.name_en,family_member.name_ar,user_account.profile_gender gender,
-            membership.role::text role
-     FROM app.tree_memberships membership
-     JOIN app.family_members family_member ON family_member.id=membership.family_member_id
-     JOIN app.users user_account ON user_account.id=membership.user_id
-     WHERE membership.tree_id=$1 AND membership.family_member_id IS NOT NULL
-       AND membership.revoked_at IS NULL
-       AND membership.affiliation_status IN ('active','read_only')
-     ORDER BY CASE membership.role WHEN 'owner' THEN 0 ELSE 1 END,family_member.created_at`,
-    [treeId],
-  );
-  const grantedBranches = await client.query<GrantedBranchRow>(
-    `SELECT DISTINCT branch.id target_branch_id,branch.name_en,branch.name_ar
-     FROM app.branch_grants grant_record
-     JOIN app.subfamilies branch ON branch.id=grant_record.root_subfamily_id
-     WHERE grant_record.tree_id=$1 AND grant_record.revoked_at IS NULL
-       AND (grant_record.expires_at IS NULL OR grant_record.expires_at>now())
-     ORDER BY branch.name_en`,
-    [treeId],
-  );
   return {
+    currentBranches: await loadTreeBranches(client, treeId),
     expectedVersion: tree.rows[0].version,
     mappingRequirements: {
-      linkedMembers: linkedMembers.rows,
-      grantedBranches: grantedBranches.rows,
+      linkedMembers: [],
+      grantedBranches: [],
     },
   };
 }
@@ -100,7 +67,13 @@ export async function handleFamilyCsvImportRequest(
     );
     const parsed = parseFamilyCsv(body.csv);
     if (!parsed.ok) return json({ code: "INVALID_FAMILY_CSV", issues: parsed.issues }, 422);
-    return json({ ...remapFamilyCsvPreview(parsed.preview, randomUUID), ...context });
+    const branchIssues = familyCsvBranchConflictIssues(context.currentBranches, [
+      ...context.currentBranches,
+      ...parsed.preview.subfamilies,
+    ]);
+    if (branchIssues.length) return json({ code: "INVALID_FAMILY_CSV", issues: branchIssues }, 422);
+    const { currentBranches: _currentBranches, ...publicContext } = context;
+    return json({ ...remapFamilyCsvPreview(parsed.preview, randomUUID), ...publicContext });
   }
 
   const body = await parseBody(request, familyCsvApplySchema, 15 * 1024 * 1024);

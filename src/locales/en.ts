@@ -256,6 +256,8 @@ export const en = {
   deleted: "Member deleted",
   members_deleted: "Deleted {count} members",
   members_delete_skipped: "{count} protected members could not be deleted",
+  branch_root_delete_blocked:
+    "This member is a branch root and cannot be deleted. Contact the tree owner for branch management first.",
   reset_data: "Reset to sample data",
   data_reset: "Data reset",
   name_required: "At least one name (English or Arabic) is required",
@@ -401,6 +403,10 @@ export const en = {
   branch_in_use: "Clear this branch's dependencies before deleting it.",
   branch_must_be_inactive: "Deactivate this branch before deleting it.",
   branch_management_failed: "The branch could not be updated.",
+  duplicate_branch_name:
+    "A branch with this English or Arabic name already exists in this family tree.",
+  duplicate_branch_root:
+    "This family member is already the root of another branch in this family tree.",
   save_tree_before_branch_management:
     "Save or discard your canvas changes before managing branches.",
   branch_read_only_description:
@@ -719,11 +725,11 @@ export const en = {
   family_csv_import: "Import CSV",
   family_csv_import_title: "Import a complete family tree",
   family_csv_import_description:
-    "Validate members, spouses, parents, and branches before replacing the current tree with an editable draft.",
+    "Validate members, spouses, parents, and branches, then add the imported family beside the current tree as an editable draft. You can connect them afterward.",
   family_csv_choose_file: "Choose CSV file",
   family_csv_download_template: "Download template",
   family_csv_required_fields:
-    "Required: member_ref, gender, and at least one of name_en or name_ar. References such as P1 only connect rows; the system generates the real IDs.",
+    "Required: member_ref, gender, and at least one of name_en or name_ar. References such as P1 only connect rows; the system generates the real IDs. A missing reference in a male member's spouse_refs creates an unknown wife that children may reuse in mother_ref.",
   family_csv_preview_failed: "The CSV could not be validated. Check the file and try again.",
   family_csv_save_or_discard: "Save or discard the current tree changes before starting an import.",
   family_csv_members: "Members",

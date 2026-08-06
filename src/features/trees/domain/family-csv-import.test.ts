@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   FAMILY_CSV_MAX_BYTES,
+  familyCsvBranchConflictIssues,
   familyCsvTemplate,
   parseFamilyCsv,
   remapFamilyCsvPreview,
@@ -10,7 +11,7 @@ import {
 // The contract scenarios stay together so canonical and legacy CSV behavior is reviewed as one unit.
 // eslint-disable-next-line max-lines-per-function
 describe("family CSV import", () => {
-  it("parses the UTF-8 bilingual template and infers the parents' union", () => {
+  it("parses the UTF-8 bilingual template with an implicit unknown wife", () => {
     const result = parseFamilyCsv(familyCsvTemplate());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -21,7 +22,62 @@ describe("family CSV import", () => {
       branches: 1,
     });
     expect(result.preview.members.find(({ id }) => id === "P001")?.spouse_ids).toEqual(["P002"]);
+    expect(result.preview.members.find(({ id }) => id === "P002")).toMatchObject({
+      name_en: "Unknown wife",
+      name_ar: "زوجة غير معروفة",
+      gender: "female",
+      is_unknown: true,
+      spouse_ids: ["P001"],
+    });
+    expect(result.preview.members.find(({ id }) => id === "P003")?.mother_id).toBe("P002");
+    expect(result.preview.warnings).toContainEqual(
+      expect.objectContaining({ code: "CREATED_UNKNOWN_WIFE", row: 2 }),
+    );
     expect(result.preview.subfamilies[0]).toMatchObject({ id: "B001", linked_male_id: "P001" });
+  });
+
+  it("reuses implicit wives for children and preserves multiple-spouse divorce state", () => {
+    const csv = [
+      "member_ref,name_en,gender,mother_ref,spouse_refs,divorced_spouse_refs",
+      "H,Husband,male,,U1|U2,U1",
+      "C1,First child,male,U1,,",
+      "C2,Second child,female,U1,,",
+    ].join("\n");
+    const result = parseFamilyCsv(csv);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.preview.members).toHaveLength(5);
+    expect(result.preview.members.find(({ id }) => id === "H")).toMatchObject({
+      spouse_ids: ["U1", "U2"],
+      divorced_from: ["U1"],
+    });
+    expect(result.preview.members.find(({ id }) => id === "U1")).toMatchObject({
+      is_unknown: true,
+      spouse_ids: ["H"],
+      divorced_from: ["H"],
+    });
+    expect(
+      result.preview.members
+        .filter(({ id }) => id.startsWith("C"))
+        .map(({ mother_id }) => mother_id),
+    ).toEqual(["U1", "U1"]);
+    expect(
+      result.preview.warnings.filter(({ code }) => code === "CREATED_UNKNOWN_WIFE"),
+    ).toHaveLength(2);
+
+    let sequence = 200;
+    const remapped = remapFamilyCsvPreview(
+      result.preview,
+      () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, "0")}`,
+    );
+    const sources = new Map(
+      remapped.sourceMemberIds.map(({ sourceId, targetId }) => [sourceId, targetId]),
+    );
+    expect(sources.get("U1")).toBeDefined();
+    expect(remapped.members.find(({ id }) => id === sources.get("C1"))?.mother_id).toBe(
+      sources.get("U1"),
+    );
   });
 
   it("supports quoted commas, line breaks, Arabic-only names, and disconnected roots", () => {
@@ -150,9 +206,56 @@ describe("family CSV import", () => {
     });
   });
 
+  it("counts generated unknown wives toward the member limit", () => {
+    const rows = ["member_ref,name_en,gender,spouse_refs"];
+    for (let index = 0; index < 5_001; index += 1)
+      rows.push(`H${index},Husband ${index},male,U${index}`);
+    const result = parseFamilyCsv(rows.join("\n"));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues.map(({ code }) => code)).toContain("TOO_MANY_MEMBERS");
+  });
+
+  it("rejects imported branch names and roots already used by the current tree", () => {
+    const current = [
+      { id: "existing", name_en: "Main", name_ar: "الرئيسي", linked_male_id: "root" },
+    ];
+    expect(
+      familyCsvBranchConflictIssues(current, [
+        ...current,
+        { id: "imported", name_en: " main ", name_ar: "مختلف", linked_male_id: "new-root" },
+      ]).map(({ code, column }) => ({ code, column })),
+    ).toEqual([{ code: "DUPLICATE_BRANCH_NAME", column: "branch_name_en" }]);
+    expect(
+      familyCsvBranchConflictIssues(current, [
+        ...current,
+        { id: "imported", name_en: "Other", name_ar: "آخر", linked_male_id: "root" },
+      ]).map(({ code, column }) => ({ code, column })),
+    ).toEqual([{ code: "DUPLICATE_BRANCH_ROOT", column: "member_ref" }]);
+  });
+
   it.each([
     ["duplicate IDs", "member_id,name_en,gender\nA,One,male\nA,Two,female", "DUPLICATE_MEMBER_ID"],
     ["missing references", "member_id,name_en,gender,father_id\nA,One,male,X", "MISSING_REFERENCE"],
+    [
+      "standalone missing mothers",
+      "member_ref,name_en,gender,mother_ref\nC,Child,male,U",
+      "MISSING_REFERENCE",
+    ],
+    [
+      "missing spouses referenced only by females",
+      "member_ref,name_en,gender,spouse_refs\nW,Wife,female,H",
+      "MISSING_REFERENCE",
+    ],
+    [
+      "duplicate English branch names",
+      "member_ref,name_en,gender,branch_ref,branch_name_en\nA,One,male,B1,Main\nB,Two,male,B2, main ",
+      "DUPLICATE_BRANCH_NAME",
+    ],
+    [
+      "duplicate Arabic branch names",
+      "member_ref,name_en,gender,branch_ref,branch_name_en,branch_name_ar\nA,One,male,B1,East,الشرق\nB,Two,male,B2,West, الشرق ",
+      "DUPLICATE_BRANCH_NAME",
+    ],
     [
       "wrong parent gender",
       "member_id,name_en,gender,father_id\nA,One,female,B\nB,Two,female,",

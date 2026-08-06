@@ -1,8 +1,6 @@
 import type { PoolClient } from "pg";
 import { ApiError, type SnapshotInput } from "@/server/security";
 
-type ProtectedMember = { id: string; gender: "male" | "female" | null };
-
 export async function requireFamilyCsvImportManager(
   client: PoolClient,
   treeId: string,
@@ -19,38 +17,26 @@ export async function requireFamilyCsvImportManager(
   if (!access.rowCount) throw new ApiError("FORBIDDEN", 403);
 }
 
-export async function validateProtectedFamilyCsvImport(
+export async function validateFamilyCsvAppend(
   client: PoolClient,
   treeId: string,
   snapshot: SnapshotInput,
 ) {
-  const protectedMembers = await client.query<ProtectedMember>(
-    `SELECT membership.family_member_id id,user_account.profile_gender gender
-     FROM app.tree_memberships membership
-     JOIN app.users user_account ON user_account.id=membership.user_id
-     WHERE membership.tree_id=$1 AND membership.family_member_id IS NOT NULL
-       AND membership.revoked_at IS NULL
-       AND membership.affiliation_status IN ('active','read_only')`,
+  const currentMembers = await client.query<{ id: string }>(
+    "SELECT id FROM app.family_members WHERE tree_id=$1 AND deleted_at IS NULL",
     [treeId],
   );
-  const members = new Map((snapshot.members ?? []).map((member) => [member.id, member]));
-  for (const protectedMember of protectedMembers.rows) {
-    const imported = members.get(protectedMember.id);
-    if (!imported) throw new ApiError("IMPORT_LINKED_MEMBER_REQUIRED", 422);
-    if (protectedMember.gender && imported.gender !== protectedMember.gender)
-      throw new ApiError("IMPORT_LINKED_MEMBER_GENDER", 422);
-  }
-
-  const protectedBranches = await client.query<{ id: string }>(
-    `SELECT DISTINCT grant_record.root_subfamily_id id
-     FROM app.branch_grants grant_record
-     WHERE grant_record.tree_id=$1 AND grant_record.revoked_at IS NULL
-       AND (grant_record.expires_at IS NULL OR grant_record.expires_at>now())`,
+  const currentBranches = await client.query<{ id: string }>(
+    "SELECT id FROM app.subfamilies WHERE tree_id=$1 AND deleted_at IS NULL",
     [treeId],
   );
-  const branches = new Set((snapshot.subfamilies ?? []).map(({ id }) => id));
-  for (const branch of protectedBranches.rows)
-    if (!branches.has(branch.id)) throw new ApiError("IMPORT_GRANTED_BRANCH_REQUIRED", 422);
+  const submittedMembers = new Set((snapshot.members ?? []).map(({ id }) => id));
+  const submittedBranches = new Set((snapshot.subfamilies ?? []).map(({ id }) => id));
+  if (
+    currentMembers.rows.some(({ id }) => !submittedMembers.has(id)) ||
+    currentBranches.rows.some(({ id }) => !submittedBranches.has(id))
+  )
+    throw new ApiError("IMPORT_MUST_APPEND", 422);
 }
 
 export function validateSourceMappings(

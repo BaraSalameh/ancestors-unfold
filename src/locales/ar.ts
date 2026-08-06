@@ -246,6 +246,8 @@ export const ar = {
   deleted: "تم الحذف",
   members_deleted: "تم حذف {count} من الأفراد",
   members_delete_skipped: "تعذر حذف {count} من الأفراد المحميين",
+  branch_root_delete_blocked:
+    "هذا الفرد هو أصل فرع ولا يمكن حذفه. تواصل مع مالك الشجرة لإدارة الفرع أولاً.",
   reset_data: "إعادة البيانات الأولية",
   data_reset: "تمت إعادة الضبط",
   name_required: "يلزم إدخال الاسم بالإنجليزية أو العربية",
@@ -398,6 +400,8 @@ export const ar = {
   branch_in_use: "أزل ارتباطات هذا الفرع قبل حذفه.",
   branch_must_be_inactive: "عطّل هذا الفرع قبل حذفه.",
   branch_management_failed: "تعذر تحديث الفرع.",
+  duplicate_branch_name: "يوجد فرع بهذا الاسم الإنجليزي أو العربي في شجرة العائلة هذه.",
+  duplicate_branch_root: "هذا الفرد هو أصل فرع آخر بالفعل في شجرة العائلة هذه.",
   save_tree_before_branch_management: "احفظ تغييرات اللوحة أو تجاهلها قبل إدارة الفروع.",
   branch_read_only_description: "يدير مالك الشجرة تفاصيل الفرع. عدّل الأشخاص والعلاقات في اللوحة.",
   search_members: "البحث عن الأعضاء",
@@ -703,11 +707,11 @@ export const ar = {
   family_csv_import: "استيراد CSV",
   family_csv_import_title: "استيراد شجرة عائلة كاملة",
   family_csv_import_description:
-    "تحقق من الأفراد والأزواج والآباء والفروع قبل استبدال الشجرة الحالية بمسودة قابلة للتعديل.",
+    "تحقق من الأفراد والأزواج والآباء والفروع، ثم أضف العائلة المستوردة بجانب الشجرة الحالية كمسودة قابلة للتعديل. يمكنك ربطهما لاحقًا.",
   family_csv_choose_file: "اختيار ملف CSV",
   family_csv_download_template: "تنزيل القالب",
   family_csv_required_fields:
-    "المطلوب: member_ref وgender وواحد على الأقل من name_en أو name_ar. المراجع مثل P1 تربط الصفوف فقط، وينشئ النظام المعرّفات الفعلية.",
+    "المطلوب: member_ref وgender وواحد على الأقل من name_en أو name_ar. المراجع مثل P1 تربط الصفوف فقط، وينشئ النظام المعرّفات الفعلية. ينشئ المرجع المفقود في spouse_refs لفرد ذكر زوجة غير معروفة، ويمكن للأبناء استخدام المرجع نفسه في mother_ref.",
   family_csv_preview_failed: "تعذر التحقق من ملف CSV. راجع الملف وحاول مجدداً.",
   family_csv_save_or_discard: "احفظ تغييرات الشجرة الحالية أو تجاهلها قبل بدء الاستيراد.",
   family_csv_members: "الأفراد",

@@ -40,11 +40,13 @@ export function EditPage() {
   const handleDelete = (includeWives: boolean) => {
     const ids = includeWives ? [...deletionPlan.selectedIds, ...deletionPlan.wifeIds] : [member.id];
     const result = familyStore.removeMany(ids);
-    toast.success(
-      result.removed === 1 ? t("deleted") : t("members_deleted", { count: result.removed }),
-    );
+    if (result.removed)
+      toast.success(
+        result.removed === 1 ? t("deleted") : t("members_deleted", { count: result.removed }),
+      );
+    if (result.blockedBranchRoots) toast.error(t("branch_root_delete_blocked"));
     if (result.skipped) toast.warning(t("members_delete_skipped", { count: result.skipped }));
-    navigate(memberDeleteDestination(treeId, returnPreview));
+    if (!familyStore.get(member.id)) navigate(memberDeleteDestination(treeId, returnPreview));
   };
 
   return (

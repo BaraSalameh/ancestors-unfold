@@ -8,13 +8,14 @@ import {
   lockSnapshotVersion,
 } from "./snapshot-write-preparation";
 import { validateSnapshotImages } from "./snapshot-image-validation";
-import { validateBranchEditorRoot, validateSnapshotBranchRoots } from "./snapshot-graph-validation";
+import { enforceSnapshotBranchRoots } from "./snapshot-branch-root-policy";
+import { enforceSnapshotBranchUniqueness } from "./snapshot-branch-uniqueness";
 import { enforceBranchSnapshotScope } from "./snapshot-branch-scope";
 import { writeSnapshotMembers } from "./snapshot-member-writer";
 import { writeSnapshotRelationships } from "./snapshot-relationship-writer";
 import {
   requireFamilyCsvImportManager,
-  validateProtectedFamilyCsvImport,
+  validateFamilyCsvAppend,
   validateSourceMappings,
 } from "./family-csv-import-protection";
 
@@ -40,8 +41,7 @@ export async function importSnapshot(
   // eslint-disable-next-line complexity
   return transaction(s.user_id, s.id, rid, async (c) => {
     const { isBranchEditor, branchRootId } = await authorizeSnapshotWrite(c, treeId, s.user_id);
-    validateSnapshotBranchRoots(b);
-    if (isBranchEditor) await validateBranchEditorRoot(c, treeId, branchRootId, b);
+    await enforceSnapshotBranchRoots(c, treeId, b, isBranchEditor ? branchRootId : null);
     if (options.familyCsv) {
       await requireFamilyCsvImportManager(c, treeId, s.user_id);
       validateSourceMappings(
@@ -49,7 +49,7 @@ export async function importSnapshot(
         options.familyCsv.sourceMemberIds,
         options.familyCsv.sourceBranchIds,
       );
-      await validateProtectedFamilyCsvImport(c, treeId, b);
+      await validateFamilyCsvAppend(c, treeId, b);
     }
     const batch = b.batchId || randomUUID();
     const completed = await completedSnapshotWrite(c, treeId, batch);
@@ -64,6 +64,7 @@ export async function importSnapshot(
       members.rows.forEach(({ id }) => allowedMembers.add(id));
     }
     const expectedVersion = await lockSnapshotVersion(c, treeId, Number(b.expectedVersion));
+    if (!isBranchEditor) await enforceSnapshotBranchUniqueness(c, treeId, b);
     const existingMembers = isBranchEditor
       ? await c.query<{ id: string }>(
           "SELECT id FROM app.family_members WHERE tree_id=$1 AND deleted_at IS NULL",

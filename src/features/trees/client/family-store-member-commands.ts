@@ -1,4 +1,4 @@
-import type { FamilyMember, MemberInput, StagedSpouse, SubFamily } from "@/features/members/domain";
+import type { FamilyMember, MemberInput, StagedSpouse } from "@/features/members/domain";
 import {
   detachParentRelationship,
   ensureParentsAreSpouses,
@@ -9,16 +9,15 @@ import {
   toggleDivorce as toggleDivorceRelationship,
 } from "@/features/members/domain";
 import { mirrorSpouseLink } from "./member-link-mutations";
-import { reconcileDraftSubfamilyRoots } from "./family-store-subfamily-reconciliation";
 
 export interface MemberCommandContext {
   state: FamilyMember[];
-  subfamilies?: SubFamily[];
   stagedImages: Map<string, File>;
   commit(mutator: () => void): void;
   replaceStagedImages(next: ReadonlyMap<string, File>): void;
   emit(): void;
   protectedGender?(id: string): FamilyMember["gender"] | undefined;
+  isBranchRoot?(id: string): boolean;
 }
 
 export function createMemberCommands(ctx: MemberCommandContext) {
@@ -359,38 +358,43 @@ function createRelationshipCommands(ctx: MemberCommandContext) {
 function createMemberRemovalCommands(ctx: MemberCommandContext) {
   return {
     remove(id: string): void {
-      if (ctx.protectedGender?.(id)) return;
+      if (ctx.protectedGender?.(id) || ctx.isBranchRoot?.(id)) return;
       ctx.commit(() => {
         ctx.state = removeMember(ctx.state, id);
-        reconcileContextSubfamilyRoots(ctx);
         ctx.stagedImages.delete(id);
       });
       ctx.replaceStagedImages(ctx.stagedImages);
       ctx.emit();
     },
-    removeMany(ids: Iterable<string>): { removed: number; skipped: number } {
+    removeMany(ids: Iterable<string>): {
+      removed: number;
+      skipped: number;
+      blockedBranchRoots: number;
+    } {
       const requested = new Set(ids);
       const existing = ctx.state.filter((member) => requested.has(member.id));
-      const removable = existing.filter((member) => !ctx.protectedGender?.(member.id));
-      const skipped = existing.length - removable.length;
-      if (!removable.length) return { removed: 0, skipped };
+      const branchRoots = existing.filter((member) => ctx.isBranchRoot?.(member.id));
+      const protectedMembers = existing.filter(
+        (member) => !ctx.isBranchRoot?.(member.id) && ctx.protectedGender?.(member.id),
+      );
+      const removable = existing.filter(
+        (member) => !ctx.isBranchRoot?.(member.id) && !ctx.protectedGender?.(member.id),
+      );
+      const result = {
+        removed: removable.length,
+        skipped: protectedMembers.length,
+        blockedBranchRoots: branchRoots.length,
+      };
+      if (!removable.length) return result;
       ctx.commit(() => {
         for (const member of removable) {
           ctx.state = removeMember(ctx.state, member.id);
           ctx.stagedImages.delete(member.id);
         }
-        reconcileContextSubfamilyRoots(ctx);
       });
       ctx.replaceStagedImages(ctx.stagedImages);
       ctx.emit();
-      return { removed: removable.length, skipped };
+      return result;
     },
   };
-}
-
-function reconcileContextSubfamilyRoots(ctx: MemberCommandContext) {
-  if (!ctx.subfamilies) return;
-  const reconciled = reconcileDraftSubfamilyRoots(ctx.state, ctx.subfamilies);
-  ctx.state = reconciled.members;
-  ctx.subfamilies = reconciled.subfamilies;
 }

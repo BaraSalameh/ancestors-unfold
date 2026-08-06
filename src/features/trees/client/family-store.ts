@@ -5,7 +5,6 @@ import { treeClient, type FamilyCsvPreviewResponse } from "../api/tree-client";
 // eslint-disable-next-line no-restricted-imports -- tree persistence coordinates staged member-image uploads.
 import { memberImageClient } from "@/features/members/api";
 import { createMemberCommands, type MemberCommandContext } from "./family-store-member-commands";
-import { reconcileDraftSubfamilyRoots } from "./family-store-subfamily-reconciliation";
 import {
   createSubfamilyCommands,
   type SubfamilyCommandContext,
@@ -29,11 +28,7 @@ let accessScope: TreeAccessScope = "preview";
 let assignedBranchId: string | undefined;
 let canImportCsv = false;
 const listeners = new Set<() => void>();
-type DraftSnapshot = {
-  members: FamilyMember[];
-  subfamilies: SubFamily[];
-  stagedImages: Map<string, File>;
-};
+type DraftSnapshot = { members: FamilyMember[]; stagedImages: Map<string, File> };
 let past: DraftSnapshot[] = [];
 let future: DraftSnapshot[] = [];
 let stagedImages = new Map<string, File>();
@@ -137,9 +132,6 @@ async function updateRemoteSnapshot() {
       stagedImages.delete(memberId);
       stagedImageUrls.delete(memberId);
     }
-    const reconciled = reconcileDraftSubfamilyRoots(state, subfamilies);
-    state = reconciled.members;
-    subfamilies = reconciled.subfamilies;
     const members = cloneMembers(state);
     const currentSubfamilies = cloneSubfamilies(subfamilies);
     const activeImport = pendingCsvImport;
@@ -151,11 +143,11 @@ async function updateRemoteSnapshot() {
           subfamilies: currentSubfamilies,
           sourceMemberIds: members.map(({ id: targetId }) => ({
             targetId,
-            sourceId: activeImport.sourceMemberIds.get(targetId) ?? targetId,
+            sourceId: activeImport.sourceMemberIds.get(targetId) ?? `draft|member|${targetId}`,
           })),
           sourceBranchIds: currentSubfamilies.map(({ id: targetId }) => ({
             targetId,
-            sourceId: activeImport.sourceBranchIds.get(targetId) ?? targetId,
+            sourceId: activeImport.sourceBranchIds.get(targetId) ?? `draft|branch|${targetId}`,
           })),
         })
       : await treeClient.saveSnapshot(treeId, {
@@ -254,11 +246,7 @@ function loadSubfamilies() {
 }
 
 function snapshot(): DraftSnapshot {
-  return {
-    members: cloneMembers(state),
-    subfamilies: cloneSubfamilies(subfamilies),
-    stagedImages: new Map(stagedImages),
-  };
+  return { members: cloneMembers(state), stagedImages: new Map(stagedImages) };
 }
 
 function replaceStagedImages(next: ReadonlyMap<string, File>) {
@@ -283,7 +271,6 @@ function commit(mutator: () => void) {
   mutator();
   if (
     JSON.stringify(before.members) === JSON.stringify(state) &&
-    JSON.stringify(before.subfamilies) === JSON.stringify(subfamilies) &&
     before.stagedImages.size === stagedImages.size
   )
     return;
@@ -304,7 +291,6 @@ function applySnapshot(next: DraftSnapshot) {
       void memberImageClient.discard(activeTreeId, member.image_asset_id).catch(() => undefined);
   }
   state = cloneMembers(next.members);
-  subfamilies = cloneSubfamilies(next.subfamilies);
   replaceStagedImages(next.stagedImages);
   markDraftChanged();
   emit();
@@ -317,12 +303,6 @@ const memberCommandContext: MemberCommandContext = {
   set state(next) {
     state = next;
   },
-  get subfamilies() {
-    return subfamilies;
-  },
-  set subfamilies(next) {
-    subfamilies = next ?? [];
-  },
   get stagedImages() {
     return stagedImages;
   },
@@ -333,13 +313,12 @@ const memberCommandContext: MemberCommandContext = {
   replaceStagedImages,
   emit,
   protectedGender(id) {
-    const importedGender = pendingCsvImport?.protectedMemberIds.get(id);
-    if (importedGender) return importedGender;
-    if (accessScope !== "branch") return undefined;
-    const assignedRoot = subfamilies.find(
-      (branch) => branch.id === assignedBranchId && branch.linked_male_id === id,
+    return pendingCsvImport?.protectedMemberIds.get(id);
+  },
+  isBranchRoot(id) {
+    return subfamilies.some(
+      ({ linked_male_id, status }) => linked_male_id === id && status !== "inactive",
     );
-    return assignedRoot ? state.find((member) => member.id === id)?.gender : undefined;
   },
 };
 
@@ -461,6 +440,9 @@ export const familyStore = {
   },
   protectedImportGender(id: string): FamilyMember["gender"] | undefined {
     return pendingCsvImport?.protectedMemberIds.get(id);
+  },
+  isBranchRoot(id: string): boolean {
+    return memberCommandContext.isBranchRoot?.(id) ?? false;
   },
   isProtectedImportBranch(id: string): boolean {
     return pendingCsvImport?.protectedBranchIds.has(id) ?? false;

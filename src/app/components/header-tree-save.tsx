@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { familyStore } from "@/features/trees";
 import { Button } from "@/shared/ui/button";
 import type { TranslationKey } from "@/locales";
+import { ApiClientError } from "@/shared/api/client";
 
 type Persistence = {
   dirty: boolean;
@@ -30,9 +31,21 @@ export function HeaderTreeSave({ persistence, t }: { persistence: Persistence; t
     try {
       await familyStore.updateSnapshot();
       toast.success(t("tree_saved"));
-    } catch {
+    } catch (error) {
       const conflicted = familyStore.getPersistenceState().conflicted;
-      toast.error(conflicted ? t("tree_version_conflict") : t("tree_update_failed_draft"));
+      const duplicateKey =
+        error instanceof ApiClientError && error.code === "DUPLICATE_BRANCH_NAME"
+          ? "duplicate_branch_name"
+          : error instanceof ApiClientError && error.code === "DUPLICATE_BRANCH_ROOT"
+            ? "duplicate_branch_root"
+            : undefined;
+      toast.error(
+        duplicateKey
+          ? t(duplicateKey)
+          : conflicted
+            ? t("tree_version_conflict")
+            : t("tree_update_failed_draft"),
+      );
     }
   };
 

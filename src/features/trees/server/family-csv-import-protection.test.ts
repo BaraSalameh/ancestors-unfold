@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { SnapshotInput } from "@/server/security";
 import {
   requireFamilyCsvImportManager,
-  validateProtectedFamilyCsvImport,
+  validateFamilyCsvAppend,
   validateSourceMappings,
 } from "./family-csv-import-protection";
 
@@ -40,41 +40,41 @@ describe("family CSV import protection", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
   });
 
-  it("requires every active linked member and granted branch with compatible gender", async () => {
+  it("requires imports to retain every active member and branch", async () => {
     const query = vi
       .fn()
       .mockResolvedValueOnce({
-        rows: [{ id: snapshot.members[0].id, gender: "male" }],
+        rows: [{ id: snapshot.members[0].id }],
         rowCount: 1,
       })
       .mockResolvedValueOnce({ rows: [{ id: snapshot.subfamilies[0].id }], rowCount: 1 });
     await expect(
-      validateProtectedFamilyCsvImport({ query } as unknown as PoolClient, "tree", snapshot),
+      validateFamilyCsvAppend({ query } as unknown as PoolClient, "tree", snapshot),
     ).resolves.toBeUndefined();
   });
 
-  it("rejects deletion of a linked member or granted branch", async () => {
-    const memberQuery = vi.fn().mockResolvedValueOnce({
-      rows: [{ id: snapshot.members[0].id, gender: "male" }],
-      rowCount: 1,
-    });
+  it("rejects replacement of any current member or branch", async () => {
+    const memberQuery = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ id: snapshot.members[0].id }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
     await expect(
-      validateProtectedFamilyCsvImport({ query: memberQuery } as unknown as PoolClient, "tree", {
+      validateFamilyCsvAppend({ query: memberQuery } as unknown as PoolClient, "tree", {
         ...snapshot,
         members: [],
       }),
-    ).rejects.toMatchObject({ code: "IMPORT_LINKED_MEMBER_REQUIRED" });
+    ).rejects.toMatchObject({ code: "IMPORT_MUST_APPEND" });
 
     const branchQuery = vi
       .fn()
       .mockResolvedValueOnce({ rows: [], rowCount: 0 })
       .mockResolvedValueOnce({ rows: [{ id: snapshot.subfamilies[0].id }], rowCount: 1 });
     await expect(
-      validateProtectedFamilyCsvImport({ query: branchQuery } as unknown as PoolClient, "tree", {
+      validateFamilyCsvAppend({ query: branchQuery } as unknown as PoolClient, "tree", {
         ...snapshot,
         subfamilies: [],
       }),
-    ).rejects.toMatchObject({ code: "IMPORT_GRANTED_BRANCH_REQUIRED" });
+    ).rejects.toMatchObject({ code: "IMPORT_MUST_APPEND" });
   });
 
   it("accepts only one-to-one source mappings targeting the draft", () => {

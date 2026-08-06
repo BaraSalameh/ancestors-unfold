@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- The CSV grammar and graph validation form one versioned import contract. */
 import Papa from "papaparse";
 import type { FamilyMember, SubFamily } from "@/features/members/domain";
+import { newBranchConflicts, type BranchUniquenessInput } from "./branch-uniqueness";
 
 export const FAMILY_CSV_MAX_BYTES = 10 * 1024 * 1024;
 const FAMILY_CSV_MAX_MEMBERS = 10_000;
@@ -390,7 +391,60 @@ function parseMembers(rows: Array<{ row: number; value: CsvRow }>) {
       });
     }
   }
-  return { issues, members, subfamilies };
+  return { issues, members, subfamilies, branchRows };
+}
+
+export function familyCsvBranchConflictIssues(
+  current: readonly BranchUniquenessInput[],
+  next: readonly BranchUniquenessInput[],
+  sourceRows: ReadonlyMap<string, number> = new Map(),
+): FamilyCsvIssue[] {
+  return newBranchConflicts(current, next).map((conflict) => ({
+    code: conflict.code,
+    message:
+      conflict.code === "DUPLICATE_BRANCH_ROOT"
+        ? "A family root may be linked to only one branch."
+        : "A branch with this name already exists in the family tree.",
+    row: conflict.branchIds.map((id) => sourceRows.get(id)).find((row) => row !== undefined),
+    column: conflict.column === "linked_male_id" ? "member_ref" : conflict.column,
+    severity: "error",
+  }));
+}
+
+function synthesizeUnknownWives(members: PendingMember[]) {
+  const warnings: FamilyCsvIssue[] = [];
+  const knownIds = new Set(members.map(({ id }) => id));
+  const now = new Date().toISOString();
+
+  for (const husband of [...members]) {
+    if (husband.gender !== "male") continue;
+    for (const spouseRef of husband.rawSpouses) {
+      if (knownIds.has(spouseRef) || !validSourceId(spouseRef)) continue;
+      knownIds.add(spouseRef);
+      members.push({
+        id: spouseRef,
+        name_en: "Unknown wife",
+        name_ar: "زوجة غير معروفة",
+        gender: "female",
+        citizen_status: "resident",
+        is_unknown: true,
+        created_at: now,
+        updated_at: now,
+        sourceRow: husband.sourceRow,
+        rawSpouses: [],
+        rawDivorced: [],
+      });
+      warnings.push(
+        warning(
+          "CREATED_UNKNOWN_WIFE",
+          `Created an unknown wife for missing spouse reference ${spouseRef}.`,
+          husband.sourceRow,
+          "spouse_refs",
+        ),
+      );
+    }
+  }
+  return warnings;
 }
 
 // Relationship normalization deliberately handles all parent/spouse invariants in one graph pass.
@@ -545,6 +599,15 @@ export function parseFamilyCsv(csv: string): FamilyCsvParseResult {
   const rows = csvRows(csv);
   if (!rows.ok) return rows;
   const parsed = parseMembers(rows.rows);
+  const unknownWifeWarnings = synthesizeUnknownWives(parsed.members);
+  parsed.issues.push(...familyCsvBranchConflictIssues([], parsed.subfamilies, parsed.branchRows));
+  if (parsed.members.length > FAMILY_CSV_MAX_MEMBERS)
+    parsed.issues.push(
+      error(
+        "TOO_MANY_MEMBERS",
+        "A CSV may contain at most 10,000 members, including generated unknown wives.",
+      ),
+    );
   if (parsed.subfamilies.length > FAMILY_CSV_MAX_BRANCHES)
     parsed.issues.push(error("TOO_MANY_BRANCHES", "A CSV may define at most 2,000 branches."));
   const relationships = validateAndNormalizeRelationships(parsed.members);
@@ -577,7 +640,7 @@ export function parseFamilyCsv(csv: string): FamilyCsvParseResult {
         spouseLinks: spousePairs.size,
         branches: parsed.subfamilies.length,
       },
-      warnings: relationships.warnings,
+      warnings: [...unknownWifeWarnings, ...relationships.warnings],
     },
   };
 }
@@ -795,24 +858,6 @@ export function familyCsvTemplate() {
       "Main branch",
       "الفرع الرئيسي",
       "1950-01-01",
-      "",
-      "false",
-      "resident",
-      "",
-    ],
-    [
-      "P002",
-      "Mother",
-      "الأم",
-      "female",
-      "",
-      "",
-      "P001",
-      "",
-      "",
-      "",
-      "",
-      "1955-01-01",
       "",
       "false",
       "resident",

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemberCommands, type MemberCommandContext } from "./family-store-member-commands";
-import type { FamilyMember, SubFamily } from "@/features/members/domain";
+import type { FamilyMember } from "@/features/members/domain";
 
 const member = (id: string, patch: Partial<FamilyMember> = {}): FamilyMember => ({
   id,
@@ -106,7 +106,7 @@ describe("atomic member deletion", () => {
 
     const result = createMemberCommands(context).removeMany(["father", "mother"]);
 
-    expect(result).toEqual({ removed: 2, skipped: 0 });
+    expect(result).toEqual({ removed: 2, skipped: 0, blockedBranchRoots: 0 });
     expect(commit).toHaveBeenCalledTimes(1);
     expect(state).toEqual([member("child", { father_id: undefined, mother_id: undefined })]);
   });
@@ -130,35 +130,13 @@ describe("atomic member deletion", () => {
     expect(createMemberCommands(context).removeMany(["protected", "deletable"])).toEqual({
       removed: 1,
       skipped: 1,
+      blockedBranchRoots: 0,
     });
     expect(state.map(({ id }) => id)).toEqual(["protected"]);
   });
 
-  it("removes branches rooted at deleted members and detaches their references", () => {
-    let state = [
-      member("root"),
-      member("assigned", { subfamily_id: "root-branch" }),
-      member("other"),
-    ];
-    let subfamilies: SubFamily[] = [
-      {
-        id: "root-branch",
-        name_en: "Root branch",
-        name_ar: "",
-        linked_male_id: "root",
-        created_at: "then",
-        updated_at: "then",
-      },
-      {
-        id: "child-branch",
-        name_en: "Child branch",
-        name_ar: "",
-        linked_male_id: "other",
-        parent_subfamily_id: "root-branch",
-        created_at: "then",
-        updated_at: "then",
-      },
-    ];
+  it("blocks branch roots while deleting other selected members", () => {
+    let state = [member("branch-root"), member("contributor-member")];
     const context: MemberCommandContext = {
       get state() {
         return state;
@@ -166,23 +144,16 @@ describe("atomic member deletion", () => {
       set state(next) {
         state = next;
       },
-      get subfamilies() {
-        return subfamilies;
-      },
-      set subfamilies(next) {
-        subfamilies = next ?? [];
-      },
       stagedImages: new Map<string, File>(),
       commit: (mutator) => mutator(),
       replaceStagedImages: vi.fn(),
       emit: vi.fn(),
+      isBranchRoot: (id) => id === "branch-root",
     };
 
-    createMemberCommands(context).remove("root");
-
-    expect(state.find(({ id }) => id === "assigned")?.subfamily_id).toBeUndefined();
-    expect(subfamilies).toEqual([
-      expect.objectContaining({ id: "child-branch", parent_subfamily_id: undefined }),
-    ]);
+    expect(createMemberCommands(context).removeMany(["branch-root", "contributor-member"])).toEqual(
+      { removed: 1, skipped: 0, blockedBranchRoots: 1 },
+    );
+    expect(state.map(({ id }) => id)).toEqual(["branch-root"]);
   });
 });

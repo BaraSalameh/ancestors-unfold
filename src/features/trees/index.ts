@@ -8,6 +8,7 @@ export {
 } from "./domain/activity-label";
 export { isTreeEditorDestination } from "./domain/editor-navigation";
 export { chronologicalPeriodOrDefault } from "./domain/canvas-preview";
+export { newBranchConflicts } from "./domain/branch-uniqueness";
 export { CollaborationDashboard } from "./pages/collaboration-dashboard";
 export { BranchesPage } from "./pages/branches-page";
 export { TreePage } from "./pages/tree-page";

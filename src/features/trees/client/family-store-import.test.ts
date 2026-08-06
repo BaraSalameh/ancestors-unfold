@@ -14,7 +14,7 @@ const now = "2026-08-01T00:00:00.000Z";
 // The store is stateful by design; keeping both phases in one suite verifies the complete lifecycle.
 // eslint-disable-next-line max-lines-per-function
 describe("family store CSV import draft", () => {
-  it("saves edited import drafts through the protected endpoint and preserves mapped IDs", async () => {
+  it("saves an imported family beside the current editable tree", async () => {
     const baselineOwner = {
       id: ownerId,
       name_en: "Current owner",
@@ -39,7 +39,14 @@ describe("family store CSV import draft", () => {
         version: 5,
         access_scope: "tree",
         capabilities: { can_import_csv: true },
-        members: [{ ...baselineOwner, name_en: "Edited imported owner" }],
+        members: [
+          baselineOwner,
+          {
+            ...baselineOwner,
+            id: "00000000-0000-4000-8000-000000000100",
+            name_en: "Edited imported owner",
+          },
+        ],
         subfamilies: [],
       });
     const applyFamilyCsv = vi.fn().mockResolvedValue({ version: 5 });
@@ -82,28 +89,20 @@ describe("family store CSV import draft", () => {
       summary: { members: 1, parentLinks: 0, spouseLinks: 0, branches: 0 },
       warnings: [],
       mappingRequirements: {
-        linkedMembers: [
-          {
-            target_member_id: ownerId,
-            name_en: "Current owner",
-            name_ar: "",
-            gender: "male",
-            role: "owner",
-          },
-        ],
+        linkedMembers: [],
         grantedBranches: [],
       },
     };
 
     familyStore.stageFamilyCsvImport(preview, {
-      linkedMembers: { [ownerId]: "00000000-0000-4000-8000-000000000100" },
+      linkedMembers: {},
       grantedBranches: {},
     });
     expect(familyStore.getPersistenceState()).toMatchObject({ dirty: true, importPending: true });
     expect(familyStore.get(ownerId)).toMatchObject({ image_asset_id: "asset" });
 
-    familyStore.update(ownerId, { name_en: "Edited imported owner", gender: "female" });
-    familyStore.remove(ownerId);
+    const importedId = "00000000-0000-4000-8000-000000000100";
+    familyStore.update(importedId, { name_en: "Edited imported owner" });
     const added = familyStore.add({
       name_en: "Added while editing",
       name_ar: "",
@@ -111,6 +110,10 @@ describe("family store CSV import draft", () => {
       citizen_status: "resident",
     });
     expect(familyStore.get(ownerId)).toMatchObject({
+      name_en: "Current owner",
+      image_asset_id: "asset",
+    });
+    expect(familyStore.get(importedId)).toMatchObject({
       name_en: "Edited imported owner",
       gender: "male",
     });
@@ -123,12 +126,14 @@ describe("family store CSV import draft", () => {
       expect.objectContaining({
         expectedVersion: 4,
         members: expect.arrayContaining([
-          expect.objectContaining({ id: ownerId, name_en: "Edited imported owner" }),
+          expect.objectContaining({ id: ownerId, name_en: "Current owner" }),
+          expect.objectContaining({ id: importedId, name_en: "Edited imported owner" }),
           expect.objectContaining({ id: added.id, name_en: "Added while editing" }),
         ]),
         sourceMemberIds: [
-          { targetId: ownerId, sourceId: "source-owner" },
-          { targetId: added.id, sourceId: added.id },
+          { targetId: ownerId, sourceId: `existing|member|${ownerId}` },
+          { targetId: importedId, sourceId: "source-owner" },
+          { targetId: added.id, sourceId: `draft|member|${added.id}` },
         ],
       }),
     );

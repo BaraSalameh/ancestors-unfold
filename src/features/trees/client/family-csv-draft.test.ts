@@ -48,27 +48,13 @@ const preview: FamilyCsvPreviewResponse = {
     { sourceId: "source-branch", targetId: "00000000-0000-4000-8000-000000000102" },
   ],
   mappingRequirements: {
-    linkedMembers: [
-      {
-        target_member_id: "00000000-0000-4000-8000-000000000001",
-        name_en: "Current owner",
-        name_ar: "",
-        gender: "male",
-        role: "owner",
-      },
-    ],
-    grantedBranches: [
-      {
-        target_branch_id: "00000000-0000-4000-8000-000000000002",
-        name_en: "Current branch",
-        name_ar: "",
-      },
-    ],
+    linkedMembers: [],
+    grantedBranches: [],
   },
 };
 
-describe("family CSV draft mapping", () => {
-  it("reuses protected IDs and images while remapping every relationship", () => {
+describe("family CSV draft append", () => {
+  it("keeps the current tree and appends the imported family without connecting them", () => {
     const draft = buildFamilyCsvDraft(
       preview,
       {
@@ -112,32 +98,42 @@ describe("family CSV draft mapping", () => {
       ],
     );
 
+    expect(draft.members).toHaveLength(3);
     expect(draft.members[0]).toMatchObject({
       id: "00000000-0000-4000-8000-000000000001",
       image_asset_id: "asset",
+    });
+    expect(draft.members[0]).not.toHaveProperty("spouse_id");
+    expect(draft.members[1]).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000100",
       spouse_id: "00000000-0000-4000-8000-000000000101",
     });
+    expect(draft.subfamilies).toHaveLength(2);
     expect(draft.subfamilies[0]).toMatchObject({
       id: "00000000-0000-4000-8000-000000000002",
-      linked_male_id: "00000000-0000-4000-8000-000000000001",
     });
     expect(draft.subfamilies[0].attachments).toHaveLength(1);
-    expect(draft.sourceMemberIds.get("00000000-0000-4000-8000-000000000001")).toBe("source-owner");
+    expect(draft.subfamilies[1]).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000102",
+      linked_male_id: "00000000-0000-4000-8000-000000000100",
+    });
+    expect(draft.sourceMemberIds.get("00000000-0000-4000-8000-000000000001")).toBe(
+      "existing|member|00000000-0000-4000-8000-000000000001",
+    );
+    expect(draft.sourceMemberIds.get("00000000-0000-4000-8000-000000000100")).toBe("source-owner");
+    expect(draft.sourceBranchIds.get("00000000-0000-4000-8000-000000000002")).toBe(
+      "existing|branch|00000000-0000-4000-8000-000000000002",
+    );
+    expect(draft.protectedMemberIds.size).toBe(0);
+    expect(draft.protectedBranchIds.size).toBe(0);
   });
 
-  it("rejects duplicate or gender-incompatible protected mappings", () => {
+  it("rejects an imported UUID that collides with the current tree", () => {
     expect(() =>
       buildFamilyCsvDraft(
-        preview,
-        {
-          linkedMembers: {
-            "00000000-0000-4000-8000-000000000001": "00000000-0000-4000-8000-000000000101",
-          },
-          grantedBranches: {
-            "00000000-0000-4000-8000-000000000002": "00000000-0000-4000-8000-000000000102",
-          },
-        },
-        [],
+        { ...preview, members: [{ ...preview.members[0], id: "collision" }] },
+        { linkedMembers: {}, grantedBranches: {} },
+        [{ ...preview.members[1], id: "collision" }],
         [],
       ),
     ).toThrow("INVALID_MEMBER_MAPPING");
