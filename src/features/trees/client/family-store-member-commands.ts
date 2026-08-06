@@ -20,7 +20,11 @@ export interface MemberCommandContext {
 }
 
 export function createMemberCommands(ctx: MemberCommandContext) {
-  return { ...createMemberCrudCommands(ctx), ...createRelationshipCommands(ctx) };
+  return {
+    ...createMemberCrudCommands(ctx),
+    ...createRelationshipCommands(ctx),
+    ...createMemberRemovalCommands(ctx),
+  };
 }
 
 function addFatherWithSpouses(
@@ -347,6 +351,11 @@ function createRelationshipCommands(ctx: MemberCommandContext) {
       });
       return wife;
     },
+  };
+}
+
+function createMemberRemovalCommands(ctx: MemberCommandContext) {
+  return {
     remove(id: string): void {
       if (ctx.protectedGender?.(id)) return;
       ctx.commit(() => {
@@ -355,6 +364,22 @@ function createRelationshipCommands(ctx: MemberCommandContext) {
       });
       ctx.replaceStagedImages(ctx.stagedImages);
       ctx.emit();
+    },
+    removeMany(ids: Iterable<string>): { removed: number; skipped: number } {
+      const requested = new Set(ids);
+      const existing = ctx.state.filter((member) => requested.has(member.id));
+      const removable = existing.filter((member) => !ctx.protectedGender?.(member.id));
+      const skipped = existing.length - removable.length;
+      if (!removable.length) return { removed: 0, skipped };
+      ctx.commit(() => {
+        for (const member of removable) {
+          ctx.state = removeMember(ctx.state, member.id);
+          ctx.stagedImages.delete(member.id);
+        }
+      });
+      ctx.replaceStagedImages(ctx.stagedImages);
+      ctx.emit();
+      return { removed: removable.length, skipped };
     },
   };
 }

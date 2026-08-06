@@ -13,34 +13,50 @@ export function useDashboardTreeControls(
   updateTree: (tree: CurrentTree) => void,
 ) {
   const { t } = useI18n();
-  const [renameOpen, setRenameOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [nameEn, setNameEn] = useState("");
   const [nameAr, setNameAr] = useState("");
-  const [renaming, setRenaming] = useState(false);
-  const openRename = () => {
+  const [descriptionEn, setDescriptionEn] = useState("");
+  const [descriptionAr, setDescriptionAr] = useState("");
+  const [countryCode, setCountryCode] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<"private" | "public">("private");
+  const [managing, setManaging] = useState(false);
+  const openManage = () => {
     if (!tree || !canUseOwnerTreeControls(tree.role)) return;
     setNameEn(tree.name_en ?? "");
     setNameAr(tree.name_ar ?? "");
-    setRenameOpen(true);
+    setDescriptionEn(tree.description_en ?? "");
+    setDescriptionAr(tree.description_ar ?? "");
+    setCountryCode(tree.country_code ?? null);
+    setVisibility(tree.visibility ?? "private");
+    setManageOpen(true);
   };
-  const rename = async () => {
-    if (renaming || !tree || !canUseOwnerTreeControls(tree.role) || !nameEn.trim()) return;
-    setRenaming(true);
+  const manage = async () => {
+    if (managing || !tree || !canUseOwnerTreeControls(tree.role) || !nameEn.trim()) return;
+    setManaging(true);
     try {
       const response = await fetch(`/api/trees/${tree.id}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name_en: nameEn.trim(), name_ar: nameAr.trim() }),
+        body: JSON.stringify({
+          name_en: nameEn.trim(),
+          name_ar: nameAr.trim() || null,
+          description_en: descriptionEn.trim() || null,
+          description_ar: descriptionAr.trim() || null,
+          country_code: countryCode,
+          visibility,
+        }),
       });
-      if (!response.ok) throw new Error("TREE_RENAME_FAILED");
-      updateTree({ ...tree, name_en: nameEn.trim(), name_ar: nameAr.trim() || null });
-      setRenameOpen(false);
+      if (!response.ok) throw new Error("TREE_UPDATE_FAILED");
+      const updated = (await response.json()) as CurrentTree;
+      updateTree({ ...tree, ...updated });
+      setManageOpen(false);
       toast.success(t("updated"));
     } catch {
       toast.error(t("tree_update_failed"));
     } finally {
-      setRenaming(false);
+      setManaging(false);
     }
   };
   const copyPreview = async () => {
@@ -53,15 +69,23 @@ export function useDashboardTreeControls(
     }
   };
   return {
-    renameOpen,
-    setRenameOpen,
+    manageOpen,
+    setManageOpen,
     nameEn,
     setNameEn,
     nameAr,
     setNameAr,
-    renaming,
-    openRename,
-    rename,
+    descriptionEn,
+    setDescriptionEn,
+    descriptionAr,
+    setDescriptionAr,
+    countryCode,
+    setCountryCode,
+    visibility,
+    setVisibility,
+    managing,
+    openManage,
+    manage,
     copyPreview,
   };
 }

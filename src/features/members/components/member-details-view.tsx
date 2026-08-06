@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Edit, User } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/shared/ui/button";
 import { displayName, useI18n } from "@/shared/i18n";
 import { ExpandableProfileImage } from "../ui/expandable-profile-image";
@@ -10,7 +11,7 @@ import {
   memberReturnDestination,
   type MemberNavigationContext,
 } from "../domain/member-navigation";
-import type { DescendantEntry } from "../domain/member-details";
+import { type DescendantEntry, visibleDescendantEntries } from "../domain/member-details";
 import type { FamilyMember } from "../domain/types";
 
 interface MemberDetailsViewProps {
@@ -244,24 +245,58 @@ function DescendantSection({
   navigation: MemberNavigationContext;
 }) {
   const { t, lang } = useI18n();
+  const [collapsed, setCollapsed] = useState(
+    () =>
+      new Set(descendants.filter((entry) => entry.hasDescendants).map((entry) => entry.member.id)),
+  );
+  const visible = visibleDescendantEntries(descendants, collapsed);
+  const toggle = (id: string) =>
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   return (
-    <DetailSection title={t("descendants")}>
+    <DetailSection title={t("descendants_count", { count: descendants.length })}>
       {descendants.length === 0 ? (
         <EmptyValue />
       ) : (
         <ul className="space-y-1 text-sm">
-          {descendants.map(({ member, depth }) => (
-            <li key={member.id} style={{ paddingInlineStart: depth * 16 }}>
-              <Link
-                to="/member/$id"
-                params={{ id: member.id }}
-                search={memberDetailsSearch(navigation)}
-                className="hover:underline"
+          {visible.map(({ member, depth, hasDescendants }) => {
+            const isCollapsed = collapsed.has(member.id);
+            return (
+              <li
+                key={member.id}
+                className="flex items-center gap-1"
+                style={{ paddingInlineStart: depth * 24 }}
               >
-                • {displayName(member, lang)}
-              </Link>
-            </li>
-          ))}
+                {hasDescendants ? (
+                  <button
+                    type="button"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs hover:bg-accent"
+                    aria-expanded={!isCollapsed}
+                    aria-label={`${t(isCollapsed ? "expand_descendants" : "collapse_descendants")}: ${displayName(member, lang)}`}
+                    onClick={() => toggle(member.id)}
+                  >
+                    {isCollapsed ? "+" : "−"}
+                  </button>
+                ) : (
+                  <span className="w-5 shrink-0 text-center" aria-hidden="true">
+                    •
+                  </span>
+                )}
+                <Link
+                  to="/member/$id"
+                  params={{ id: member.id }}
+                  search={memberDetailsSearch(navigation)}
+                  className="hover:underline"
+                >
+                  {displayName(member, lang)}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </DetailSection>
@@ -316,7 +351,11 @@ export function MemberDetailsView(props: MemberDetailsViewProps) {
           )}
         </DetailSection>
         <AncestorSection ancestors={props.ancestors} navigation={navigation} />
-        <DescendantSection descendants={props.descendants} navigation={navigation} />
+        <DescendantSection
+          key={member.id}
+          descendants={props.descendants}
+          navigation={navigation}
+        />
       </div>
     </div>
   );

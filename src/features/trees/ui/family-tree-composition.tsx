@@ -12,6 +12,8 @@ interface Props {
   previewType: TreePreviewType;
   projection: FamilyTreeProjection;
   state: FamilyTreeState;
+  csvImportOpen: boolean;
+  onCsvImportOpenChange: (open: boolean) => void;
 }
 
 export function FamilyTreeComposition(props: Props) {
@@ -42,6 +44,8 @@ export function FamilyTreeComposition(props: Props) {
         query: ui.query,
         setQuery: ui.setQuery,
         t: core.t,
+        csvImportOpen: props.csvImportOpen,
+        onCsvImportOpenChange: props.onCsvImportOpenChange,
       }}
       flowKey={props.previewType}
       flow={{
@@ -103,10 +107,12 @@ export function FamilyTreeComposition(props: Props) {
       }}
       dialogs={{
         canEdit,
+        cancelMemberDeletion: graph.keyboardDeletion.cancelDeletion,
         childMotherChoice: actions.childMotherChoice,
         creationChoice: actions.creationChoice,
         lang: core.lang,
         motherPicker: ui.motherPicker,
+        memberDeletion: graph.keyboardDeletion.deletion,
         navigateToAdd: actions.navigateToAdd,
         pickMother,
         preserveDetachedSubtree: actions.preserveDetachedSubtree,
@@ -116,6 +122,7 @@ export function FamilyTreeComposition(props: Props) {
         setMotherPicker: ui.setMotherPicker,
         setRemoveParentChoice: actions.setRemoveParentChoice,
         t: core.t,
+        confirmMemberDeletion: graph.keyboardDeletion.confirmDeletion,
       }}
     />
   );

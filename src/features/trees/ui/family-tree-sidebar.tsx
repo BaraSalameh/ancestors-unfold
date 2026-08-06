@@ -48,8 +48,11 @@ export interface FamilyTreeSidebarProps {
 }
 
 export function FamilyTreeSidebar(props: FamilyTreeSidebarProps) {
+  const hasWidgets =
+    props.overviewMode || props.previewType === "chronological" || props.canManageSubfamilies;
+  if (!hasWidgets) return null;
   return (
-    <div className="absolute top-24 right-4 z-10 flex max-h-[calc(100%-8rem)] w-72 max-w-[calc(100%-2rem)] flex-col gap-2 overflow-y-auto">
+    <div className="flex min-h-0 w-72 max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto">
       {props.overviewMode && <PreviewWidget {...props} />}
       {props.previewType === "chronological" && <GenerationWidget {...props} />}
       {props.canManageSubfamilies ? <SubfamiliesWidget {...props} /> : null}
@@ -206,7 +209,7 @@ function SubfamiliesWidget(props: FamilyTreeSidebarProps) {
         onClick={() => props.toggleWidget("subfamilies")}
       />
       {!props.collapsedWidgets.subfamilies && (
-        <div className="max-h-[calc(100vh-260px)] overflow-y-auto overscroll-contain pr-1">
+        <div className="max-h-[35vh] overflow-y-auto overscroll-contain pr-1">
           <SubfamilyPanel
             mode="home"
             readOnly

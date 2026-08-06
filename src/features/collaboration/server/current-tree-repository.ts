@@ -4,6 +4,10 @@ interface CurrentTreeSummary {
   id: string;
   name_en: string | null;
   name_ar: string | null;
+  description_en: string | null;
+  description_ar: string | null;
+  country_code: string | null;
+  visibility: "private" | "public";
   role: "owner" | "contributor";
 }
 
@@ -21,7 +25,8 @@ export function currentTreeForSession(
         assigned_branch_id: string | null;
       }
     >(
-      `SELECT t.id,t.name_en,t.name_ar,t.created_at,t.version,
+      `SELECT t.id,t.name_en,t.name_ar,t.description_en,t.description_ar,
+        t.country_code,t.visibility,t.created_at,t.version,
         CASE WHEN m.role='owner' THEN 'owner'
              WHEN g.id IS NOT NULL THEN 'contributor'
              ELSE m.role::text END role,

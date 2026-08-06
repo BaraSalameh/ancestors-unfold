@@ -15,6 +15,7 @@ import { useCanvasMarquee, useCanvasSelection } from "./use-canvas-marquee";
 import { useTreeAutoLayout } from "./use-tree-auto-layout";
 import { useTreeFlowSync } from "./use-tree-flow-sync";
 import { useTreeNodeDrag } from "./use-tree-node-drag";
+import { useTreeKeyboardDelete } from "./use-tree-keyboard-delete";
 
 interface Params {
   canAutoLayout: boolean;
@@ -93,6 +94,13 @@ export function useTreeFlowController(params: Params) {
     setEdges,
     setNodes,
   });
+  const keyboardDeletion = useTreeKeyboardDelete({
+    canEdit: params.canEdit,
+    nodes,
+    setEdges,
+    setNodes,
+    t: params.t,
+  });
   const onAutoLayout = useTreeAutoLayout({
     canAutoLayout: params.canAutoLayout,
     canEdit: params.canEdit,
@@ -125,5 +133,6 @@ export function useTreeFlowController(params: Params) {
     onEdgesChange,
     onNodesChange,
     setEdges,
+    keyboardDeletion,
   };
 }

@@ -9,6 +9,7 @@ import {
   Trash2,
   ChartNoAxesCombined,
   Eye,
+  FileUp,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
@@ -69,9 +70,15 @@ function OwnerTreeActions({
             {t("manage_branches")}
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={treeControls.openRename}>
+        <DropdownMenuItem onSelect={treeControls.openManage}>
           <TextCursorInput aria-hidden="true" />
-          {t("rename")}
+          {t("manage_family")}
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/tree/$id" params={{ id: tree.id }} search={{ mode: "edit", import: "csv" }}>
+            <FileUp aria-hidden="true" />
+            {t("family_csv_import")}
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={Boolean(ownershipTransfer?.verified)}

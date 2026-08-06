@@ -8,6 +8,7 @@ import { Skeleton } from "@/shared/ui/skeleton";
 import { useI18n } from "@/shared/i18n";
 import { memberSearchLabel } from "@/features/members";
 import type { SearchOption } from "../pages/dashboard-types";
+import { invitationErrorKey, isValidInvitationEmail } from "../domain/invitation-email";
 
 function optionLabel(option: SearchOption, lang: "en" | "ar") {
   return memberSearchLabel(
@@ -126,6 +127,10 @@ export function InviteDialog({
   }, [initialBranch, open]);
   const submit = async () => {
     if (submitting) return;
+    if (!isValidInvitationEmail(email)) {
+      setError(t("invalid_email_address"));
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -137,13 +142,7 @@ export function InviteDialog({
       });
       if (!response.ok) {
         const body = (await response.json()) as { code?: string };
-        setError(
-          body.code === "INVITEE_ALREADY_REGISTERED"
-            ? t("existing_user_invitation_error")
-            : body.code === "BRANCH_ALREADY_ASSIGNED"
-              ? t("branch_already_has_contributor")
-              : t("auth_error"),
-        );
+        setError(t(invitationErrorKey(body.code)));
         return;
       }
       await onSent();

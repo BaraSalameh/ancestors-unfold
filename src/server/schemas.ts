@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COUNTRY_CODES } from "@/shared/domain/countries";
 
 export const schemas = {
   register: z
@@ -64,8 +65,10 @@ export const schemas = {
     .object({
       name_en: z.string().trim().min(1).max(200),
       name_ar: z.string().trim().max(200).nullable().optional(),
-      description_en: z.string().trim().max(5000).optional(),
-      description_ar: z.string().trim().max(5000).optional(),
+      description_en: z.string().trim().max(5000).nullable().optional(),
+      description_ar: z.string().trim().max(5000).nullable().optional(),
+      country_code: z.enum(COUNTRY_CODES).nullable().optional(),
+      visibility: z.enum(["private", "public"]).optional(),
       color: z.string().trim().max(100).optional(),
     })
     .strict(),

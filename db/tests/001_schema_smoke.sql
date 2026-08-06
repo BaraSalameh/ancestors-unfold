@@ -47,6 +47,29 @@ BEGIN
   VALUES (owner_id,'owner@example.test','Owner','المالك','active'),
          (editor_id,'editor@example.test','Editor','المحرر','active');
   INSERT INTO app.family_trees(id,owner_user_id,name_en) VALUES(v_tree_id,owner_id,'Test tree');
+  IF NOT EXISTS (
+    SELECT 1 FROM app.family_trees
+    WHERE id=v_tree_id AND visibility='private' AND country_code IS NULL
+  ) THEN
+    RAISE EXCEPTION 'family metadata defaults are invalid';
+  END IF;
+  UPDATE app.family_trees SET visibility='public',country_code='JO' WHERE id=v_tree_id;
+  IF NOT EXISTS (
+    SELECT 1 FROM app.family_trees
+    WHERE id=v_tree_id AND visibility='public' AND country_code='JO'
+  ) THEN
+    RAISE EXCEPTION 'family metadata update failed';
+  END IF;
+  BEGIN
+    UPDATE app.family_trees SET visibility='unlisted' WHERE id=v_tree_id;
+    RAISE EXCEPTION 'invalid family visibility should have been rejected';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE app.family_trees SET country_code='JOR' WHERE id=v_tree_id;
+    RAISE EXCEPTION 'invalid country code should have been rejected';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
   INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES
     (v_tree_id,owner_id,'owner'),
     (v_tree_id,editor_id,'viewer');

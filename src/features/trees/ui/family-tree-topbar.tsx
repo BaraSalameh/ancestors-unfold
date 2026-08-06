@@ -1,5 +1,4 @@
-import { FileUp, LayoutGrid, Search, X } from "lucide-react";
-import { useState } from "react";
+import { LayoutGrid, Search, X } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import type { FamilyMember } from "@/features/members";
 import { memberNameWithBirthYear } from "@/features/members";
@@ -22,13 +21,14 @@ export interface FamilyTreeTopbarProps {
   query: string;
   setQuery: (query: string) => void;
   t: I18n["t"];
+  csvImportOpen: boolean;
+  onCsvImportOpenChange: (open: boolean) => void;
 }
 
 export function FamilyTreeTopbar(props: FamilyTreeTopbarProps) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-3 p-4">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 p-4">
       <MemberSearch {...props} />
-      {props.canEdit && <EditToolbar {...props} />}
     </div>
   );
 }
@@ -77,28 +77,21 @@ function MemberSearch({ lang, matches, onFocusMember, query, setQuery, t }: Fami
   );
 }
 
-function EditToolbar({ canAutoLayout, canMutate, onAutoLayout, t }: FamilyTreeTopbarProps) {
-  const [importOpen, setImportOpen] = useState(false);
+export function EditToolbar({
+  canAutoLayout,
+  canMutate,
+  onAutoLayout,
+  t,
+  csvImportOpen,
+  onCsvImportOpenChange,
+}: FamilyTreeTopbarProps) {
   const canImport = familyStore.canImportFamilyCsv();
-  const importPending = familyStore.isFamilyCsvImportPending();
   return (
     <>
       <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1 rounded-xl border border-border/80 bg-card/95 p-1 shadow-[0_4px_18px_-8px_rgba(15,23,42,0.28)] backdrop-blur">
         <Button asChild size="sm" variant="ghost">
           <Link to="/">{t("back_to_dashboard")}</Link>
         </Button>
-        {canImport && (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={importPending}
-            onClick={() => setImportOpen(true)}
-            className="gap-1.5 shadow-none"
-          >
-            <FileUp className="h-3.5 w-3.5" />
-            {importPending ? t("family_csv_draft_pending") : t("family_csv_import")}
-          </Button>
-        )}
         <Button
           size="sm"
           variant="ghost"
@@ -124,7 +117,9 @@ function EditToolbar({ canAutoLayout, canMutate, onAutoLayout, t }: FamilyTreeTo
           </Button>
         )}
       </div>
-      {canImport ? <FamilyCsvImportDialog open={importOpen} onOpenChange={setImportOpen} /> : null}
+      {canImport ? (
+        <FamilyCsvImportDialog open={csvImportOpen} onOpenChange={onCsvImportOpenChange} />
+      ) : null}
     </>
   );
 }

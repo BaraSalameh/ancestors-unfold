@@ -5,6 +5,10 @@ export interface CurrentTree {
   id: string;
   name_en: string | null;
   name_ar: string | null;
+  description_en: string | null;
+  description_ar: string | null;
+  country_code: string | null;
+  visibility: "private" | "public";
   created_at: string;
   version: number;
   role: "owner" | "contributor";
@@ -50,6 +54,7 @@ export interface Branch {
   contributor_user_id: string | null;
   contributor_name_en: string | null;
   contributor_name_ar: string | null;
+  contributor_email: string | null;
 }
 
 export interface Invitation {

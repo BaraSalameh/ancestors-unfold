@@ -36,7 +36,9 @@ async function updateMetadata(
       await client.query(
         `UPDATE app.family_trees SET name_en=$2,name_ar=$3,
          description_en=CASE WHEN $6 THEN $4 ELSE description_en END,
-         description_ar=CASE WHEN $7 THEN $5 ELSE description_ar END
+         description_ar=CASE WHEN $7 THEN $5 ELSE description_ar END,
+         country_code=CASE WHEN $9 THEN $8 ELSE country_code END,
+         visibility=COALESCE($10,visibility),updated_at=now()
          WHERE id=$1 RETURNING *`,
         [
           treeId,
@@ -46,6 +48,9 @@ async function updateMetadata(
           descriptionAr.value,
           descriptionEn.supplied,
           descriptionAr.supplied,
+          body.country_code ?? null,
+          body.country_code !== undefined,
+          body.visibility ?? null,
         ],
       )
     ).rows[0];

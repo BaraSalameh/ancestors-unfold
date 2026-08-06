@@ -3,6 +3,7 @@ import { chronologicalPeriodOrDefault, TreePage } from "@/features/trees";
 
 interface TreeSearch {
   mode: "edit" | "view" | "preview";
+  import?: "csv";
   branchId?: string;
   preview?: "lineage" | "chronological";
   period?: number;
@@ -30,9 +31,11 @@ export const Route = createFileRoute("/tree/$id")({
       )
         ? search.branchId
         : undefined;
+    const csvImport = mode === "edit" && search.import === "csv" ? ("csv" as const) : undefined;
     return {
       mode,
       period,
+      ...(csvImport ? { import: csvImport } : {}),
       ...(branchId ? { branchId } : {}),
       ...(preview ? { preview } : {}),
     };

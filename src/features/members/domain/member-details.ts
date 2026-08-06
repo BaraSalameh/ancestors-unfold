@@ -4,6 +4,23 @@ import { getChildren } from "./queries";
 export interface DescendantEntry {
   member: FamilyMember;
   depth: number;
+  parentId: string;
+  hasDescendants: boolean;
+}
+
+export function visibleDescendantEntries(
+  descendants: DescendantEntry[],
+  collapsedParentIds: ReadonlySet<string>,
+): DescendantEntry[] {
+  const parentByMember = new Map(descendants.map((entry) => [entry.member.id, entry.parentId]));
+  return descendants.filter((entry) => {
+    let parentId = entry.parentId;
+    while (parentByMember.has(parentId)) {
+      if (collapsedParentIds.has(parentId)) return false;
+      parentId = parentByMember.get(parentId)!;
+    }
+    return true;
+  });
 }
 
 function linkedSpouseIds(member: FamilyMember, members: FamilyMember[]): Set<string> {
@@ -46,9 +63,19 @@ export function memberDescendants(
   members: FamilyMember[],
 ): DescendantEntry[] {
   const descendants: DescendantEntry[] = [];
+  const parentIds = new Set<string>();
+  for (const candidate of members) {
+    if (candidate.father_id) parentIds.add(candidate.father_id);
+    if (candidate.mother_id) parentIds.add(candidate.mother_id);
+  }
   const visit = (parentId: string, depth: number) => {
     for (const child of getChildren(members, parentId)) {
-      descendants.push({ member: child, depth });
+      descendants.push({
+        member: child,
+        depth,
+        parentId,
+        hasDescendants: parentIds.has(child.id),
+      });
       visit(child.id, depth + 1);
     }
   };

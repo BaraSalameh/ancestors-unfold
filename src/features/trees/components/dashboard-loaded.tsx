@@ -4,7 +4,7 @@ import type { DashboardTreeControls } from "../client/use-dashboard-tree-control
 import type { OwnershipTransferController } from "../client/use-ownership-transfer";
 import type { ContributorAccountDeletionController } from "../client/use-contributor-account-deletion";
 import { OwnershipTransferDialog } from "./ownership-transfer-dialog";
-import { TreeRenameDialog } from "./tree-rename-dialog";
+import { ManageFamilyDialog } from "./tree-rename-dialog";
 import { ContributorAccountDeletionDialog } from "./contributor-account-deletion-dialog";
 import { DashboardHeader } from "./dashboard-header";
 import { AuthenticityCard, BranchesCard } from "./dashboard-cards";
@@ -81,7 +81,7 @@ export function DashboardLoaded({
         )}
         local={local}
       />
-      <TreeRenameDialog controller={treeControls} />
+      <ManageFamilyDialog controller={treeControls} />
       <ContributorAccountDeletionDialog controller={accountDeletion} />
     </main>
   );

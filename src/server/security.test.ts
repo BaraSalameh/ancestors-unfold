@@ -245,6 +245,30 @@ describe("contributor invitation input", () => {
   });
 });
 
+describe("family metadata input", () => {
+  it("accepts bilingual descriptions, an ISO country, and persisted visibility", () => {
+    expect(
+      schemas.tree.parse({
+        name_en: "Family",
+        name_ar: "العائلة",
+        description_en: "Family history",
+        description_ar: "تاريخ العائلة",
+        country_code: "JO",
+        visibility: "public",
+      }),
+    ).toMatchObject({ country_code: "JO", visibility: "public" });
+  });
+
+  it("rejects unsupported country and visibility values", () => {
+    expect(() =>
+      schemas.tree.parse({ name_en: "Family", country_code: "ZZ", visibility: "private" }),
+    ).toThrow();
+    expect(() =>
+      schemas.tree.parse({ name_en: "Family", country_code: "JO", visibility: "unlisted" }),
+    ).toThrow();
+  });
+});
+
 describe("profile mutation input", () => {
   it("accepts supported account genders and rejects unknown values", () => {
     expect(
