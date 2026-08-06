@@ -47,7 +47,8 @@ export async function handleTreeOverviewRequest(
       `SELECT b.id,b.name_en,b.name_ar,b.linked_male_id root_family_member_id,
         b.parent_subfamily_id parent_branch_id,b.position_label,b.status,
         COALESCE(m.member_ids,'[]'::json) member_ids,COALESCE(m.member_count,0)::int member_count,
-        g.user_id contributor_user_id,u.full_name_en contributor_name_en,u.full_name_ar contributor_name_ar
+        g.user_id contributor_user_id,u.full_name_en contributor_name_en,
+        u.full_name_ar contributor_name_ar,u.email contributor_email
        FROM app.subfamilies b LEFT JOIN app.branch_grants g
         ON g.tree_id=b.tree_id AND g.root_subfamily_id=b.id AND g.role='branch_editor' AND g.revoked_at IS NULL
        LEFT JOIN app.users u ON u.id=g.user_id

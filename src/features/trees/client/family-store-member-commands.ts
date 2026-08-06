@@ -16,10 +16,16 @@ export interface MemberCommandContext {
   commit(mutator: () => void): void;
   replaceStagedImages(next: ReadonlyMap<string, File>): void;
   emit(): void;
+  protectedGender?(id: string): FamilyMember["gender"] | undefined;
+  isBranchRoot?(id: string): boolean;
 }
 
 export function createMemberCommands(ctx: MemberCommandContext) {
-  return { ...createMemberCrudCommands(ctx), ...createRelationshipCommands(ctx) };
+  return {
+    ...createMemberCrudCommands(ctx),
+    ...createRelationshipCommands(ctx),
+    ...createMemberRemovalCommands(ctx),
+  };
 }
 
 function addFatherWithSpouses(
@@ -114,6 +120,8 @@ function addFatherWithSpouses(
   return father!;
 }
 
+// Member CRUD intentionally stays together so every mutation shares the same checkpoint behavior.
+// eslint-disable-next-line max-lines-per-function
 function createMemberCrudCommands(ctx: MemberCommandContext) {
   return {
     add(input: MemberInput, imageFile?: File): FamilyMember {
@@ -214,10 +222,18 @@ function createMemberCrudCommands(ctx: MemberCommandContext) {
       });
     },
     update(id: string, patch: Partial<MemberInput>, imageFile?: File | null): void {
+      const protectedGender = ctx.protectedGender?.(id);
+      const safePatch =
+        protectedGender && patch.gender && patch.gender !== protectedGender
+          ? { ...patch, gender: protectedGender }
+          : patch;
       const now = new Date().toISOString();
       ctx.commit(() => {
-        ctx.state = ctx.state.map((m) => (m.id === id ? { ...m, ...patch, updated_at: now } : m));
-        if (patch.spouse_id) ctx.state = mirrorSpouseLink(ctx.state, id, patch.spouse_id, now);
+        ctx.state = ctx.state.map((m) =>
+          m.id === id ? { ...m, ...safePatch, updated_at: now } : m,
+        );
+        if (safePatch.spouse_id)
+          ctx.state = mirrorSpouseLink(ctx.state, id, safePatch.spouse_id, now);
         ctx.state = ensureParentsAreSpouses(ctx.state, id, now);
         if (imageFile instanceof File) ctx.stagedImages.set(id, imageFile);
         else if (imageFile === null) ctx.stagedImages.delete(id);
@@ -289,7 +305,13 @@ function createRelationshipCommands(ctx: MemberCommandContext) {
     removeSpouse(maleId: string, femaleId: string): void {
       const now = new Date().toISOString();
       ctx.commit(() => {
-        ctx.state = removeSpouseAttachment(ctx.state, maleId, femaleId, now);
+        ctx.state = removeSpouseAttachment(
+          ctx.state,
+          maleId,
+          femaleId,
+          now,
+          Boolean(ctx.protectedGender?.(femaleId)),
+        );
       });
     },
     addUnknownSpouse(maleId: string): FamilyMember | undefined {
@@ -330,13 +352,49 @@ function createRelationshipCommands(ctx: MemberCommandContext) {
       });
       return wife;
     },
+  };
+}
+
+function createMemberRemovalCommands(ctx: MemberCommandContext) {
+  return {
     remove(id: string): void {
+      if (ctx.protectedGender?.(id) || ctx.isBranchRoot?.(id)) return;
       ctx.commit(() => {
         ctx.state = removeMember(ctx.state, id);
         ctx.stagedImages.delete(id);
       });
       ctx.replaceStagedImages(ctx.stagedImages);
       ctx.emit();
+    },
+    removeMany(ids: Iterable<string>): {
+      removed: number;
+      skipped: number;
+      blockedBranchRoots: number;
+    } {
+      const requested = new Set(ids);
+      const existing = ctx.state.filter((member) => requested.has(member.id));
+      const branchRoots = existing.filter((member) => ctx.isBranchRoot?.(member.id));
+      const protectedMembers = existing.filter(
+        (member) => !ctx.isBranchRoot?.(member.id) && ctx.protectedGender?.(member.id),
+      );
+      const removable = existing.filter(
+        (member) => !ctx.isBranchRoot?.(member.id) && !ctx.protectedGender?.(member.id),
+      );
+      const result = {
+        removed: removable.length,
+        skipped: protectedMembers.length,
+        blockedBranchRoots: branchRoots.length,
+      };
+      if (!removable.length) return result;
+      ctx.commit(() => {
+        for (const member of removable) {
+          ctx.state = removeMember(ctx.state, member.id);
+          ctx.stagedImages.delete(member.id);
+        }
+      });
+      ctx.replaceStagedImages(ctx.stagedImages);
+      ctx.emit();
+      return result;
     },
   };
 }

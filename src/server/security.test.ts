@@ -1,5 +1,6 @@
+import { z } from "zod";
 import { describe, expect, it } from "vitest";
-import { ApiError, assertJsonRequest, assertSameOrigin, schemas } from "./security";
+import { ApiError, assertJsonRequest, assertSameOrigin, parseBody, schemas } from "./security";
 
 const member = {
   id: "member-1",
@@ -168,6 +169,18 @@ describe("HTTP security checks", () => {
     });
     expect(() => assertSameOrigin(request)).toThrowError("CSRF_REJECTED");
   });
+
+  it("enforces the actual UTF-8 body size when content-length is absent", async () => {
+    const request = new Request("http://localhost/api/x", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: "ééé" }),
+    });
+    await expect(parseBody(request, z.object({ value: z.string() }), 5)).rejects.toMatchObject({
+      code: "PAYLOAD_TOO_LARGE",
+      status: 413,
+    });
+  });
 });
 
 describe("registration input", () => {
@@ -228,6 +241,30 @@ describe("contributor invitation input", () => {
   it("rejects obsolete invitee and position fields", () => {
     expect(() =>
       schemas.invitation.parse({ ...invitation, positionLabel: "Son of branch root" }),
+    ).toThrow();
+  });
+});
+
+describe("family metadata input", () => {
+  it("accepts bilingual descriptions, an ISO country, and persisted visibility", () => {
+    expect(
+      schemas.tree.parse({
+        name_en: "Family",
+        name_ar: "العائلة",
+        description_en: "Family history",
+        description_ar: "تاريخ العائلة",
+        country_code: "JO",
+        visibility: "public",
+      }),
+    ).toMatchObject({ country_code: "JO", visibility: "public" });
+  });
+
+  it("rejects unsupported country and visibility values", () => {
+    expect(() =>
+      schemas.tree.parse({ name_en: "Family", country_code: "ZZ", visibility: "private" }),
+    ).toThrow();
+    expect(() =>
+      schemas.tree.parse({ name_en: "Family", country_code: "JO", visibility: "unlisted" }),
     ).toThrow();
   });
 });

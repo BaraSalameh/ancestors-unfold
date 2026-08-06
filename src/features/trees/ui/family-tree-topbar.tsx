@@ -6,6 +6,7 @@ import type { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { familyStore } from "../client/family-store";
+import { FamilyCsvImportDialog } from "./family-csv-import-dialog";
 
 type I18n = ReturnType<typeof useI18n>;
 
@@ -20,13 +21,14 @@ export interface FamilyTreeTopbarProps {
   query: string;
   setQuery: (query: string) => void;
   t: I18n["t"];
+  csvImportOpen: boolean;
+  onCsvImportOpenChange: (open: boolean) => void;
 }
 
 export function FamilyTreeTopbar(props: FamilyTreeTopbarProps) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-3 p-4">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 p-4">
       <MemberSearch {...props} />
-      {props.canEdit && <EditToolbar {...props} />}
     </div>
   );
 }
@@ -75,36 +77,49 @@ function MemberSearch({ lang, matches, onFocusMember, query, setQuery, t }: Fami
   );
 }
 
-function EditToolbar({ canAutoLayout, canMutate, onAutoLayout, t }: FamilyTreeTopbarProps) {
+export function EditToolbar({
+  canAutoLayout,
+  canMutate,
+  onAutoLayout,
+  t,
+  csvImportOpen,
+  onCsvImportOpenChange,
+}: FamilyTreeTopbarProps) {
+  const canImport = familyStore.canImportFamilyCsv();
   return (
-    <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1 rounded-xl border border-border/80 bg-card/95 p-1 shadow-[0_4px_18px_-8px_rgba(15,23,42,0.28)] backdrop-blur">
-      <Button asChild size="sm" variant="ghost">
-        <Link to="/">{t("back_to_dashboard")}</Link>
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => familyStore.undo()}
-        disabled={!canMutate || !familyStore.canUndo()}
-        className="shadow-none"
-      >
-        {t("undo")}
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => familyStore.redo()}
-        disabled={!canMutate || !familyStore.canRedo()}
-        className="shadow-none"
-      >
-        {t("redo")}
-      </Button>
-      {canAutoLayout && (
-        <Button size="sm" variant="ghost" onClick={onAutoLayout} className="gap-1.5 shadow-none">
-          <LayoutGrid className="h-3.5 w-3.5" />
-          {t("auto_layout")}
+    <>
+      <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1 rounded-xl border border-border/80 bg-card/95 p-1 shadow-[0_4px_18px_-8px_rgba(15,23,42,0.28)] backdrop-blur">
+        <Button asChild size="sm" variant="ghost">
+          <Link to="/">{t("back_to_dashboard")}</Link>
         </Button>
-      )}
-    </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => familyStore.undo()}
+          disabled={!canMutate || !familyStore.canUndo()}
+          className="shadow-none"
+        >
+          {t("undo")}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => familyStore.redo()}
+          disabled={!canMutate || !familyStore.canRedo()}
+          className="shadow-none"
+        >
+          {t("redo")}
+        </Button>
+        {canAutoLayout && (
+          <Button size="sm" variant="ghost" onClick={onAutoLayout} className="gap-1.5 shadow-none">
+            <LayoutGrid className="h-3.5 w-3.5" />
+            {t("auto_layout")}
+          </Button>
+        )}
+      </div>
+      {canImport ? (
+        <FamilyCsvImportDialog open={csvImportOpen} onOpenChange={onCsvImportOpenChange} />
+      ) : null}
+    </>
   );
 }

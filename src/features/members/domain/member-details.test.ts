@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { memberDescendants, memberSpouses, paternalAncestors } from "./member-details";
+import {
+  memberDescendants,
+  memberSpouses,
+  paternalAncestors,
+  visibleDescendantEntries,
+} from "./member-details";
 import type { FamilyMember } from "./types";
 
 const member = (id: string, values: Partial<FamilyMember> = {}): FamilyMember => ({
@@ -33,8 +38,33 @@ describe("member details projections", () => {
     const members = [grandfather, father, child, grandchild];
     expect(paternalAncestors(child, members)).toEqual([father, grandfather]);
     expect(memberDescendants(father, members)).toEqual([
-      { member: child, depth: 1 },
-      { member: grandchild, depth: 2 },
+      { member: child, depth: 1, parentId: "father", hasDescendants: true },
+      { member: grandchild, depth: 2, parentId: "child", hasDescendants: false },
+    ]);
+  });
+
+  it("reveals each descendant subtree independently", () => {
+    const root = member("root");
+    const child = member("child", { father_id: root.id });
+    const sibling = member("sibling", { father_id: root.id });
+    const grandchild = member("grandchild", { mother_id: child.id });
+    const greatGrandchild = member("great-grandchild", { father_id: grandchild.id });
+    const descendants = memberDescendants(root, [
+      root,
+      child,
+      sibling,
+      grandchild,
+      greatGrandchild,
+    ]);
+
+    expect(visibleDescendantEntries(descendants, new Set([child.id, grandchild.id]))).toEqual([
+      descendants[0],
+      descendants[3],
+    ]);
+    expect(visibleDescendantEntries(descendants, new Set([grandchild.id]))).toEqual([
+      descendants[0],
+      descendants[1],
+      descendants[3],
     ]);
   });
 });

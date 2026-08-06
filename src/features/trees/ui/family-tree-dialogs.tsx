@@ -1,6 +1,10 @@
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
-import type { FamilyMember } from "@/features/members";
+import {
+  MemberDeletionDialog,
+  type FamilyMember,
+  type MemberDeletionPlan,
+} from "@/features/members";
 import { displayName, ordinal, useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import {
@@ -47,6 +51,9 @@ export interface FamilyTreeDialogsProps {
   creationChoice: CreationChoice | null;
   lang: Language;
   motherPicker: MotherPickerState | null;
+  memberDeletion: MemberDeletionPlan | null;
+  cancelMemberDeletion: () => void;
+  confirmMemberDeletion: (includeWives: boolean) => void;
   navigateToAdd: (target: AddRelativeTarget) => void;
   pickMother: (wifeId: string | null) => void;
   preserveDetachedSubtree: (childId: string, role: "father_id" | "mother_id") => void;
@@ -66,7 +73,40 @@ export function FamilyTreeDialogs(props: FamilyTreeDialogsProps) {
       <CreationChoiceDialog {...props} />
       <ChildMotherDialog {...props} />
       <MotherPickerDialog {...props} />
+      <KeyboardMemberDeletionDialog {...props} />
     </>
+  );
+}
+
+function KeyboardMemberDeletionDialog(props: FamilyTreeDialogsProps) {
+  const plan = props.memberDeletion;
+  const selected =
+    plan?.selectedIds.flatMap((id) => {
+      const member = familyStore.get(id);
+      return member ? [member] : [];
+    }) ?? [];
+  const wives =
+    plan?.wifeIds.flatMap((id) => {
+      const member = familyStore.get(id);
+      return member ? [member] : [];
+    }) ?? [];
+  const selectedIds = new Set(plan?.selectedIds ?? []);
+  const hasChildren = familyStore
+    .getAll()
+    .some(
+      (member) =>
+        selectedIds.has(member.father_id ?? "") || selectedIds.has(member.mother_id ?? ""),
+    );
+
+  return (
+    <MemberDeletionDialog
+      open={Boolean(plan)}
+      selected={selected}
+      wives={wives}
+      hasChildren={hasChildren}
+      onOpenChange={(open) => !open && props.cancelMemberDeletion()}
+      onConfirm={props.confirmMemberDeletion}
+    />
   );
 }
 

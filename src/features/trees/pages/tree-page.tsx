@@ -1,4 +1,4 @@
-import { useParams, useSearch } from "@tanstack/react-router";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { TriangleAlert } from "lucide-react";
 import { FamilyTree } from "@/features/trees";
 import { familyStore, useFamilyLoadState } from "@/features/trees";
@@ -6,8 +6,9 @@ import { useI18n } from "@/shared/i18n";
 import { TreeLoadingIndicator } from "@/shared/ui/page-skeletons";
 
 export function TreePage() {
-  const { mode, preview, period, branchId } = useSearch({ from: "/tree/$id" });
+  const { mode, preview, period, branchId, import: csvImport } = useSearch({ from: "/tree/$id" });
   const { id } = useParams({ from: "/tree/$id" });
+  const navigate = useNavigate();
   const { t } = useI18n();
   familyStore.activateTree(id, mode);
   const loadState = useFamilyLoadState();
@@ -34,6 +35,16 @@ export function TreePage() {
         chronologicalPeriod={period ?? 10}
         accessMode={mode}
         initialBranchId={selectedBranchId}
+        csvImportOpen={csvImport === "csv"}
+        onCsvImportOpenChange={(open) => {
+          if (open) return;
+          void navigate({
+            to: "/tree/$id",
+            params: { id },
+            search: { mode, preview, period, branchId, import: undefined },
+            replace: true,
+          });
+        }}
       />
     </div>
   );

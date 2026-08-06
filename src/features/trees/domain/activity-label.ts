@@ -46,6 +46,7 @@ const activityLabels: Record<string, TranslationKey> = {
   ownership_transfer_accepted: "activity_ownership_transfer_accepted",
   ownership_transfer_rejected: "activity_ownership_transfer_rejected",
   ownership_transfer_cancelled: "activity_ownership_transfer_cancelled",
+  family_csv_import: "activity_family_csv_import",
 };
 
 const localizedName = (person: ActivityPerson | ActivityNamedTarget | null, lang: Lang) => {

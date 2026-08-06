@@ -8,20 +8,50 @@ import {
   lockSnapshotVersion,
 } from "./snapshot-write-preparation";
 import { validateSnapshotImages } from "./snapshot-image-validation";
+import { enforceSnapshotBranchRoots } from "./snapshot-branch-root-policy";
+import { enforceSnapshotBranchUniqueness } from "./snapshot-branch-uniqueness";
 import { enforceBranchSnapshotScope } from "./snapshot-branch-scope";
 import { writeSnapshotMembers } from "./snapshot-member-writer";
 import { writeSnapshotRelationships } from "./snapshot-relationship-writer";
+import {
+  countImportedSourceMappings,
+  requireFamilyCsvImportManager,
+  validateFamilyCsvAppend,
+  validateSourceMappings,
+} from "./family-csv-import-protection";
+
+type SnapshotImportOptions = {
+  familyCsv?: {
+    sourceMemberIds: ReadonlyMap<string, string>;
+    sourceBranchIds: ReadonlyMap<string, string>;
+  };
+};
 
 // Snapshot replacement is deliberately one serialized transaction to preserve version and RLS semantics.
+// This coordinator keeps the serialized snapshot transaction visible as one auditable unit.
+// eslint-disable-next-line max-lines-per-function
 export async function importSnapshot(
   s: SessionContext,
   rid: string,
   treeId: string,
   b: SnapshotInput,
+  options: SnapshotImportOptions = {},
 ) {
   // Keeping the complete reconciliation in this callback guarantees rollback on any failed entity write.
+  // The transaction callback explicitly coordinates authorization, mapping, writes, and history.
+  // eslint-disable-next-line complexity
   return transaction(s.user_id, s.id, rid, async (c) => {
     const { isBranchEditor, branchRootId } = await authorizeSnapshotWrite(c, treeId, s.user_id);
+    await enforceSnapshotBranchRoots(c, treeId, b, isBranchEditor ? branchRootId : null);
+    if (options.familyCsv) {
+      await requireFamilyCsvImportManager(c, treeId, s.user_id);
+      validateSourceMappings(
+        b,
+        options.familyCsv.sourceMemberIds,
+        options.familyCsv.sourceBranchIds,
+      );
+      await validateFamilyCsvAppend(c, treeId, b);
+    }
     const batch = b.batchId || randomUUID();
     const completed = await completedSnapshotWrite(c, treeId, batch);
     if (completed) return completed;
@@ -35,6 +65,7 @@ export async function importSnapshot(
       members.rows.forEach(({ id }) => allowedMembers.add(id));
     }
     const expectedVersion = await lockSnapshotVersion(c, treeId, Number(b.expectedVersion));
+    if (!isBranchEditor) await enforceSnapshotBranchUniqueness(c, treeId, b);
     const existingMembers = isBranchEditor
       ? await c.query<{ id: string }>(
           "SELECT id FROM app.family_members WHERE tree_id=$1 AND deleted_at IS NULL",
@@ -81,6 +112,8 @@ export async function importSnapshot(
       existingMemberIds,
       allowedMembers,
       editableIds,
+      options.familyCsv?.sourceMemberIds,
+      options.familyCsv?.sourceBranchIds,
     );
     await writeSnapshotRelationships(
       c,
@@ -95,6 +128,20 @@ export async function importSnapshot(
       sfMap,
     );
     await c.query("SELECT app.reconcile_branch_structure($1)", [treeId]);
+    if (options.familyCsv)
+      await c.query(
+        `INSERT INTO app.tree_activity(
+           tree_id,actor_user_id,action_type,target_type,target_id,metadata
+         ) VALUES($1,$2,'family_csv_import','family_tree',$1,$3::jsonb)`,
+        [
+          treeId,
+          s.user_id,
+          JSON.stringify({
+            members: countImportedSourceMappings(options.familyCsv.sourceMemberIds, "member"),
+            branches: countImportedSourceMappings(options.familyCsv.sourceBranchIds, "branch"),
+          }),
+        ],
+      );
     const updated = await c.query<{ version: number }>(
       "UPDATE app.family_trees SET version=version+1 WHERE id=$1 RETURNING version",
       [treeId],

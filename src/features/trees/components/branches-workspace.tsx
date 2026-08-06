@@ -163,6 +163,20 @@ function BranchList({
               <span className="block text-xs text-muted-foreground">
                 {t("branch_people_recorded", { count: branch.member_count })}
               </span>
+              {branch.contributor_user_id ? (
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  <span className="block truncate">
+                    {local(branch.contributor_name_en, branch.contributor_name_ar)}
+                  </span>
+                  <span className="block truncate" dir="ltr">
+                    {branch.contributor_email}
+                  </span>
+                </span>
+              ) : (
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {t("branch_no_contributor_assigned")}
+                </span>
+              )}
             </span>
             <Badge variant={branch.status === "active" ? "default" : "secondary"}>
               {t(branch.status === "active" ? "branch_active" : "branch_inactive")}

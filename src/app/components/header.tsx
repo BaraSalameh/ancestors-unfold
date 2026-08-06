@@ -22,6 +22,7 @@ export function Header() {
     isTreeEdit ||
     /^\/(edit|member|add)\//.test(location.pathname) ||
     location.pathname === "/branches";
+  const showTreeSave = isTreeWorkspace && location.pathname !== "/branches";
 
   useTreeNavigationBlocker(isTreeWorkspace, persistence.dirty, t("unsaved_changes_warning"));
 
@@ -34,7 +35,7 @@ export function Header() {
         </Link>
 
         <div className="ms-auto flex items-center gap-1">
-          {isTreeWorkspace && familyStore.canEditActiveTree() && (
+          {showTreeSave && familyStore.canEditActiveTree() && (
             <HeaderTreeSave persistence={persistence} t={t} />
           )}
           <Button

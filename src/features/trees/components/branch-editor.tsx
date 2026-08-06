@@ -60,6 +60,7 @@ export function BranchEditor(props: Props) {
       <CardContent className="space-y-6">
         <BranchDetailsForm
           branch={props.branch}
+          branches={props.branches}
           members={members}
           mutate={mutation.mutate}
           saving={mutation.saving}
@@ -115,11 +116,15 @@ function useBranchMutation({ tree, treeDirty, onSaved }: Props) {
       const body = (await response.json()) as { code?: string };
       if (!response.ok) {
         const key =
-          body.code === "BRANCH_IN_USE"
-            ? "branch_in_use"
-            : body.code === "BRANCH_MUST_BE_INACTIVE"
-              ? "branch_must_be_inactive"
-              : "branch_management_failed";
+          body.code === "DUPLICATE_BRANCH_NAME"
+            ? "duplicate_branch_name"
+            : body.code === "DUPLICATE_BRANCH_ROOT"
+              ? "duplicate_branch_root"
+              : body.code === "BRANCH_IN_USE"
+                ? "branch_in_use"
+                : body.code === "BRANCH_MUST_BE_INACTIVE"
+                  ? "branch_must_be_inactive"
+                  : "branch_management_failed";
         toast.error(t(key));
         return false;
       }

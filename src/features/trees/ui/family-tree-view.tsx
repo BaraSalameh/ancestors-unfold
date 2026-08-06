@@ -4,12 +4,14 @@ import ReactFlow, {
   BackgroundVariant,
   Controls,
   MiniMap,
+  Panel,
   type ReactFlowProps,
   type Viewport,
 } from "reactflow";
 import { FamilyTreeDialogs, type FamilyTreeDialogsProps } from "./family-tree-dialogs";
 import { FamilyTreeSidebar, type FamilyTreeSidebarProps } from "./family-tree-sidebar";
 import { FamilyTreeTopbar, type FamilyTreeTopbarProps } from "./family-tree-topbar";
+import { EditToolbar } from "./family-tree-topbar";
 import { MemberNode } from "./member-node";
 import { RelationshipEdge } from "./relationship-edge";
 
@@ -88,14 +90,23 @@ export function FamilyTreeView(props: FamilyTreeViewProps) {
           className="bg-muted/20!"
         />
         {props.chronologicalOverlay && <ChronologicalGuide {...props.chronologicalOverlay} />}
-        <MiniMap
-          pannable
-          zoomable
-          position="bottom-right"
-          nodeStrokeWidth={3}
-          maskColor="color-mix(in oklab, var(--color-background) 72%, transparent)"
-          className="canvas-minimap! overflow-hidden! rounded-xl! border! border-border/80! bg-card/95! shadow-lg!"
-        />
+        <Panel
+          position="top-right"
+          className="z-10! flex max-h-[calc(100%-5rem)] max-w-[calc(100%-2rem)] flex-col items-end gap-2"
+          style={{ margin: 0, right: 16, top: 64 }}
+        >
+          {props.topbar.canEdit ? <EditToolbar {...props.topbar} /> : null}
+          <FamilyTreeSidebar {...props.sidebar} />
+          <MiniMap
+            pannable
+            zoomable
+            position="top-right"
+            nodeStrokeWidth={3}
+            maskColor="color-mix(in oklab, var(--color-background) 72%, transparent)"
+            className="canvas-minimap! m-0! shrink-0 overflow-hidden! rounded-xl! border! border-border/80! bg-card/95! shadow-lg!"
+            style={{ position: "relative", inset: "auto" }}
+          />
+        </Panel>
         <Controls
           showInteractive={false}
           position="bottom-left"
@@ -103,7 +114,6 @@ export function FamilyTreeView(props: FamilyTreeViewProps) {
         />
       </ReactFlow>
       {props.marqueeRect && <Marquee rect={props.marqueeRect} />}
-      <FamilyTreeSidebar {...props.sidebar} />
       <FamilyTreeDialogs {...props.dialogs} />
     </div>
   );

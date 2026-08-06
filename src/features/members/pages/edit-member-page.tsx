@@ -2,21 +2,13 @@ import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { MemberForm } from "@/features/members";
 import { familyStore, useFamily } from "@/features/trees";
 import { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/shared/ui/alert-dialog";
+import { MemberDeletionDialog } from "../components/member-deletion-dialog";
+import { memberDeletionPlan } from "../domain/member-deletion";
 import { memberDeleteDestination, memberDetailsSearch } from "../domain/member-navigation";
+import { MemberForm } from "../ui/member-form";
 
 export function EditPage() {
   const { id } = useParams({ from: "/edit/$id" });
@@ -37,18 +29,36 @@ export function EditPage() {
   const children = members.filter((candidate) =>
     [candidate.father_id, candidate.mother_id].includes(member.id),
   );
+  const deletionPlan = memberDeletionPlan([member.id], members, (memberId) =>
+    Boolean(familyStore.protectedImportGender(memberId)),
+  );
+  const wives = deletionPlan.wifeIds.flatMap((wifeId) => {
+    const wife = members.find((candidate) => candidate.id === wifeId);
+    return wife ? [wife] : [];
+  });
 
-  const handleDelete = () => {
-    familyStore.remove(member.id);
-    toast.success(t("deleted"));
-    navigate(memberDeleteDestination(treeId, returnPreview));
+  const handleDelete = (includeWives: boolean) => {
+    const ids = includeWives ? [...deletionPlan.selectedIds, ...deletionPlan.wifeIds] : [member.id];
+    const result = familyStore.removeMany(ids);
+    if (result.removed)
+      toast.success(
+        result.removed === 1 ? t("deleted") : t("members_deleted", { count: result.removed }),
+      );
+    if (result.blockedBranchRoots) toast.error(t("branch_root_delete_blocked"));
+    if (result.skipped) toast.warning(t("members_delete_skipped", { count: result.skipped }));
+    if (!familyStore.get(member.id)) navigate(memberDeleteDestination(treeId, returnPreview));
   };
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-foreground">{t("edit_member")}</h1>
-        <Button type="button" variant="destructive" onClick={() => setConfirmOpen(true)}>
+        <Button
+          type="button"
+          variant="destructive"
+          disabled={Boolean(familyStore.protectedImportGender(id))}
+          onClick={() => setConfirmOpen(true)}
+        >
           <Trash2 className="me-2 h-4 w-4" />
           {t("delete")}
         </Button>
@@ -59,6 +69,7 @@ export function EditPage() {
           initialImageFile={familyStore.getStagedMemberImage(id)}
           memberId={id}
           members={members}
+          lockedGender={familyStore.protectedImportGender(id)}
           submitLabel={t("save")}
           cancelLabel={t("back")}
           onCancel={() => {
@@ -84,36 +95,14 @@ export function EditPage() {
           }}
         />
       </div>
-      <AlertDialog
+      <MemberDeletionDialog
         open={confirmOpen}
-        onOpenChange={(open) => {
-          setConfirmOpen(open);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("confirm_delete")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("confirm_delete_desc")}
-              {children.length > 0 && (
-                <span className="mt-2 block text-destructive">{t("delete_warning_children")}</span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                handleDelete();
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {t("delete")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        selected={[member]}
+        wives={wives}
+        hasChildren={children.length > 0}
+        onOpenChange={setConfirmOpen}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

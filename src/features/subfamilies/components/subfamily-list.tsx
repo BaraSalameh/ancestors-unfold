@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { familyStore } from "@/features/trees";
+import { familyStore, newBranchConflicts } from "@/features/trees";
 import type { SubFamily } from "@/features/members";
 import { displayName, useI18n } from "@/shared/i18n";
+import { toast } from "sonner";
 
 export function SubfamilyList({
   subfamilies,
@@ -23,6 +24,15 @@ export function SubfamilyList({
   const add = () => {
     const name = newName.trim();
     if (!name) return;
+    const current = familyStore.getSubfamilies();
+    const conflict = newBranchConflicts(current, [
+      ...current,
+      { id: "new", name_en: name, name_ar: name },
+    ])[0];
+    if (conflict) {
+      toast.error(t("duplicate_branch_name"));
+      return;
+    }
     const created = familyStore.addSubfamily(name, name);
     setNewName("");
     onSelect(created.id);

@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { familyStore } from "@/features/trees";
+import { familyStore, newBranchConflicts } from "@/features/trees";
 import type { FamilyMember, SubFamily } from "@/features/members";
 import { displayName, useI18n } from "@/shared/i18n";
 import { matchingMaleMember } from "../domain/male-member-match";
+import { toast } from "sonner";
 
 export function SubfamilyEditForm({
   subfamily,
@@ -24,6 +25,28 @@ export function SubfamilyEditForm({
     const nextNameAr = nameAr.trim();
     if (!nextNameEn && !nextNameAr) return;
     const matched = matchingMaleMember(maleMembers, maleSearch, lang);
+    const current = familyStore.getSubfamilies();
+    const next = current.map((item) =>
+      item.id === subfamily.id
+        ? {
+            ...item,
+            name_en: nextNameEn || subfamily.name_en,
+            name_ar: nextNameAr || subfamily.name_ar,
+            linked_male_id: matched?.id ?? (maleId || undefined),
+          }
+        : item,
+    );
+    const conflict = newBranchConflicts(current, next)[0];
+    if (conflict) {
+      toast.error(
+        t(
+          conflict.code === "DUPLICATE_BRANCH_ROOT"
+            ? "duplicate_branch_root"
+            : "duplicate_branch_name",
+        ),
+      );
+      return;
+    }
     familyStore.updateSubfamily(subfamily.id, {
       name_en: nextNameEn || subfamily.name_en,
       name_ar: nextNameAr || subfamily.name_ar,

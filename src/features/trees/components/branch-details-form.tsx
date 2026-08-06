@@ -6,17 +6,20 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { MemberSearchPicker, type FamilyMember } from "@/features/members";
 import type { Branch } from "../pages/dashboard-types";
+import { newBranchConflicts } from "../domain/branch-uniqueness";
 import type { BranchMutation, BranchMutationAction } from "./branch-editor";
 
 // eslint-disable-next-line complexity
 export function BranchDetailsForm({
   branch,
+  branches,
   members,
   mutate,
   saving,
   onCancel,
 }: {
   branch?: Branch;
+  branches: Branch[];
   members: FamilyMember[];
   mutate: BranchMutation;
   saving?: BranchMutationAction;
@@ -35,6 +38,17 @@ export function BranchDetailsForm({
       name_ar: nameAr.trim() || null,
       ...((!branch || branch.status === "active") && { rootFamilyMemberId: rootId }),
     };
+    const conflict = branchFormConflict(branches, branch, changes.name_en, changes.name_ar, rootId);
+    if (conflict) {
+      toast.error(
+        t(
+          conflict.code === "DUPLICATE_BRANCH_ROOT"
+            ? "duplicate_branch_root"
+            : "duplicate_branch_name",
+        ),
+      );
+      return;
+    }
     const saved = branch
       ? await mutate("PATCH", path, changes, saveAction)
       : await mutate("POST", path, { ...changes, status: "active" }, saveAction);
@@ -82,6 +96,31 @@ export function BranchDetailsForm({
       </div>
     </section>
   );
+}
+
+function branchFormConflict(
+  branches: Branch[],
+  branch: Branch | undefined,
+  nameEn: string,
+  nameAr: string | null,
+  rootId: string,
+) {
+  const current = branches.map((item) => ({
+    id: item.id,
+    name_en: item.name_en,
+    name_ar: item.name_ar,
+    linked_male_id: item.root_family_member_id,
+  }));
+  const candidate = {
+    id: branch?.id ?? "new",
+    name_en: nameEn,
+    name_ar: nameAr,
+    linked_male_id: rootId,
+  };
+  const next = branch
+    ? current.map((item) => (item.id === branch.id ? candidate : item))
+    : [...current, candidate];
+  return newBranchConflicts(current, next)[0];
 }
 
 function Field({

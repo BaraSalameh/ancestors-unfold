@@ -81,3 +81,79 @@ describe("atomic father and spouse creation", () => {
     );
   });
 });
+
+describe("atomic member deletion", () => {
+  it("removes multiple members and their relationships in one commit", () => {
+    let state = [
+      member("father", { spouse_id: "mother", spouse_ids: ["mother"] }),
+      member("mother", { gender: "female", spouse_id: "father" }),
+      member("child", { father_id: "father", mother_id: "mother" }),
+    ];
+    const stagedImages = new Map<string, File>();
+    const commit = vi.fn((mutator: () => void) => mutator());
+    const context: MemberCommandContext = {
+      get state() {
+        return state;
+      },
+      set state(next) {
+        state = next;
+      },
+      stagedImages,
+      commit,
+      replaceStagedImages: vi.fn(),
+      emit: vi.fn(),
+    };
+
+    const result = createMemberCommands(context).removeMany(["father", "mother"]);
+
+    expect(result).toEqual({ removed: 2, skipped: 0, blockedBranchRoots: 0 });
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(state).toEqual([member("child", { father_id: undefined, mother_id: undefined })]);
+  });
+
+  it("keeps protected members and reports them as skipped", () => {
+    let state = [member("protected"), member("deletable")];
+    const context: MemberCommandContext = {
+      get state() {
+        return state;
+      },
+      set state(next) {
+        state = next;
+      },
+      stagedImages: new Map<string, File>(),
+      commit: (mutator) => mutator(),
+      replaceStagedImages: vi.fn(),
+      emit: vi.fn(),
+      protectedGender: (id) => (id === "protected" ? "male" : undefined),
+    };
+
+    expect(createMemberCommands(context).removeMany(["protected", "deletable"])).toEqual({
+      removed: 1,
+      skipped: 1,
+      blockedBranchRoots: 0,
+    });
+    expect(state.map(({ id }) => id)).toEqual(["protected"]);
+  });
+
+  it("blocks branch roots while deleting other selected members", () => {
+    let state = [member("branch-root"), member("contributor-member")];
+    const context: MemberCommandContext = {
+      get state() {
+        return state;
+      },
+      set state(next) {
+        state = next;
+      },
+      stagedImages: new Map<string, File>(),
+      commit: (mutator) => mutator(),
+      replaceStagedImages: vi.fn(),
+      emit: vi.fn(),
+      isBranchRoot: (id) => id === "branch-root",
+    };
+
+    expect(createMemberCommands(context).removeMany(["branch-root", "contributor-member"])).toEqual(
+      { removed: 1, skipped: 0, blockedBranchRoots: 1 },
+    );
+    expect(state.map(({ id }) => id)).toEqual(["branch-root"]);
+  });
+});

@@ -18,6 +18,8 @@ interface FamilyTreeProps {
   overviewMode?: boolean;
   preview?: TreePreviewType;
   readOnly?: boolean;
+  csvImportOpen?: boolean;
+  onCsvImportOpenChange?: (open: boolean) => void;
 }
 
 function Inner({
@@ -27,6 +29,8 @@ function Inner({
   chronologicalPeriod = DEFAULT_CHRONOLOGICAL_PERIOD,
   accessMode = "edit",
   initialBranchId,
+  csvImportOpen = false,
+  onCsvImportOpenChange = () => undefined,
 }: FamilyTreeProps) {
   const state = useFamilyTreeState({
     chronologicalPeriod,
@@ -54,6 +58,8 @@ function Inner({
       previewType={preview}
       projection={projection}
       state={state}
+      csvImportOpen={csvImportOpen}
+      onCsvImportOpenChange={onCsvImportOpenChange}
     />
   );
 }

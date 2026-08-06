@@ -4,6 +4,10 @@ import { jsonResponse as json } from "@/shared/http/response";
 import { ApiError, parseBody, schemas } from "@/server/security";
 import { requireTreeOwner } from "./authorization";
 import type { CollaborationSession } from "./types";
+import {
+  assertBranchSetUnique,
+  loadTreeBranches,
+} from "@/features/trees/server/snapshot-branch-uniqueness";
 
 export async function beginTreeMutation(
   client: PoolClient,
@@ -62,6 +66,16 @@ async function createBranch(
   const result = await transaction(session.user_id, session.id, requestId, async (client) => {
     await beginTreeMutation(client, treeId, session.user_id, body.expectedVersion, body.batchId);
     await requireBranchRoot(client, treeId, body.rootFamilyMemberId);
+    const currentBranches = await loadTreeBranches(client, treeId);
+    assertBranchSetUnique(currentBranches, [
+      ...currentBranches,
+      {
+        id: `new:${body.batchId}`,
+        name_en: body.name_en,
+        name_ar: body.name_ar,
+        linked_male_id: body.rootFamilyMemberId,
+      },
+    ]);
     const created = (
       await client.query(
         `INSERT INTO app.subfamilies(
@@ -96,6 +110,22 @@ async function updateBranch(
     await beginTreeMutation(client, treeId, session.user_id, body.expectedVersion, body.batchId);
     const rootProvided = Object.hasOwn(body, "rootFamilyMemberId");
     if (rootProvided) await requireBranchRoot(client, treeId, body.rootFamilyMemberId!);
+    const currentBranches = await loadTreeBranches(client, treeId);
+    const currentBranch = currentBranches.find(({ id }) => id === branchId);
+    if (!currentBranch) throw new ApiError("BRANCH_UNAVAILABLE", 404);
+    assertBranchSetUnique(
+      currentBranches,
+      currentBranches.map((branch) =>
+        branch.id === branchId
+          ? {
+              ...branch,
+              name_en: body.name_en ?? branch.name_en,
+              name_ar: Object.hasOwn(body, "name_ar") ? body.name_ar : branch.name_ar,
+              linked_male_id: rootProvided ? body.rootFamilyMemberId : branch.linked_male_id,
+            }
+          : branch,
+      ),
+    );
     const updated = (
       await client.query(
         `UPDATE app.subfamilies SET
@@ -163,7 +193,7 @@ async function deleteBranch(
         EXISTS(SELECT 1 FROM app.subfamilies WHERE tree_id=$1 AND parent_subfamily_id=$2 AND deleted_at IS NULL) OR
         EXISTS(SELECT 1 FROM app.branch_grants WHERE tree_id=$1 AND root_subfamily_id=$2 AND revoked_at IS NULL) OR
         EXISTS(SELECT 1 FROM app.contributor_invitations WHERE tree_id=$1 AND branch_id=$2 AND status='pending') OR
-        EXISTS(SELECT 1 FROM app.ownership_transfers WHERE tree_id=$1 AND branch_id=$2 AND status='pending') OR
+        EXISTS(SELECT 1 FROM app.ownership_transfers WHERE tree_id=$1 AND previous_owner_branch_id=$2 AND status='pending') OR
         EXISTS(SELECT 1 FROM app.subfamily_attachments WHERE tree_id=$1 AND subfamily_id=$2)
       ) blocked`,
       [treeId, branchId, branch.rows[0].linked_male_id],

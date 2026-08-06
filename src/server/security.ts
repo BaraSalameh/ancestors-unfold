@@ -12,10 +12,9 @@ export class ApiError extends Error {
   }
 }
 
-export function assertJsonRequest(request: Request) {
+export function assertJsonRequest(request: Request, maxBytes = serverConfig.MAX_REQUEST_BYTES) {
   const length = Number(request.headers.get("content-length") ?? 0);
-  const max = serverConfig.MAX_REQUEST_BYTES;
-  if (length > max) throw new ApiError("PAYLOAD_TOO_LARGE", 413);
+  if (length > maxBytes) throw new ApiError("PAYLOAD_TOO_LARGE", 413);
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
     throw new ApiError("UNSUPPORTED_MEDIA_TYPE", 415);
 }
@@ -27,12 +26,20 @@ export function assertSameOrigin(request: Request) {
   if (!origin || origin !== expected) throw new ApiError("CSRF_REJECTED", 403);
 }
 
-export async function parseBody<T>(request: Request, schema: ZodType<T>): Promise<T> {
-  assertJsonRequest(request);
+export async function parseBody<T>(
+  request: Request,
+  schema: ZodType<T>,
+  maxBytes = serverConfig.MAX_REQUEST_BYTES,
+): Promise<T> {
+  assertJsonRequest(request, maxBytes);
   let value: unknown;
   try {
-    value = await request.json();
-  } catch {
+    const raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > maxBytes)
+      throw new ApiError("PAYLOAD_TOO_LARGE", 413);
+    value = JSON.parse(raw) as unknown;
+  } catch (caught) {
+    if (caught instanceof ApiError) throw caught;
     throw new ApiError("INVALID_JSON");
   }
   const result = schema.safeParse(value);
@@ -48,7 +55,7 @@ export function requestIp(request: Request): string | null {
 
 export async function enforceRateLimit(
   request: Request,
-  type: "login" | "password_reset" | "totp" | "email_verification",
+  type: "login" | "password_reset" | "totp" | "email_verification" | "family_csv_import",
   identifier: string,
   limit = 8,
   minutes = 15,
