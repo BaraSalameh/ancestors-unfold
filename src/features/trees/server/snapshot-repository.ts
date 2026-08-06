@@ -8,6 +8,7 @@ import {
   lockSnapshotVersion,
 } from "./snapshot-write-preparation";
 import { validateSnapshotImages } from "./snapshot-image-validation";
+import { validateBranchEditorRoot, validateSnapshotBranchRoots } from "./snapshot-graph-validation";
 import { enforceBranchSnapshotScope } from "./snapshot-branch-scope";
 import { writeSnapshotMembers } from "./snapshot-member-writer";
 import { writeSnapshotRelationships } from "./snapshot-relationship-writer";
@@ -39,6 +40,8 @@ export async function importSnapshot(
   // eslint-disable-next-line complexity
   return transaction(s.user_id, s.id, rid, async (c) => {
     const { isBranchEditor, branchRootId } = await authorizeSnapshotWrite(c, treeId, s.user_id);
+    validateSnapshotBranchRoots(b);
+    if (isBranchEditor) await validateBranchEditorRoot(c, treeId, branchRootId, b);
     if (options.familyCsv) {
       await requireFamilyCsvImportManager(c, treeId, s.user_id);
       validateSourceMappings(

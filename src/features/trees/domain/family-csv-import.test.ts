@@ -3,9 +3,12 @@ import {
   FAMILY_CSV_MAX_BYTES,
   familyCsvTemplate,
   parseFamilyCsv,
+  remapFamilyCsvPreview,
   validateFamilyImportGraph,
 } from "./family-csv-import";
 
+// The contract scenarios stay together so canonical and legacy CSV behavior is reviewed as one unit.
+// eslint-disable-next-line max-lines-per-function
 describe("family CSV import", () => {
   it("parses the UTF-8 bilingual template and infers the parents' union", () => {
     const result = parseFamilyCsv(familyCsvTemplate());
@@ -47,6 +50,69 @@ describe("family CSV import", () => {
     expect(result.preview.members[0].spouse_ids).toEqual(["W2", "W1"]);
     expect(result.preview.members[0].divorced_from).toEqual(["W1"]);
     expect(result.preview.members[1].divorced_from).toEqual(["H"]);
+  });
+
+  it("turns canonical file references into generated IDs and rewrites the complete graph", () => {
+    const csv = [
+      "member_ref,name_en,gender,father_ref,mother_ref,spouse_refs,branch_ref,branch_name_en",
+      "Dad,Father,male,,,Mom,Main,Main branch",
+      "Mom,Mother,female,,,Dad,,",
+      "row-17,Child,male,Dad,Mom,,,",
+    ].join("\n");
+    const parsed = parseFamilyCsv(csv);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    let sequence = 100;
+    const remapped = remapFamilyCsvPreview(
+      parsed.preview,
+      () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, "0")}`,
+    );
+
+    const sourceMembers = new Map(
+      remapped.sourceMemberIds.map(({ sourceId, targetId }) => [sourceId, targetId]),
+    );
+    const sourceBranches = new Map(
+      remapped.sourceBranchIds.map(({ sourceId, targetId }) => [sourceId, targetId]),
+    );
+    expect(remapped.members.map(({ id }) => id)).not.toContain("Dad");
+    expect(remapped.members.find(({ id }) => id === sourceMembers.get("row-17"))).toMatchObject({
+      father_id: sourceMembers.get("Dad"),
+      mother_id: sourceMembers.get("Mom"),
+    });
+    expect(remapped.members.find(({ id }) => id === sourceMembers.get("Dad"))?.spouse_ids).toEqual([
+      sourceMembers.get("Mom"),
+    ]);
+    expect(remapped.subfamilies[0]).toMatchObject({
+      id: sourceBranches.get("Main"),
+      linked_male_id: sourceMembers.get("Dad"),
+    });
+  });
+
+  it("always remaps UUID-shaped source references and generates fresh IDs per preview", () => {
+    const sourceId = "00000000-0000-4000-8000-000000000001";
+    const parsed = parseFamilyCsv(`member_ref,name_en,gender\n${sourceId},One,male`);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const first = remapFamilyCsvPreview(
+      parsed.preview,
+      () => "00000000-0000-4000-8000-000000000101",
+    );
+    const second = remapFamilyCsvPreview(
+      parsed.preview,
+      () => "00000000-0000-4000-8000-000000000102",
+    );
+    expect(first.members[0].id).not.toBe(sourceId);
+    expect(first.members[0].id).not.toBe(second.members[0].id);
+    expect(first.sourceMemberIds[0]).toEqual({
+      sourceId,
+      targetId: "00000000-0000-4000-8000-000000000101",
+    });
+  });
+
+  it("rejects ambiguous canonical and legacy headers", () => {
+    const result = parseFamilyCsv("member_ref,member_id,name_en,gender\nA,A,One,male");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues.map(({ code }) => code)).toContain("AMBIGUOUS_HEADER");
   });
 
   it("validates the legacy primary spouse field in edited import drafts", () => {

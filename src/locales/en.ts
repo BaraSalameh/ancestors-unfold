@@ -723,7 +723,7 @@ export const en = {
   family_csv_choose_file: "Choose CSV file",
   family_csv_download_template: "Download template",
   family_csv_required_fields:
-    "Required: member_id, gender, and at least one of name_en or name_ar. Relationship fields use member IDs.",
+    "Required: member_ref, gender, and at least one of name_en or name_ar. References such as P1 only connect rows; the system generates the real IDs.",
   family_csv_preview_failed: "The CSV could not be validated. Check the file and try again.",
   family_csv_save_or_discard: "Save or discard the current tree changes before starting an import.",
   family_csv_members: "Members",

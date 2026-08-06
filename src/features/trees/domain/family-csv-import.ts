@@ -7,15 +7,15 @@ const FAMILY_CSV_MAX_MEMBERS = 10_000;
 const FAMILY_CSV_MAX_BRANCHES = 2_000;
 
 const FAMILY_CSV_HEADERS = [
-  "member_id",
+  "member_ref",
   "name_en",
   "name_ar",
   "gender",
-  "father_id",
-  "mother_id",
-  "spouse_ids",
-  "divorced_spouse_ids",
-  "branch_id",
+  "father_ref",
+  "mother_ref",
+  "spouse_refs",
+  "divorced_spouse_refs",
+  "branch_ref",
   "branch_name_en",
   "branch_name_ar",
   "birth_date",
@@ -24,6 +24,15 @@ const FAMILY_CSV_HEADERS = [
   "citizen_status",
   "notes",
 ] as const;
+
+const FAMILY_CSV_HEADER_ALIASES = {
+  member_id: "member_ref",
+  father_id: "father_ref",
+  mother_id: "mother_ref",
+  spouse_ids: "spouse_refs",
+  divorced_spouse_ids: "divorced_spouse_refs",
+  branch_id: "branch_ref",
+} as const satisfies Record<string, FamilyCsvHeader>;
 
 type FamilyCsvHeader = (typeof FAMILY_CSV_HEADERS)[number];
 type CsvRow = Record<FamilyCsvHeader, string>;
@@ -43,17 +52,25 @@ type FamilyCsvSummary = {
   branches: number;
 };
 
-type FamilyCsvPreview = {
+export type FamilyCsvPreview = {
   members: FamilyMember[];
   subfamilies: SubFamily[];
   summary: FamilyCsvSummary;
   warnings: FamilyCsvIssue[];
 };
 
+export type RemappedFamilyCsvPreview = FamilyCsvPreview & {
+  sourceMemberIds: Array<{ sourceId: string; targetId: string }>;
+  sourceBranchIds: Array<{ sourceId: string; targetId: string }>;
+};
+
 type FamilyCsvParseResult =
   { ok: true; preview: FamilyCsvPreview } | { ok: false; issues: FamilyCsvIssue[] };
 
-const allowedHeaders = new Set<string>(FAMILY_CSV_HEADERS);
+const allowedHeaders = new Set<string>([
+  ...FAMILY_CSV_HEADERS,
+  ...Object.keys(FAMILY_CSV_HEADER_ALIASES),
+]);
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_REPORTED_ISSUES = 500;
 
@@ -71,6 +88,11 @@ function byteLength(value: string) {
 
 function normalizeHeader(value: string, index: number) {
   return (index === 0 ? value.replace(/^\uFEFF/, "") : value).trim().toLowerCase();
+}
+
+function canonicalHeader(value: string): FamilyCsvHeader | undefined {
+  if ((FAMILY_CSV_HEADERS as readonly string[]).includes(value)) return value as FamilyCsvHeader;
+  return FAMILY_CSV_HEADER_ALIASES[value as keyof typeof FAMILY_CSV_HEADER_ALIASES];
 }
 
 function validSourceId(value: string) {
@@ -131,6 +153,7 @@ function csvRows(
   const headers = parsed.data[0].map(normalizeHeader);
   const issues: FamilyCsvIssue[] = [];
   const seen = new Set<string>();
+  const seenCanonical = new Map<FamilyCsvHeader, string>();
   headers.forEach((header, index) => {
     if (!header) {
       issues.push(error("EMPTY_HEADER", "CSV headers may not be empty.", 1, String(index + 1)));
@@ -141,11 +164,23 @@ function csvRows(
     seen.add(header);
     if (!allowedHeaders.has(header))
       issues.push(error("UNKNOWN_HEADER", `Unknown header: ${header}.`, 1, header));
+    const canonical = canonicalHeader(header);
+    const prior = canonical ? seenCanonical.get(canonical) : undefined;
+    if (canonical && prior && prior !== header)
+      issues.push(
+        error(
+          "AMBIGUOUS_HEADER",
+          `Headers ${prior} and ${header} represent the same field; use only one.`,
+          1,
+          header,
+        ),
+      );
+    else if (canonical) seenCanonical.set(canonical, header);
   });
-  for (const required of ["member_id", "gender"])
-    if (!seen.has(required))
+  for (const required of ["member_ref", "gender"] as const)
+    if (!seenCanonical.has(required))
       issues.push(error("MISSING_HEADER", `Missing required header: ${required}.`, 1, required));
-  if (!seen.has("name_en") && !seen.has("name_ar"))
+  if (!seenCanonical.has("name_en") && !seenCanonical.has("name_ar"))
     issues.push(
       error("MISSING_NAME_HEADER", "The CSV must include name_en or name_ar.", 1, "name_en"),
     );
@@ -163,8 +198,8 @@ function csvRows(
   const rows = dataRows.map((cells, rowIndex) => {
     const value = emptyRow();
     headers.forEach((header, columnIndex) => {
-      if (allowedHeaders.has(header))
-        value[header as FamilyCsvHeader] = (cells[columnIndex] ?? "").trim();
+      const canonical = canonicalHeader(header);
+      if (canonical) value[canonical] = (cells[columnIndex] ?? "").trim();
     });
     if (cells.length > headers.length && cells.slice(headers.length).some((cell) => cell.trim()))
       issues.push(
@@ -194,20 +229,25 @@ function parseMembers(rows: Array<{ row: number; value: CsvRow }>) {
   const now = new Date().toISOString();
 
   for (const { row, value } of rows) {
-    if (!validSourceId(value.member_id))
+    if (!validSourceId(value.member_ref))
       issues.push(
         error(
           "INVALID_MEMBER_ID",
-          "member_id is required, must be at most 200 characters, and cannot contain | or line breaks.",
+          "member_ref is required, must be at most 200 characters, and cannot contain | or line breaks.",
           row,
-          "member_id",
+          "member_ref",
         ),
       );
-    else if (memberRows.has(value.member_id))
+    else if (memberRows.has(value.member_ref))
       issues.push(
-        error("DUPLICATE_MEMBER_ID", `Duplicate member_id: ${value.member_id}.`, row, "member_id"),
+        error(
+          "DUPLICATE_MEMBER_ID",
+          `Duplicate member_ref: ${value.member_ref}.`,
+          row,
+          "member_ref",
+        ),
       );
-    else memberRows.set(value.member_id, row);
+    else memberRows.set(value.member_ref, row);
 
     if (!value.name_en && !value.name_ar)
       issues.push(error("NAME_REQUIRED", "At least one member name is required.", row, "name_en"));
@@ -256,28 +296,33 @@ function parseMembers(rows: Array<{ row: number; value: CsvRow }>) {
     if (value.notes.length > 10_000)
       issues.push(error("NOTES_TOO_LONG", "notes may not exceed 10,000 characters.", row, "notes"));
 
-    const rawSpouses = splitIds(value.spouse_ids);
-    const rawDivorced = splitIds(value.divorced_spouse_ids);
+    const rawSpouses = splitIds(value.spouse_refs);
+    const rawDivorced = splitIds(value.divorced_spouse_refs);
     for (const id of [...rawSpouses, ...rawDivorced])
       if (!validSourceId(id))
         issues.push(error("INVALID_RELATION_ID", `Invalid relationship ID: ${id}.`, row));
     if (rawSpouses.length > 100)
       issues.push(
-        error("TOO_MANY_SPOUSES", "A member may reference at most 100 spouses.", row, "spouse_ids"),
+        error(
+          "TOO_MANY_SPOUSES",
+          "A member may reference at most 100 spouses.",
+          row,
+          "spouse_refs",
+        ),
       );
     for (const id of rawDivorced)
       if (!rawSpouses.includes(id))
         issues.push(
           error(
             "DIVORCE_NOT_SPOUSE",
-            `${id} appears in divorced_spouse_ids but not spouse_ids.`,
+            `${id} appears in divorced_spouse_refs but not spouse_refs.`,
             row,
-            "divorced_spouse_ids",
+            "divorced_spouse_refs",
           ),
         );
 
     members.push({
-      id: value.member_id,
+      id: value.member_ref,
       name_en: value.name_en,
       name_ar: value.name_ar,
       gender: value.gender === "female" ? "female" : "male",
@@ -286,8 +331,8 @@ function parseMembers(rows: Array<{ row: number; value: CsvRow }>) {
       is_deceased: deceased ?? Boolean(value.death_date),
       citizen_status: value.citizen_status === "non_resident" ? "non_resident" : "resident",
       notes: value.notes || undefined,
-      father_id: value.father_id || undefined,
-      mother_id: value.mother_id || undefined,
+      father_id: value.father_ref || undefined,
+      mother_id: value.mother_ref || undefined,
       created_at: now,
       updated_at: now,
       sourceRow: row,
@@ -295,15 +340,15 @@ function parseMembers(rows: Array<{ row: number; value: CsvRow }>) {
       rawDivorced,
     });
 
-    const hasBranch = Boolean(value.branch_id || value.branch_name_en || value.branch_name_ar);
+    const hasBranch = Boolean(value.branch_ref || value.branch_name_en || value.branch_name_ar);
     if (hasBranch) {
-      if (!validSourceId(value.branch_id))
+      if (!validSourceId(value.branch_ref))
         issues.push(
           error(
             "BRANCH_ID_REQUIRED",
-            "A valid branch_id is required for a branch root.",
+            "A valid branch_ref is required for a branch root.",
             row,
-            "branch_id",
+            "branch_ref",
           ),
         );
       if (!value.branch_name_en && !value.branch_name_ar)
@@ -316,26 +361,28 @@ function parseMembers(rows: Array<{ row: number; value: CsvRow }>) {
           ),
         );
       if (value.gender !== "male")
-        issues.push(error("BRANCH_ROOT_NOT_MALE", "A branch root must be male.", row, "branch_id"));
-      if (branchRows.has(value.branch_id))
+        issues.push(
+          error("BRANCH_ROOT_NOT_MALE", "A branch root must be male.", row, "branch_ref"),
+        );
+      if (branchRows.has(value.branch_ref))
         issues.push(
           error(
             "DUPLICATE_BRANCH_ID",
-            `Duplicate branch_id: ${value.branch_id}.`,
+            `Duplicate branch_ref: ${value.branch_ref}.`,
             row,
-            "branch_id",
+            "branch_ref",
           ),
         );
-      else if (value.branch_id) branchRows.set(value.branch_id, row);
+      else if (value.branch_ref) branchRows.set(value.branch_ref, row);
       if (value.branch_name_en.length > 200 || value.branch_name_ar.length > 200)
         issues.push(
           error("BRANCH_NAME_TOO_LONG", "Branch names may not exceed 200 characters.", row),
         );
       subfamilies.push({
-        id: value.branch_id,
+        id: value.branch_ref,
         name_en: value.branch_name_en || value.branch_name_ar,
         name_ar: value.branch_name_ar,
-        linked_male_id: value.member_id,
+        linked_male_id: value.member_ref,
         status: "active",
         attachments: [],
         created_at: now,
@@ -532,6 +579,44 @@ export function parseFamilyCsv(csv: string): FamilyCsvParseResult {
       },
       warnings: relationships.warnings,
     },
+  };
+}
+
+/**
+ * Converts file-local references into server-issued draft UUIDs before the graph crosses the API
+ * boundary. Source references remain available only in the explicit audit mappings.
+ */
+export function remapFamilyCsvPreview(
+  preview: FamilyCsvPreview,
+  createId: () => string,
+): RemappedFamilyCsvPreview {
+  const memberTargets = new Map(preview.members.map((member) => [member.id, createId()]));
+  const branchTargets = new Map(preview.subfamilies.map((branch) => [branch.id, createId()]));
+  const mapMember = (sourceId: string | undefined) =>
+    sourceId ? memberTargets.get(sourceId) : undefined;
+  const mapBranch = (sourceId: string | undefined) =>
+    sourceId ? branchTargets.get(sourceId) : undefined;
+
+  return {
+    ...preview,
+    members: preview.members.map((member) => ({
+      ...member,
+      id: memberTargets.get(member.id)!,
+      father_id: mapMember(member.father_id),
+      mother_id: mapMember(member.mother_id),
+      spouse_id: mapMember(member.spouse_id),
+      spouse_ids: member.spouse_ids?.map((id) => memberTargets.get(id)!),
+      divorced_from: member.divorced_from?.map((id) => memberTargets.get(id)!),
+      subfamily_id: mapBranch(member.subfamily_id),
+    })),
+    subfamilies: preview.subfamilies.map((branch) => ({
+      ...branch,
+      id: branchTargets.get(branch.id)!,
+      linked_male_id: mapMember(branch.linked_male_id),
+      parent_subfamily_id: mapBranch(branch.parent_subfamily_id),
+    })),
+    sourceMemberIds: [...memberTargets].map(([sourceId, targetId]) => ({ sourceId, targetId })),
+    sourceBranchIds: [...branchTargets].map(([sourceId, targetId]) => ({ sourceId, targetId })),
   };
 }
 

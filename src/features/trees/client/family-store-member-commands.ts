@@ -1,4 +1,4 @@
-import type { FamilyMember, MemberInput, StagedSpouse } from "@/features/members/domain";
+import type { FamilyMember, MemberInput, StagedSpouse, SubFamily } from "@/features/members/domain";
 import {
   detachParentRelationship,
   ensureParentsAreSpouses,
@@ -9,9 +9,11 @@ import {
   toggleDivorce as toggleDivorceRelationship,
 } from "@/features/members/domain";
 import { mirrorSpouseLink } from "./member-link-mutations";
+import { reconcileDraftSubfamilyRoots } from "./family-store-subfamily-reconciliation";
 
 export interface MemberCommandContext {
   state: FamilyMember[];
+  subfamilies?: SubFamily[];
   stagedImages: Map<string, File>;
   commit(mutator: () => void): void;
   replaceStagedImages(next: ReadonlyMap<string, File>): void;
@@ -360,6 +362,7 @@ function createMemberRemovalCommands(ctx: MemberCommandContext) {
       if (ctx.protectedGender?.(id)) return;
       ctx.commit(() => {
         ctx.state = removeMember(ctx.state, id);
+        reconcileContextSubfamilyRoots(ctx);
         ctx.stagedImages.delete(id);
       });
       ctx.replaceStagedImages(ctx.stagedImages);
@@ -376,10 +379,18 @@ function createMemberRemovalCommands(ctx: MemberCommandContext) {
           ctx.state = removeMember(ctx.state, member.id);
           ctx.stagedImages.delete(member.id);
         }
+        reconcileContextSubfamilyRoots(ctx);
       });
       ctx.replaceStagedImages(ctx.stagedImages);
       ctx.emit();
       return { removed: removable.length, skipped };
     },
   };
+}
+
+function reconcileContextSubfamilyRoots(ctx: MemberCommandContext) {
+  if (!ctx.subfamilies) return;
+  const reconciled = reconcileDraftSubfamilyRoots(ctx.state, ctx.subfamilies);
+  ctx.state = reconciled.members;
+  ctx.subfamilies = reconciled.subfamilies;
 }

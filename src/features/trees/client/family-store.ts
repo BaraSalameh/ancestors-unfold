@@ -5,6 +5,7 @@ import { treeClient, type FamilyCsvPreviewResponse } from "../api/tree-client";
 // eslint-disable-next-line no-restricted-imports -- tree persistence coordinates staged member-image uploads.
 import { memberImageClient } from "@/features/members/api";
 import { createMemberCommands, type MemberCommandContext } from "./family-store-member-commands";
+import { reconcileDraftSubfamilyRoots } from "./family-store-subfamily-reconciliation";
 import {
   createSubfamilyCommands,
   type SubfamilyCommandContext,
@@ -28,7 +29,11 @@ let accessScope: TreeAccessScope = "preview";
 let assignedBranchId: string | undefined;
 let canImportCsv = false;
 const listeners = new Set<() => void>();
-type DraftSnapshot = { members: FamilyMember[]; stagedImages: Map<string, File> };
+type DraftSnapshot = {
+  members: FamilyMember[];
+  subfamilies: SubFamily[];
+  stagedImages: Map<string, File>;
+};
 let past: DraftSnapshot[] = [];
 let future: DraftSnapshot[] = [];
 let stagedImages = new Map<string, File>();
@@ -132,6 +137,9 @@ async function updateRemoteSnapshot() {
       stagedImages.delete(memberId);
       stagedImageUrls.delete(memberId);
     }
+    const reconciled = reconcileDraftSubfamilyRoots(state, subfamilies);
+    state = reconciled.members;
+    subfamilies = reconciled.subfamilies;
     const members = cloneMembers(state);
     const currentSubfamilies = cloneSubfamilies(subfamilies);
     const activeImport = pendingCsvImport;
@@ -246,7 +254,11 @@ function loadSubfamilies() {
 }
 
 function snapshot(): DraftSnapshot {
-  return { members: cloneMembers(state), stagedImages: new Map(stagedImages) };
+  return {
+    members: cloneMembers(state),
+    subfamilies: cloneSubfamilies(subfamilies),
+    stagedImages: new Map(stagedImages),
+  };
 }
 
 function replaceStagedImages(next: ReadonlyMap<string, File>) {
@@ -271,6 +283,7 @@ function commit(mutator: () => void) {
   mutator();
   if (
     JSON.stringify(before.members) === JSON.stringify(state) &&
+    JSON.stringify(before.subfamilies) === JSON.stringify(subfamilies) &&
     before.stagedImages.size === stagedImages.size
   )
     return;
@@ -291,6 +304,7 @@ function applySnapshot(next: DraftSnapshot) {
       void memberImageClient.discard(activeTreeId, member.image_asset_id).catch(() => undefined);
   }
   state = cloneMembers(next.members);
+  subfamilies = cloneSubfamilies(next.subfamilies);
   replaceStagedImages(next.stagedImages);
   markDraftChanged();
   emit();
@@ -303,6 +317,12 @@ const memberCommandContext: MemberCommandContext = {
   set state(next) {
     state = next;
   },
+  get subfamilies() {
+    return subfamilies;
+  },
+  set subfamilies(next) {
+    subfamilies = next ?? [];
+  },
   get stagedImages() {
     return stagedImages;
   },
@@ -313,7 +333,13 @@ const memberCommandContext: MemberCommandContext = {
   replaceStagedImages,
   emit,
   protectedGender(id) {
-    return pendingCsvImport?.protectedMemberIds.get(id);
+    const importedGender = pendingCsvImport?.protectedMemberIds.get(id);
+    if (importedGender) return importedGender;
+    if (accessScope !== "branch") return undefined;
+    const assignedRoot = subfamilies.find(
+      (branch) => branch.id === assignedBranchId && branch.linked_male_id === id,
+    );
+    return assignedRoot ? state.find((member) => member.id === id)?.gender : undefined;
   },
 };
 

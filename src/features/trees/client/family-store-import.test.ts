@@ -65,7 +65,7 @@ describe("family store CSV import draft", () => {
       expectedVersion: 4,
       members: [
         {
-          id: "source-owner",
+          id: "00000000-0000-4000-8000-000000000100",
           name_en: "Imported owner",
           name_ar: "",
           gender: "male",
@@ -75,6 +75,10 @@ describe("family store CSV import draft", () => {
         },
       ],
       subfamilies: [],
+      sourceMemberIds: [
+        { sourceId: "source-owner", targetId: "00000000-0000-4000-8000-000000000100" },
+      ],
+      sourceBranchIds: [],
       summary: { members: 1, parentLinks: 0, spouseLinks: 0, branches: 0 },
       warnings: [],
       mappingRequirements: {
@@ -92,7 +96,7 @@ describe("family store CSV import draft", () => {
     };
 
     familyStore.stageFamilyCsvImport(preview, {
-      linkedMembers: { [ownerId]: "source-owner" },
+      linkedMembers: { [ownerId]: "00000000-0000-4000-8000-000000000100" },
       grantedBranches: {},
     });
     expect(familyStore.getPersistenceState()).toMatchObject({ dirty: true, importPending: true });
@@ -169,6 +173,8 @@ describe("family store CSV import draft", () => {
           expectedVersion: 4,
           members: [],
           subfamilies: [],
+          sourceMemberIds: [],
+          sourceBranchIds: [],
           summary: { members: 0, parentLinks: 0, spouseLinks: 0, branches: 0 },
           warnings: [],
           mappingRequirements: { linkedMembers: [], grantedBranches: [] },

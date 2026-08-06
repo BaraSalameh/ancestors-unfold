@@ -8,37 +8,44 @@ const preview: FamilyCsvPreviewResponse = {
   warnings: [],
   members: [
     {
-      id: "source-owner",
+      id: "00000000-0000-4000-8000-000000000100",
       name_en: "Imported owner",
       name_ar: "",
       gender: "male",
       citizen_status: "resident",
-      spouse_id: "source-wife",
-      spouse_ids: ["source-wife"],
+      spouse_id: "00000000-0000-4000-8000-000000000101",
+      spouse_ids: ["00000000-0000-4000-8000-000000000101"],
       created_at: "2026-08-01T00:00:00.000Z",
       updated_at: "2026-08-01T00:00:00.000Z",
     },
     {
-      id: "source-wife",
+      id: "00000000-0000-4000-8000-000000000101",
       name_en: "Wife",
       name_ar: "",
       gender: "female",
       citizen_status: "resident",
-      spouse_id: "source-owner",
-      spouse_ids: ["source-owner"],
+      spouse_id: "00000000-0000-4000-8000-000000000100",
+      spouse_ids: ["00000000-0000-4000-8000-000000000100"],
       created_at: "2026-08-01T00:00:00.000Z",
       updated_at: "2026-08-01T00:00:00.000Z",
     },
   ],
   subfamilies: [
     {
-      id: "source-branch",
+      id: "00000000-0000-4000-8000-000000000102",
       name_en: "Imported branch",
       name_ar: "",
-      linked_male_id: "source-owner",
+      linked_male_id: "00000000-0000-4000-8000-000000000100",
       created_at: "2026-08-01T00:00:00.000Z",
       updated_at: "2026-08-01T00:00:00.000Z",
     },
+  ],
+  sourceMemberIds: [
+    { sourceId: "source-owner", targetId: "00000000-0000-4000-8000-000000000100" },
+    { sourceId: "source-wife", targetId: "00000000-0000-4000-8000-000000000101" },
+  ],
+  sourceBranchIds: [
+    { sourceId: "source-branch", targetId: "00000000-0000-4000-8000-000000000102" },
   ],
   mappingRequirements: {
     linkedMembers: [
@@ -62,15 +69,14 @@ const preview: FamilyCsvPreviewResponse = {
 
 describe("family CSV draft mapping", () => {
   it("reuses protected IDs and images while remapping every relationship", () => {
-    let sequence = 10;
     const draft = buildFamilyCsvDraft(
       preview,
       {
         linkedMembers: {
-          "00000000-0000-4000-8000-000000000001": "source-owner",
+          "00000000-0000-4000-8000-000000000001": "00000000-0000-4000-8000-000000000100",
         },
         grantedBranches: {
-          "00000000-0000-4000-8000-000000000002": "source-branch",
+          "00000000-0000-4000-8000-000000000002": "00000000-0000-4000-8000-000000000102",
         },
       },
       [
@@ -104,13 +110,12 @@ describe("family CSV draft mapping", () => {
           updated_at: "2020-01-01T00:00:00.000Z",
         },
       ],
-      () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, "0")}`,
     );
 
     expect(draft.members[0]).toMatchObject({
       id: "00000000-0000-4000-8000-000000000001",
       image_asset_id: "asset",
-      spouse_id: "00000000-0000-4000-8000-000000000010",
+      spouse_id: "00000000-0000-4000-8000-000000000101",
     });
     expect(draft.subfamilies[0]).toMatchObject({
       id: "00000000-0000-4000-8000-000000000002",
@@ -126,10 +131,10 @@ describe("family CSV draft mapping", () => {
         preview,
         {
           linkedMembers: {
-            "00000000-0000-4000-8000-000000000001": "source-wife",
+            "00000000-0000-4000-8000-000000000001": "00000000-0000-4000-8000-000000000101",
           },
           grantedBranches: {
-            "00000000-0000-4000-8000-000000000002": "source-branch",
+            "00000000-0000-4000-8000-000000000002": "00000000-0000-4000-8000-000000000102",
           },
         },
         [],

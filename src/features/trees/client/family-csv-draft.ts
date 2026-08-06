@@ -22,7 +22,6 @@ export function buildFamilyCsvDraft(
   selections: FamilyCsvMappingSelections,
   currentMembers: FamilyMember[],
   currentBranches: SubFamily[],
-  createId: () => string = () => crypto.randomUUID(),
 ): BuiltFamilyCsvDraft {
   const importedMembers = new Map(preview.members.map((member) => [member.id, member]));
   const importedBranches = new Map(preview.subfamilies.map((branch) => [branch.id, branch]));
@@ -52,9 +51,9 @@ export function buildFamilyCsvDraft(
   }
 
   for (const member of preview.members)
-    if (!memberTargets.has(member.id)) memberTargets.set(member.id, createId());
+    if (!memberTargets.has(member.id)) memberTargets.set(member.id, member.id);
   for (const branch of preview.subfamilies)
-    if (!branchTargets.has(branch.id)) branchTargets.set(branch.id, createId());
+    if (!branchTargets.has(branch.id)) branchTargets.set(branch.id, branch.id);
   for (const [sourceBranchId, targetBranchId] of branchTargets) {
     if (!protectedBranchIds.has(targetBranchId)) continue;
     const rootSourceId = importedBranches.get(sourceBranchId)?.linked_male_id;
@@ -63,10 +62,18 @@ export function buildFamilyCsvDraft(
   }
 
   const mapMember = (id: string | undefined) => (id ? memberTargets.get(id) : undefined);
+  const previewMemberSources = new Map(
+    preview.sourceMemberIds.map(({ targetId, sourceId }) => [targetId, sourceId]),
+  );
+  const previewBranchSources = new Map(
+    preview.sourceBranchIds.map(({ targetId, sourceId }) => [targetId, sourceId]),
+  );
   const sourceMemberIds = new Map<string, string>();
   const members = preview.members.map((member) => {
     const targetId = memberTargets.get(member.id)!;
-    sourceMemberIds.set(targetId, member.id);
+    const sourceId = previewMemberSources.get(member.id);
+    if (!sourceId) throw new Error("INVALID_MEMBER_MAPPING");
+    sourceMemberIds.set(targetId, sourceId);
     const existing = currentMembers.find(({ id }) => id === targetId);
     return {
       ...member,
@@ -87,7 +94,9 @@ export function buildFamilyCsvDraft(
   const sourceBranchIds = new Map<string, string>();
   const subfamilies = preview.subfamilies.map((branch) => {
     const targetId = branchTargets.get(branch.id)!;
-    sourceBranchIds.set(targetId, branch.id);
+    const sourceId = previewBranchSources.get(branch.id);
+    if (!sourceId) throw new Error("INVALID_BRANCH_MAPPING");
+    sourceBranchIds.set(targetId, sourceId);
     const existing = currentBranches.find(({ id }) => id === targetId);
     return {
       ...branch,

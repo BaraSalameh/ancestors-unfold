@@ -707,7 +707,7 @@ export const ar = {
   family_csv_choose_file: "اختيار ملف CSV",
   family_csv_download_template: "تنزيل القالب",
   family_csv_required_fields:
-    "المطلوب: member_id وgender وواحد على الأقل من name_en أو name_ar. تستخدم حقول العلاقات معرّفات الأفراد.",
+    "المطلوب: member_ref وgender وواحد على الأقل من name_en أو name_ar. المراجع مثل P1 تربط الصفوف فقط، وينشئ النظام المعرّفات الفعلية.",
   family_csv_preview_failed: "تعذر التحقق من ملف CSV. راجع الملف وحاول مجدداً.",
   family_csv_save_or_discard: "احفظ تغييرات الشجرة الحالية أو تجاهلها قبل بدء الاستيراد.",
   family_csv_members: "الأفراد",

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemberCommands, type MemberCommandContext } from "./family-store-member-commands";
-import type { FamilyMember } from "@/features/members/domain";
+import type { FamilyMember, SubFamily } from "@/features/members/domain";
 
 const member = (id: string, patch: Partial<FamilyMember> = {}): FamilyMember => ({
   id,
@@ -132,5 +132,57 @@ describe("atomic member deletion", () => {
       skipped: 1,
     });
     expect(state.map(({ id }) => id)).toEqual(["protected"]);
+  });
+
+  it("removes branches rooted at deleted members and detaches their references", () => {
+    let state = [
+      member("root"),
+      member("assigned", { subfamily_id: "root-branch" }),
+      member("other"),
+    ];
+    let subfamilies: SubFamily[] = [
+      {
+        id: "root-branch",
+        name_en: "Root branch",
+        name_ar: "",
+        linked_male_id: "root",
+        created_at: "then",
+        updated_at: "then",
+      },
+      {
+        id: "child-branch",
+        name_en: "Child branch",
+        name_ar: "",
+        linked_male_id: "other",
+        parent_subfamily_id: "root-branch",
+        created_at: "then",
+        updated_at: "then",
+      },
+    ];
+    const context: MemberCommandContext = {
+      get state() {
+        return state;
+      },
+      set state(next) {
+        state = next;
+      },
+      get subfamilies() {
+        return subfamilies;
+      },
+      set subfamilies(next) {
+        subfamilies = next ?? [];
+      },
+      stagedImages: new Map<string, File>(),
+      commit: (mutator) => mutator(),
+      replaceStagedImages: vi.fn(),
+      emit: vi.fn(),
+    };
+
+    createMemberCommands(context).remove("root");
+
+    expect(state.find(({ id }) => id === "assigned")?.subfamily_id).toBeUndefined();
+    expect(subfamilies).toEqual([
+      expect.objectContaining({ id: "child-branch", parent_subfamily_id: undefined }),
+    ]);
   });
 });

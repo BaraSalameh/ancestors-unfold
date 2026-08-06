@@ -22,6 +22,8 @@ export type FamilyCsvPreviewResponse = {
   expectedVersion: number;
   members: FamilyMember[];
   subfamilies: SubFamily[];
+  sourceMemberIds: Array<{ sourceId: string; targetId: string }>;
+  sourceBranchIds: Array<{ sourceId: string; targetId: string }>;
   summary: { members: number; parentLinks: number; spouseLinks: number; branches: number };
   warnings: Array<{
     code: string;

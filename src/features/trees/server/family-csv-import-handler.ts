@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { Session } from "@/features/auth/server";
 import { reconcileMemberImages } from "@/features/members/server";
@@ -5,7 +6,11 @@ import { enforceRateLimit, parseBody, ApiError } from "@/server/security";
 import { familyCsvApplySchema, familyCsvPreviewSchema } from "@/server/schemas";
 import { jsonResponse as json } from "@/shared/http/response";
 import { query, transaction } from "@/shared/server/database";
-import { parseFamilyCsv, validateFamilyImportGraph } from "../domain/family-csv-import";
+import {
+  parseFamilyCsv,
+  remapFamilyCsvPreview,
+  validateFamilyImportGraph,
+} from "../domain/family-csv-import";
 import { importSnapshot } from "./snapshot-repository";
 import { requireFamilyCsvImportManager } from "./family-csv-import-protection";
 
@@ -95,7 +100,7 @@ export async function handleFamilyCsvImportRequest(
     );
     const parsed = parseFamilyCsv(body.csv);
     if (!parsed.ok) return json({ code: "INVALID_FAMILY_CSV", issues: parsed.issues }, 422);
-    return json({ ...parsed.preview, ...context });
+    return json({ ...remapFamilyCsvPreview(parsed.preview, randomUUID), ...context });
   }
 
   const body = await parseBody(request, familyCsvApplySchema, 15 * 1024 * 1024);
