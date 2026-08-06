@@ -75,11 +75,6 @@ export function alignDecadeSingleChildren(
     const source = nodeById.get(edge.source);
     const target = nodeById.get(edge.target);
     if (!source || !target) continue;
-    if (
-      typeof target.data.member.decade_pos_x === "number" &&
-      typeof target.data.member.decade_pos_y === "number"
-    )
-      continue;
     const desiredX = source.position.x + (width(source) - width(target)) / 2;
     const wouldOverlap = nodes.some(
       (other) =>

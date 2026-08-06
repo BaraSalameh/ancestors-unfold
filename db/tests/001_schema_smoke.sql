@@ -645,4 +645,86 @@ BEGIN
   END IF;
 END $$;
 
+-- Obsolete columns are absent while canonical snapshots and branch attachments retain active data.
+DO $$
+DECLARE
+  v_owner uuid := gen_random_uuid();
+  v_tree uuid := gen_random_uuid();
+  v_member uuid := gen_random_uuid();
+  v_branch uuid := gen_random_uuid();
+  v_file uuid := gen_random_uuid();
+  v_union uuid := gen_random_uuid();
+  v_snapshot jsonb;
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM (VALUES
+      ('family_members','image_file_id'),
+      ('family_members','decade_pos_x'),
+      ('family_members','decade_pos_y'),
+      ('family_trees','color'),
+      ('family_trees','theme_metadata'),
+      ('subfamilies','color'),
+      ('subfamilies','position_label'),
+      ('unions','started_on'),
+      ('unions','ended_on'),
+      ('unions','notes'),
+      ('users','timezone'),
+      ('subfamily_attachments','title'),
+      ('subfamily_attachments','attachment_type'),
+      ('subfamily_attachments','description'),
+      ('subfamily_attachments','display_order'),
+      ('subfamily_attachments','preview_safe')
+    ) removed(table_name,column_name)
+    JOIN information_schema.columns column_info
+      ON column_info.table_schema='app'
+     AND column_info.table_name=removed.table_name
+     AND column_info.column_name=removed.column_name
+  ) THEN
+    RAISE EXCEPTION 'an obsolete database column is still present';
+  END IF;
+
+  INSERT INTO app.users(id,email,full_name_en,full_name_ar,status)
+    VALUES(v_owner,'obsolete-columns@example.test','Schema Owner','Schema Owner','active');
+  INSERT INTO app.family_trees(id,owner_user_id,name_en,country_code)
+    VALUES(v_tree,v_owner,'Conservative cleanup','JO');
+  INSERT INTO app.tree_memberships(tree_id,user_id,role) VALUES(v_tree,v_owner,'owner');
+  INSERT INTO app.family_members(id,tree_id,name_en,gender,pos_x,pos_y)
+    VALUES(v_member,v_tree,'Positioned member','male',12.5,24.5);
+  INSERT INTO app.subfamilies(id,tree_id,name_en,linked_male_id)
+    VALUES(v_branch,v_tree,'Canonical attachments',v_member);
+  INSERT INTO app.unions(id,tree_id,status,display_order)
+    VALUES(v_union,v_tree,'current',2);
+  INSERT INTO app.files(
+    id,storage_provider,object_key,original_name,media_type,byte_size,
+    checksum_sha256,uploaded_by,scan_status
+  ) VALUES(
+    v_file,'test','obsolete-columns/file','family.pdf','application/pdf',4,
+    digest('test','sha256'),v_owner,'clean'
+  );
+  INSERT INTO app.subfamily_attachments(subfamily_id,tree_id,file_id)
+    VALUES(v_branch,v_tree,v_file);
+
+  IF NOT EXISTS (
+    SELECT 1 FROM app.subfamily_attachments attachment
+    JOIN app.files file ON file.id=attachment.file_id
+    WHERE attachment.subfamily_id=v_branch
+      AND file.original_name='family.pdf'
+      AND file.media_type='application/pdf'
+  ) THEN
+    RAISE EXCEPTION 'canonical branch attachment metadata is unavailable';
+  END IF;
+
+  v_snapshot := app.canonical_tree_snapshot(v_tree);
+  IF (v_snapshot->'members'->0->>'pos_x')::double precision <> 12.5
+     OR (v_snapshot->'members'->0->>'pos_y')::double precision <> 24.5
+     OR (v_snapshot->'members'->0) ? 'decade_pos_x'
+     OR (v_snapshot->'subfamilies'->0) ? 'color'
+     OR (v_snapshot->'unions'->0) ? 'started_on'
+     OR (SELECT country_code FROM app.family_trees WHERE id=v_tree) <> 'JO'
+     OR (SELECT status FROM app.unions WHERE id=v_union) <> 'current' THEN
+    RAISE EXCEPTION 'active snapshot, tree metadata, or union behavior regressed';
+  END IF;
+END $$;
+
 ROLLBACK;

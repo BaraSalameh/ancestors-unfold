@@ -94,8 +94,7 @@ export function useTreeNodeDrag({
           .filter(({ type }) => type === "member")
           .map((node) => [node.id, { x: node.position.x, y: node.position.y }]),
       );
-      if (previewType === "chronological") familyStore.setDecadePositions(positions);
-      else familyStore.setPositions(positions);
+      if (previewType === "lineage") familyStore.setPositions(positions);
     },
     [canEdit, previewType, setNodes],
   );

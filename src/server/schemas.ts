@@ -69,7 +69,6 @@ export const schemas = {
       description_ar: z.string().trim().max(5000).nullable().optional(),
       country_code: z.enum(COUNTRY_CODES).nullable().optional(),
       visibility: z.enum(["private", "public"]).optional(),
-      color: z.string().trim().max(100).optional(),
     })
     .strict(),
   branchGrant: z
@@ -299,8 +298,6 @@ export const schemas = {
               subfamily_id: z.string().max(200).optional(),
               pos_x: z.number().finite().optional(),
               pos_y: z.number().finite().optional(),
-              decade_pos_x: z.number().finite().optional(),
-              decade_pos_y: z.number().finite().optional(),
               created_at: z.string().max(50),
               updated_at: z.string().max(50),
             })
@@ -325,7 +322,6 @@ export const schemas = {
               status: z.enum(["active", "inactive"]).optional(),
               notes: z.string().max(10_000).optional(),
               attachments: z.array(z.unknown()).max(100).optional(),
-              color: z.string().max(100).optional(),
               created_at: z.string().max(50),
               updated_at: z.string().max(50),
             })

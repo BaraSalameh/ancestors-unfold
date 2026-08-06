@@ -32,8 +32,6 @@ export interface FamilyMember {
   subfamily_id?: string;
   pos_x?: number;
   pos_y?: number;
-  decade_pos_x?: number;
-  decade_pos_y?: number;
   created_at: string;
   updated_at: string;
 }
@@ -55,7 +53,6 @@ export interface SubFamily {
   status?: "active" | "inactive";
   notes?: string;
   attachments?: SubFamilyAttachment[];
-  color?: string;
   created_at: string;
   updated_at: string;
 }

@@ -59,7 +59,6 @@ export async function writeSnapshotMembers(
 }
 
 // Snapshot preparation branches across full-tree and scoped editor persistence rules.
-// eslint-disable-next-line complexity
 async function prepareSnapshotMembers(
   client: PoolClient,
   treeId: string,
@@ -91,9 +90,9 @@ async function prepareSnapshotMembers(
     const id = /^[0-9a-f]{8}-/.test(sf.id) ? sf.id : randomUUID();
     subfamilyIds.set(sf.id, id);
     await client.query(
-      `INSERT INTO app.subfamilies(id,tree_id,name_en,name_ar,notes,color) VALUES($1,$2,$3,$4,$5,$6)
-        ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,notes=excluded.notes,color=excluded.color,deleted_at=NULL`,
-      [id, treeId, sf.name_en, sf.name_ar || null, sf.notes || null, sf.color || null],
+      `INSERT INTO app.subfamilies(id,tree_id,name_en,name_ar,notes) VALUES($1,$2,$3,$4,$5)
+        ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,notes=excluded.notes,deleted_at=NULL`,
+      [id, treeId, sf.name_en, sf.name_ar || null, sf.notes || null],
     );
     await client.query(
       `INSERT INTO app.import_id_map(import_batch_id,entity_type,source_id,target_id,status)
@@ -133,15 +132,15 @@ async function upsertSnapshotMembers(
       await client.query(
         `UPDATE app.family_members SET name_en=$3,name_ar=$4,gender=$5,birth_date=$6,
             death_date=$7,is_deceased=$8,citizen_status=$9,image_url=$10,image_public_id=$11,image_asset_id=$12,
-            notes=$13,is_unknown=$14,pos_x=$15,pos_y=$16,decade_pos_x=$17,decade_pos_y=$18,
-            updated_by=$19,updated_at=now(),version=version+1
+            notes=$13,is_unknown=$14,pos_x=$15,pos_y=$16,
+            updated_by=$17,updated_at=now(),version=version+1
            WHERE id=$1 AND tree_id=$2 AND deleted_at IS NULL`,
-        [...values.slice(0, 18), userId],
+        [...values.slice(0, 16), userId],
       );
     else
       await client.query(
-        `INSERT INTO app.family_members(id,tree_id,name_en,name_ar,gender,birth_date,death_date,is_deceased,citizen_status,image_url,image_public_id,image_asset_id,notes,is_unknown,pos_x,pos_y,decade_pos_x,decade_pos_y,subfamily_id,created_by,updated_by)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$20) ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,gender=excluded.gender,birth_date=excluded.birth_date,death_date=excluded.death_date,is_deceased=excluded.is_deceased,citizen_status=excluded.citizen_status,image_url=excluded.image_url,image_public_id=excluded.image_public_id,image_asset_id=excluded.image_asset_id,notes=excluded.notes,is_unknown=excluded.is_unknown,pos_x=excluded.pos_x,pos_y=excluded.pos_y,decade_pos_x=excluded.decade_pos_x,decade_pos_y=excluded.decade_pos_y,updated_by=excluded.updated_by,updated_at=now(),version=app.family_members.version+1,deleted_at=NULL`,
+        `INSERT INTO app.family_members(id,tree_id,name_en,name_ar,gender,birth_date,death_date,is_deceased,citizen_status,image_url,image_public_id,image_asset_id,notes,is_unknown,pos_x,pos_y,subfamily_id,created_by,updated_by)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$18) ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,gender=excluded.gender,birth_date=excluded.birth_date,death_date=excluded.death_date,is_deceased=excluded.is_deceased,citizen_status=excluded.citizen_status,image_url=excluded.image_url,image_public_id=excluded.image_public_id,image_asset_id=excluded.image_asset_id,notes=excluded.notes,is_unknown=excluded.is_unknown,pos_x=excluded.pos_x,pos_y=excluded.pos_y,updated_by=excluded.updated_by,updated_at=now(),version=app.family_members.version+1,deleted_at=NULL`,
         values,
       );
     await client.query(
@@ -184,8 +183,6 @@ function snapshotMemberValues(
     !!member.is_unknown,
     member.pos_x ?? null,
     member.pos_y ?? null,
-    member.decade_pos_x ?? null,
-    member.decade_pos_y ?? null,
     member.subfamily_id
       ? (subfamilyIds.get(member.subfamily_id) ?? null)
       : isBranchEditor

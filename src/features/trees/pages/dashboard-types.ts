@@ -47,7 +47,6 @@ export interface Branch {
   name_ar: string | null;
   root_family_member_id: string | null;
   parent_branch_id: string | null;
-  position_label: string | null;
   status: string;
   member_ids: string[];
   member_count: number;

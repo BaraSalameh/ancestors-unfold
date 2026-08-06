@@ -82,8 +82,6 @@ function memberPositionFields(member: MemberRow) {
   return {
     pos_x: member.pos_x ?? undefined,
     pos_y: member.pos_y ?? undefined,
-    decade_pos_x: member.decade_pos_x ?? undefined,
-    decade_pos_y: member.decade_pos_y ?? undefined,
     created_at: member.created_at,
     updated_at: member.updated_at,
   };
@@ -118,7 +116,7 @@ export async function loadRenderableSnapshot(
     `SELECT m.id,coalesce(m.name_en, '') name_en,coalesce(m.name_ar, '') name_ar,
       m.gender,m.birth_date::text birth_date,m.death_date::text death_date,m.is_deceased,
       m.citizen_status,m.image_url,m.image_public_id,m.image_asset_id,m.notes,m.is_unknown,m.subfamily_id,
-      m.pos_x,m.pos_y,m.decade_pos_x,m.decade_pos_y,m.created_at,m.updated_at,
+      m.pos_x,m.pos_y,m.created_at,m.updated_at,
       f.parent_id father_id,mo.parent_id mother_id FROM app.family_members m
     LEFT JOIN app.parent_child_relationships f ON f.child_id=m.id AND f.parent_role='father' AND f.deleted_at IS NULL
     LEFT JOIN app.parent_child_relationships mo ON mo.child_id=m.id AND mo.parent_role='mother' AND mo.deleted_at IS NULL
@@ -126,7 +124,7 @@ export async function loadRenderableSnapshot(
     [treeId],
   );
   const subfamilies = await runner.query<Record<string, unknown>>(
-    `SELECT id,name_en,name_ar,linked_male_id,parent_subfamily_id,status,notes,color,created_at,updated_at
+    `SELECT id,name_en,name_ar,linked_male_id,parent_subfamily_id,status,notes,created_at,updated_at
     FROM app.subfamilies WHERE tree_id=$1 AND deleted_at IS NULL`,
     [treeId],
   );
@@ -158,7 +156,6 @@ export async function loadRenderableSnapshot(
       parent_subfamily_id: subfamily.parent_subfamily_id ?? undefined,
       status: subfamily.status ?? "active",
       ...(includePrivate ? { notes: subfamily.notes ?? undefined } : {}),
-      color: subfamily.color ?? undefined,
       created_at: subfamily.created_at,
       updated_at: subfamily.updated_at,
     })),

@@ -121,7 +121,6 @@ function addFatherWithSpouses(
 }
 
 // Member CRUD intentionally stays together so every mutation shares the same checkpoint behavior.
-// eslint-disable-next-line max-lines-per-function
 function createMemberCrudCommands(ctx: MemberCommandContext) {
   return {
     add(input: MemberInput, imageFile?: File): FamilyMember {
@@ -197,28 +196,9 @@ function createMemberCrudCommands(ctx: MemberCommandContext) {
         });
       });
     },
-    setDecadePositions(positions: ReadonlyMap<string, { x: number; y: number }>): void {
-      ctx.commit(() => {
-        ctx.state = ctx.state.map((member) => {
-          const position = positions.get(member.id);
-          return !position
-            ? member
-            : { ...member, decade_pos_x: position.x, decade_pos_y: position.y };
-        });
-      });
-    },
     clearPositions(): void {
       ctx.commit(() => {
         ctx.state = ctx.state.map((m) => ({ ...m, pos_x: undefined, pos_y: undefined }));
-      });
-    },
-    clearDecadePositions(): void {
-      ctx.commit(() => {
-        ctx.state = ctx.state.map((m) => ({
-          ...m,
-          decade_pos_x: undefined,
-          decade_pos_y: undefined,
-        }));
       });
     },
     update(id: string, patch: Partial<MemberInput>, imageFile?: File | null): void {

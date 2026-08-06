@@ -72,7 +72,6 @@ export function useTreeAutoLayout(options: AutoLayoutOptions) {
     setEdges(auto.edges);
     const positions = new Map(auto.nodes.map((node) => [node.id, node.position]));
     if (previewType === "lineage") familyStore.setPositions(positions);
-    else familyStore.setDecadePositions(positions);
     didFit.current = false;
     requestAnimationFrame(() => fitView({ padding: 0.2, duration: 400 }));
     toast.success(t("auto_layout_done"));
@@ -103,7 +102,5 @@ function withoutCanvasPositions(member: FamilyMember): FamilyMember {
     ...member,
     pos_x: undefined,
     pos_y: undefined,
-    decade_pos_x: undefined,
-    decade_pos_y: undefined,
   };
 }

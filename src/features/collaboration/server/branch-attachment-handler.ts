@@ -219,10 +219,9 @@ async function registerAttachment(
       )
     ).rows[0];
     await client.query(
-      `INSERT INTO app.subfamily_attachments(
-         subfamily_id,tree_id,file_id,title,attachment_type
-       ) VALUES($1,$2,$3,$4,$5)`,
-      [branchId, treeId, file.id, body.fileName, body.mediaType],
+      `INSERT INTO app.subfamily_attachments(subfamily_id,tree_id,file_id)
+       VALUES($1,$2,$3)`,
+      [branchId, treeId, file.id],
     );
     return file;
   });

@@ -15,7 +15,6 @@ export function createSubfamilyCommands(ctx: SubfamilyCommandContext) {
     addSubfamily(
       name_en: string,
       name_ar: string,
-      color?: string,
       linked_male_id?: string,
       parent_subfamily_id?: string,
     ): SubFamily {
@@ -28,7 +27,6 @@ export function createSubfamilyCommands(ctx: SubfamilyCommandContext) {
         parent_subfamily_id,
         status: "active",
         attachments: [],
-        color,
         created_at: now,
         updated_at: now,
       };
