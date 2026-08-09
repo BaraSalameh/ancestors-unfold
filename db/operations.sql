@@ -1,8 +1,11 @@
 -- Examples for the deployment/maintenance system; do not run this file as a migration.
 
--- Provision the current and next audit partitions.
-SELECT audit.create_month_partition(current_date);
-SELECT audit.create_month_partition((current_date + interval '1 month')::date);
+-- Drain the default partition and provision the current and next partitions.
+-- Production invokes this daily through /api/cron/database-maintenance.
+SELECT * FROM audit.maintain_partitions(current_date,2);
+
+-- This should remain zero; alert when it does not.
+SELECT count(*) AS unpartitioned_audit_events FROM audit.events_default;
 
 -- Find active sessions that the server should reject or revoke.
 SELECT s.id, s.user_id

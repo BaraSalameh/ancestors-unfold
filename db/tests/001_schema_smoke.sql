@@ -313,6 +313,64 @@ BEGIN
      OR to_regprocedure('app.saved_snapshot_version(uuid,uuid)') IS NULL THEN
     RAISE EXCEPTION 'tree snapshot history functions are missing';
   END IF;
+  IF to_regprocedure('audit.maintain_partitions(date,integer)') IS NULL THEN
+    RAISE EXCEPTION 'audit partition maintenance function is missing';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='app' AND table_name='tree_snapshots'
+      AND column_name='schema_version'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='app' AND table_name='tree_snapshots'
+      AND column_name='parent_snapshot_id'
+  ) THEN
+    RAISE EXCEPTION 'tree snapshot contract columns are missing';
+  END IF;
+END $$;
+
+-- Snapshot lineage links consecutive persisted versions while allowing the
+-- first retained snapshot to act as a genesis checkpoint.
+DO $$
+DECLARE
+  owner_id uuid:=gen_random_uuid();
+  v_tree_id uuid:=gen_random_uuid();
+  first_batch uuid:=gen_random_uuid();
+  second_batch uuid:=gen_random_uuid();
+  first_snapshot_id uuid;
+BEGIN
+  INSERT INTO app.users(id,email,full_name_en,full_name_ar,status)
+    VALUES(owner_id,'snapshot-lineage@example.test','Snapshot owner','Snapshot owner','active');
+  INSERT INTO app.family_trees(id,owner_user_id,name_en)
+    VALUES(v_tree_id,owner_id,'Snapshot lineage');
+  INSERT INTO app.tree_memberships(tree_id,user_id,role)
+    VALUES(v_tree_id,owner_id,'owner');
+  PERFORM app.set_request_context(owner_id,NULL,gen_random_uuid());
+
+  UPDATE app.family_trees SET version=version+1 WHERE id=v_tree_id;
+  PERFORM app.store_tree_snapshot(v_tree_id,2,1,first_batch);
+  SELECT id INTO first_snapshot_id
+  FROM app.tree_snapshots WHERE tree_id=v_tree_id AND version=2;
+
+  UPDATE app.family_trees SET version=version+1 WHERE id=v_tree_id;
+  PERFORM app.store_tree_snapshot(v_tree_id,3,2,second_batch);
+
+  IF (SELECT parent_snapshot_id FROM app.tree_snapshots
+      WHERE tree_id=v_tree_id AND version=2) IS NOT NULL
+     OR (SELECT parent_snapshot_id FROM app.tree_snapshots
+         WHERE tree_id=v_tree_id AND version=3) IS DISTINCT FROM first_snapshot_id
+     OR EXISTS (SELECT 1 FROM app.tree_snapshots
+                WHERE tree_id=v_tree_id AND schema_version<>1) THEN
+    RAISE EXCEPTION 'tree snapshot lineage or schema version is invalid';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  PERFORM * FROM audit.maintain_partitions(current_date,2);
+  IF EXISTS (SELECT 1 FROM audit.events_default) THEN
+    RAISE EXCEPTION 'current audit events were left in the default partition';
+  END IF;
 END $$;
 
 -- Contributor member permissions: full-tree viewing, branch edits, and creator-owned drafts.

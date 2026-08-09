@@ -17,8 +17,15 @@ export async function handleTreeCatalogRequest(
     ), visible_members AS (
       SELECT m.id,m.tree_id FROM app.family_members m JOIN visible_trees t ON t.id=m.tree_id
       WHERE m.deleted_at IS NULL
+    ), roots AS (
+      SELECT m.tree_id,m.id FROM visible_members m
+      WHERE NOT EXISTS (
+        SELECT 1 FROM app.parent_child_relationships relationship
+        WHERE relationship.tree_id=m.tree_id AND relationship.child_id=m.id
+          AND relationship.deleted_at IS NULL
+      )
     ), lineage AS (
-      SELECT m.tree_id,m.id,1 AS depth,ARRAY[m.id] AS path FROM visible_members m
+      SELECT root.tree_id,root.id,1 AS depth,ARRAY[root.id] AS path FROM roots root
       UNION ALL
       SELECT l.tree_id,child.id,l.depth+1,l.path || child.id FROM lineage l
       JOIN app.parent_child_relationships relationship ON relationship.tree_id=l.tree_id

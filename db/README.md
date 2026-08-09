@@ -1,6 +1,6 @@
 # Ancestors Unfold database
 
-This directory is the PostgreSQL contract for the future server. The current browser application still uses `localStorage`; do not connect it directly to PostgreSQL or expose a database credential to the browser.
+This directory is the PostgreSQL contract used by the server application. Browser code must never connect directly to PostgreSQL or receive a database credential.
 
 ## Apply and verify
 
@@ -37,6 +37,8 @@ The `app.preview_members` view deliberately excludes notes and contacts and redu
 ## Audit operations
 
 Run `audit.create_month_partition()` ahead of each month. The default partition prevents lost events if scheduling fails. Maintenance must move default-partition rows into the proper monthly partition, drop partitions older than seven years, and monitor audit insertion failures. Audit trigger redaction is a safety net; service code must never place secrets inside metadata.
+
+Production schedules `/api/cron/database-maintenance` daily through `vercel.json`. The endpoint requires Vercel's `CRON_SECRET` bearer token and calls `audit.maintain_partitions(current_date,2)`, which drains the default partition and prepares the current and next month. Alert if the endpoint fails or `audit.events_default` remains non-empty. Partition retention remains an explicit maintenance decision; review the candidates in `db/operations.sql` before dropping anything.
 
 ## LocalStorage migration order
 

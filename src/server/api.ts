@@ -61,12 +61,8 @@ async function handlePublicApi(
   if (operationsResponse) return operationsResponse;
   const invitationResponse = await validatePublicInvitation(request);
   if (invitationResponse) return invitationResponse;
-  if (url.pathname === "/api/cron/cloudinary-cleanup" && request.method === "GET") {
-    const secret = process.env.CRON_SECRET;
-    if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
-      return json({ code: "UNAUTHENTICATED" }, 401);
-    return json(await cleanupStaleMemberImages());
-  }
+  const cronResponse = await handleCronRequest(request, url);
+  if (cronResponse) return cronResponse;
   const googleResponse = await handleGoogleAuthRequest(request, url, requestId);
   if (googleResponse) return googleResponse;
   const registrationResponse = await handleRegistrationRequest(request, url, requestId);
@@ -77,6 +73,25 @@ async function handlePublicApi(
     /^\/api\/trees\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/preview$/i,
   );
   if (preview && request.method === "GET") return json(await readPublicSnapshot(preview[1]));
+  return undefined;
+}
+
+async function handleCronRequest(request: Request, url: URL): Promise<Response | undefined> {
+  if (url.pathname === "/api/cron/cloudinary-cleanup" && request.method === "GET") {
+    const secret = process.env.CRON_SECRET;
+    if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
+      return json({ code: "UNAUTHENTICATED" }, 401);
+    return json(await cleanupStaleMemberImages());
+  }
+  if (url.pathname === "/api/cron/database-maintenance" && request.method === "GET") {
+    const secret = process.env.CRON_SECRET;
+    if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
+      return json({ code: "UNAUTHENTICATED" }, 401);
+    const result = await query<{ partition_month: string; moved_rows: string }>(
+      "SELECT partition_month,moved_rows::text FROM audit.maintain_partitions(current_date,2)",
+    );
+    return json({ partitions: result.rows });
+  }
   return undefined;
 }
 

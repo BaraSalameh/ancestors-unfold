@@ -27,7 +27,7 @@ export async function handleAuthenticatedSessionRequest(
   if (url.pathname === "/api/auth/sessions" && request.method === "GET") {
     const result = await query(
       `SELECT id,created_at,last_seen_at,idle_expires_at,absolute_expires_at,revoked_at,ip_address,user_agent
-       FROM app.sessions WHERE user_id=$1 ORDER BY created_at DESC`,
+       FROM app.sessions WHERE user_id=$1 ORDER BY created_at DESC,id DESC`,
       [session.user_id],
     );
     return json(result.rows);

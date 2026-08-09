@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/cloudinary-cleanup",
       "schedule": "17 3 * * *"
+    },
+    {
+      "path": "/api/cron/database-maintenance",
+      "schedule": "47 2 * * *"
     }
   ]
 }
