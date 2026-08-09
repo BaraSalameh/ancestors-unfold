@@ -1,6 +1,7 @@
 import { Link, useSearch } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { LockKeyhole } from "lucide-react";
+import { BrandMark } from "@/app/components/brand-mark";
 import { AuthError, useAuth } from "@/features/auth";
 import { useI18n } from "@/shared/i18n";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
@@ -51,7 +52,8 @@ export function ResetPasswordPage() {
   return (
     <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-muted/25 px-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
+        <CardHeader className="text-center">
+          <BrandMark className="mx-auto mb-2 h-20 w-20" />
           <CardTitle>{t("reset_password")}</CardTitle>
           <CardDescription>
             {done ? t("password_reset_success") : t("choose_new_password")}

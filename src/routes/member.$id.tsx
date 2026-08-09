@@ -3,6 +3,6 @@ import { MemberPage, parseMemberNavigationSearch } from "@/features/members";
 
 export const Route = createFileRoute("/member/$id")({
   validateSearch: parseMemberNavigationSearch,
-  head: () => ({ meta: [{ title: "Member Details — Family Tree Hub" }] }),
+  head: () => ({ meta: [{ title: "Member Details — Ancestors Unfold" }] }),
   component: MemberPage,
 });

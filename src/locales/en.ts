@@ -141,7 +141,7 @@ export const en = {
   delete_family_tree: "Delete family tree",
   new_family_story: "A new family story waiting to unfold.",
   just_now: "Just now",
-  app_name: "Family Tree Hub",
+  app_name: "Ancestors Unfold",
   family_tree: "Family Tree",
   settings: "Settings",
   add_member: "Add Member",

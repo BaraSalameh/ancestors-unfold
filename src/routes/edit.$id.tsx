@@ -6,6 +6,6 @@ export const Route = createFileRoute("/edit/$id")({
     returnPreview:
       search.returnPreview === "chronological" ? ("chronological" as const) : ("lineage" as const),
   }),
-  head: () => ({ meta: [{ title: "Edit Member — Family Tree Hub" }] }),
+  head: () => ({ meta: [{ title: "Edit Member — Ancestors Unfold" }] }),
   component: EditPage,
 });

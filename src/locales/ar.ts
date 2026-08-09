@@ -132,7 +132,7 @@ export const ar = {
   delete_family_tree: "حذف شجرة العائلة",
   new_family_story: "قصة عائلية جديدة تنتظر أن تُروى.",
   just_now: "الآن",
-  app_name: "شجرة العائلة",
+  app_name: "أنسابنا",
   family_tree: "شجرة العائلة",
   settings: "الإعدادات",
   add_member: "إضافة فرد",

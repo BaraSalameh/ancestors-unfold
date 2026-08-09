@@ -1,4 +1,4 @@
-import { TreePine } from "lucide-react";
+import { BrandMark } from "@/app/components/brand-mark";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
 import { useI18n } from "@/shared/i18n";
 import { useAuthPage, type AuthPageSearch } from "../client/use-auth-page";
@@ -26,9 +26,7 @@ export function AuthPage({ search }: { search: AuthPageSearch }) {
     <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-muted/25 px-4 py-10">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <TreePine className="h-6 w-6" />
-          </div>
+          <BrandMark className="mx-auto mb-2 h-20 w-20" />
           <CardTitle>{t(header.title)}</CardTitle>
           <CardDescription>{t(header.description)}</CardDescription>
         </CardHeader>
