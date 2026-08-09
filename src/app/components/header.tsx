@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Moon, Sun, Languages, TreePine } from "lucide-react";
+import { Moon, Sun, Languages } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { useAuth } from "@/features/auth";
 import { familyStore, useFamilyPersistence } from "@/features/trees";
@@ -9,6 +9,7 @@ import { isPublicPreviewRoute } from "@/app/domain/public-route";
 import { HeaderAccountMenu } from "./header-account-menu";
 import { HeaderTreeSave } from "./header-tree-save";
 import { useTreeNavigationBlocker } from "./use-tree-navigation-blocker";
+import { BrandMark } from "./brand-mark";
 
 export function Header() {
   const { t, lang, setLang } = useI18n();
@@ -30,7 +31,7 @@ export function Header() {
     <header className="sticky top-0 z-30 border-b bg-card/80 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
         <Link to="/" className="flex items-center gap-2 font-semibold text-foreground">
-          <TreePine className="h-5 w-5 text-primary" />
+          <BrandMark className="h-6 w-6" />
           <span className="hidden sm:inline">{t("app_name")}</span>
         </Link>
 
