@@ -1,5 +1,6 @@
 import { toast } from "sonner";
-import { familyStore } from "@/features/trees";
+import { useQueryClient } from "@tanstack/react-query";
+import { familyStore, invalidateDashboardQueries } from "@/features/trees";
 import { Button } from "@/shared/ui/button";
 import type { TranslationKey } from "@/locales";
 import { ApiClientError } from "@/shared/api/client";
@@ -27,6 +28,7 @@ function saveLabel(persistence: Persistence, t: Translate) {
 }
 
 export function HeaderTreeSave({ persistence, t }: { persistence: Persistence; t: Translate }) {
+  const queryClient = useQueryClient();
   const updateTree = async () => {
     if (persistence.conflicted) {
       if (window.confirm(t("reload_latest_warning"))) familyStore.reloadAfterConflict();
@@ -34,6 +36,7 @@ export function HeaderTreeSave({ persistence, t }: { persistence: Persistence; t
     }
     try {
       await familyStore.updateSnapshot();
+      await invalidateDashboardQueries(queryClient, familyStore.getActiveTreeId());
       toast.success(t("tree_saved"));
     } catch (error) {
       const conflicted = familyStore.getPersistenceState().conflicted;

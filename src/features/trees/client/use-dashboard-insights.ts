@@ -70,11 +70,11 @@ export function useDashboardInsights(tree: CurrentTree | undefined): DashboardIn
   return {
     quality: quality.data,
     branches: branches.data ?? [],
-    loading: quality.isLoading || branches.isLoading,
-    error: quality.isError || branches.isError,
-    retry: () => {
-      void quality.refetch();
-      void branches.refetch();
-    },
+    qualityPending: enabled && quality.isPending,
+    qualityError: quality.isError,
+    retryQuality: () => void quality.refetch(),
+    branchesPending: enabled && branches.isPending,
+    branchesError: branches.isError,
+    retryBranches: () => void branches.refetch(),
   };
 }

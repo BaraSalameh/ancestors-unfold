@@ -2,7 +2,11 @@ export type { FamilyMember, Gender, SubFamily } from "./domain/types";
 export { isMemberDeceased } from "./domain/member-status";
 export { descendantIds } from "./domain/relationships";
 export { memberDeletionPlan, type MemberDeletionPlan } from "./domain/member-deletion";
-export { memberNameWithBirthYear, memberSearchLabel } from "./domain/member-display";
+export {
+  memberNameWithBirthYear,
+  memberPaternalSearchLabel,
+  memberSearchLabel,
+} from "./domain/member-display";
 export { memberDetailsSearch, parseMemberNavigationSearch } from "./domain/member-navigation";
 export { MemberForm } from "./ui/member-form";
 export { ExpandableProfileImage } from "./ui/expandable-profile-image";

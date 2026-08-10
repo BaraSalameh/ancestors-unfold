@@ -153,6 +153,17 @@ describe("automatic branch management inputs", () => {
     ).toThrow();
   });
 
+  it("requires unique branch ids for bulk lifecycle mutations", () => {
+    const branchIds = [rootFamilyMemberId, "00000000-0000-4000-8000-000000000003"];
+    expect(schemas.branchBulkDelete.parse({ ...version, branchIds }).branchIds).toEqual(branchIds);
+    expect(
+      schemas.branchBulkDeactivationRequest.parse({ confirmation: "DELETE", branchIds }).branchIds,
+    ).toEqual(branchIds);
+    expect(() =>
+      schemas.branchBulkDelete.parse({ ...version, branchIds: [branchIds[0], branchIds[0]] }),
+    ).toThrow();
+  });
+
   it("accepts only approved branch attachment types up to 10 MB", () => {
     const attachment = {
       fileName: "family.pdf",

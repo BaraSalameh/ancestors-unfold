@@ -1,6 +1,7 @@
 import { useCallback, type MutableRefObject, type WheelEvent as ReactWheelEvent } from "react";
 import type { ReactFlowInstance, Viewport } from "reactflow";
 import { canvasWheelIntent } from "../domain/canvas-preview";
+import { canvasWidgetTarget } from "./canvas-widget-target";
 
 export function useCanvasWheel({
   canvasRef,
@@ -13,8 +14,7 @@ export function useCanvasWheel({
 }) {
   return useCallback(
     (event: ReactWheelEvent<HTMLDivElement>) => {
-      const target = event.target as HTMLElement | null;
-      const interactive = target?.closest("input, textarea, select, button, [role='dialog']");
+      const interactive = canvasWidgetTarget(event.target);
       if (interactive && !interactive.closest("[data-member-card]")) return;
       event.preventDefault();
       const current = viewportRef.current;

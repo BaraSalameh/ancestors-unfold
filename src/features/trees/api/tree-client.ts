@@ -18,7 +18,7 @@ interface SaveTreeSnapshot extends Omit<
   expectedVersion: number;
 }
 
-export type SaveTreeDelta = {
+type SaveTreeDelta = {
   batchId: string;
   expectedVersion: number;
   upsertMembers: FamilyMember[];

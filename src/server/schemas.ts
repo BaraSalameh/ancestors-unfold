@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { branchBulkDeactivationRequestSchema, branchBulkDeleteSchema } from "./bulk-branch-schemas";
 import { COUNTRY_CODES } from "@/shared/domain/countries";
 
 export const schemas = {
@@ -122,7 +123,9 @@ export const schemas = {
       expectedVersion: z.number().int().positive(),
     })
     .strict(),
+  branchBulkDelete: branchBulkDeleteSchema,
   branchDeactivationRequest: z.object({ confirmation: z.literal("DELETE") }).strict(),
+  branchBulkDeactivationRequest: branchBulkDeactivationRequestSchema,
   branchDeactivationConfirm: z
     .object({
       confirmation: z.literal("DELETE"),

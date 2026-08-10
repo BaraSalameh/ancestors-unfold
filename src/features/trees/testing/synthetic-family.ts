@@ -1,8 +1,8 @@
-import type { FamilyMember, SubFamily } from "@/features/members";
+import type { FamilyMember } from "@/features/members";
 
 const timestamp = "2026-01-01T00:00:00.000Z";
 
-export function syntheticMemberId(index: number) {
+function syntheticMemberId(index: number) {
   return `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
 }
 
@@ -25,17 +25,4 @@ export function createSyntheticFamily(count: number): FamilyMember[] {
       updated_at: timestamp,
     } satisfies FamilyMember;
   });
-}
-
-export function createSyntheticBranches(memberCount: number): SubFamily[] {
-  return Array.from({ length: Math.ceil(memberCount / 250) }, (_, index) => ({
-    id: syntheticMemberId(index * 250),
-    name_en: `Synthetic branch ${index + 1}`,
-    name_ar: `فرع تجريبي ${index + 1}`,
-    linked_male_id: syntheticMemberId(index * 250),
-    status: "active",
-    attachments: [],
-    created_at: timestamp,
-    updated_at: timestamp,
-  }));
 }

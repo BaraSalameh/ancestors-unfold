@@ -1,10 +1,11 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import { TreeLoadingIndicator } from "@/shared/ui/page-skeletons";
 import { useContributorRemoval } from "../client/use-contributor-removal";
-import { invalidateDashboardCache } from "../client/dashboard-cache";
+import { invalidateDashboardQueries } from "../client/dashboard-queries";
 import { useDashboardInvitations } from "../client/use-dashboard-invitations";
 import { familyStore } from "../client/family-store";
 import { useFamilyPersistence } from "../client/family-hooks";
@@ -39,6 +40,7 @@ export function BranchesPage() {
   const { treeId, branchId } = useSearch({ from: "/branches" });
   const navigate = useNavigate();
   const { t } = useI18n();
+  const queryClient = useQueryClient();
   const [data, setData] = useState<BranchesData>();
   const [error, setError] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>(branchId);
@@ -61,7 +63,7 @@ export function BranchesPage() {
   const invitations = useDashboardInvitations(reload);
   const removal = useContributorRemoval(data?.tree, data?.branches ?? [], reload);
   const refreshSnapshot = async () => {
-    invalidateDashboardCache();
+    await invalidateDashboardQueries(queryClient, data?.tree.id);
     await reload();
     familyStore.reloadAfterConflict();
   };

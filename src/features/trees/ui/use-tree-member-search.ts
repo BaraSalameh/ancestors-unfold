@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { ReactFlowInstance } from "reactflow";
-import type { FamilyMember } from "@/features/members";
+import { memberPaternalSearchLabel, type FamilyMember } from "@/features/members";
 import type { TreePreviewType } from "../domain/canvas-preview";
 import { NODE_H, NODE_W } from "./family-tree-layout";
 
@@ -20,10 +20,13 @@ export function useTreeMemberSearch(params: Params) {
     const query = params.query.trim();
     if (!query) return [];
     const normalized = query.toLowerCase();
+    const membersById = new Map(params.members.map((member) => [member.id, member]));
     return params.members
-      .filter(
-        (member) =>
-          member.name_en.toLowerCase().includes(normalized) || member.name_ar.includes(query),
+      .filter((member) =>
+        [
+          memberPaternalSearchLabel(member, membersById, "en"),
+          memberPaternalSearchLabel(member, membersById, "ar"),
+        ].some((label) => label.toLowerCase().includes(normalized)),
       )
       .slice(0, 8);
   }, [params.members, params.query]);

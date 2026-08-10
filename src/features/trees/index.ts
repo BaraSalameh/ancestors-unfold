@@ -1,4 +1,5 @@
 export { familyStore } from "./client/family-store";
+export { invalidateDashboardQueries } from "./client/dashboard-queries";
 export { useFamily, useFamilyLoadState, useFamilyPersistence } from "./client/family-hooks";
 export { getChildren, getGeneration } from "@/features/members/domain";
 export {

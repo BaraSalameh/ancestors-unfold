@@ -2,8 +2,8 @@ import type {
   Branch,
   CurrentTree,
   DashboardBranchHealth,
-  DashboardData,
   DashboardQualityInsights,
+  Invitation,
   OwnershipTransfer,
   Statistics,
 } from "./dashboard-types";
@@ -103,60 +103,58 @@ function transferNeedsAction(tree: CurrentTree, transfer: OwnershipTransfer | nu
   return tree.role === "owner" ? !transfer.verified : transfer.verified;
 }
 
-export function dashboardAttentionItems(
-  data: DashboardData,
-  quality?: DashboardQualityInsights,
-): AttentionItem[] {
-  const items: AttentionItem[] = [];
-  const add = (item: AttentionItem) => {
-    if (item.count > 0) items.push(item);
-  };
-  if (!canEditDashboardTree(data.tree)) add({ id: "access", count: 1, severity: "critical" });
-  if (transferNeedsAction(data.tree, data.ownershipTransfer))
-    add({
+interface DashboardAttentionData {
+  tree: CurrentTree;
+  stats?: Statistics;
+  branches?: Branch[];
+  invitations?: Invitation[];
+  ownershipTransfer?: OwnershipTransfer | null;
+}
+
+function dashboardCoreAttention(data: DashboardAttentionData): AttentionItem[] {
+  return [
+    {
+      id: "access",
+      count: canEditDashboardTree(data.tree) ? 0 : 1,
+      severity: "critical",
+    },
+    {
       id: "ownership_transfer",
-      count: 1,
+      count: transferNeedsAction(data.tree, data.ownershipTransfer ?? null) ? 1 : 0,
       severity: "critical",
       anchor: "ownership-transfer",
-    });
-  add({
-    id: "authenticity_review",
-    count: data.stats.serious_complaints,
-    severity: "critical",
-    anchor: "authenticity",
-  });
-  add({
-    id: "graph_cycles",
-    count: quality?.graph_cycles ?? 0,
-    severity: "critical",
-    analysis: { tab: "quality" },
-  });
-  add({
-    id: "contradictory_dates",
-    count: quality?.contradictory_dates ?? 0,
-    severity: "critical",
-    analysis: { tab: "quality" },
-  });
-  if (data.tree.role === "owner") {
-    add({
+    },
+    {
+      id: "authenticity_review",
+      count: data.stats?.serious_complaints ?? 0,
+      severity: "critical",
+      anchor: "authenticity",
+    },
+  ];
+}
+
+function dashboardOwnerAttention(data: DashboardAttentionData): AttentionItem[] {
+  if (data.tree.role !== "owner") return [];
+  return [
+    {
       id: "pending_invitations",
-      count: data.invitations.filter((invitation) => invitation.status === "pending").length,
+      count: data.invitations?.filter((invitation) => invitation.status === "pending").length ?? 0,
       severity: "warning",
       anchor: "pending-invitations",
-    });
-    add({
+    },
+    {
       id: "inactive_branches",
-      count: data.branches.filter((branch) => branch.status !== "active").length,
+      count: data.branches?.filter((branch) => branch.status !== "active").length ?? 0,
       severity: "warning",
       anchor: "branches",
-    });
-  }
-  add({
-    id: "possible_duplicates",
-    count: quality?.possible_duplicate_groups ?? 0,
-    severity: "warning",
-    analysis: { tab: "quality" },
-  });
+    },
+  ];
+}
+
+function dashboardQualityAttention(
+  tree: CurrentTree,
+  quality?: DashboardQualityInsights,
+): AttentionItem[] {
   const missing: Array<
     [AttentionItem["id"], keyof DashboardQualityInsights, AttentionItem["analysis"]]
   > = [
@@ -165,17 +163,54 @@ export function dashboardAttentionItems(
     ["missing_birth_date", "missing_birth_date", { tab: "explorer", missingField: "birth_date" }],
     ["missing_image", "missing_image", { tab: "explorer", missingField: "image" }],
   ];
-  if (data.tree.role === "owner") {
+  if (tree.role === "owner") {
     missing.splice(3, 0, [
       "missing_branch",
       "missing_branch",
       { tab: "explorer", missingField: "branch" },
     ]);
   }
-  for (const [id, key, analysis] of missing) {
-    add({ id, count: quality?.[key] ?? 0, severity: "info", analysis });
-  }
-  return items.slice(0, 5);
+  return [
+    {
+      id: "graph_cycles",
+      count: quality?.graph_cycles ?? 0,
+      severity: "critical",
+      analysis: { tab: "quality" },
+    },
+    {
+      id: "contradictory_dates",
+      count: quality?.contradictory_dates ?? 0,
+      severity: "critical",
+      analysis: { tab: "quality" },
+    },
+    {
+      id: "possible_duplicates",
+      count: quality?.possible_duplicate_groups ?? 0,
+      severity: "warning",
+      analysis: { tab: "quality" },
+    },
+    ...missing.map(([id, key, analysis]) => ({
+      id,
+      count: quality?.[key] ?? 0,
+      severity: "info" as const,
+      analysis,
+    })),
+  ];
+}
+
+export function dashboardAttentionItems(
+  data: DashboardAttentionData,
+  quality?: DashboardQualityInsights,
+): AttentionItem[] {
+  const qualityItems = dashboardQualityAttention(data.tree, quality);
+  return [
+    ...dashboardCoreAttention(data),
+    ...qualityItems.slice(0, 2),
+    ...dashboardOwnerAttention(data),
+    ...qualityItems.slice(2),
+  ]
+    .filter((item) => item.count > 0)
+    .slice(0, 5);
 }
 
 export function dashboardBranches(
