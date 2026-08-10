@@ -4,11 +4,8 @@ import type { SnapshotInput } from "@/server/security";
 import { writeSnapshotRelationships } from "./snapshot-relationship-writer";
 
 describe("snapshot relationship writes", () => {
-  it("looks up both spouse partners through valid union-partner aliases", async () => {
-    const query = vi.fn(async (text: string) => ({
-      rows: text.startsWith("SELECT u.id") ? [{ id: "union-1" }] : [],
-      rowCount: text.startsWith("SELECT u.id") ? 1 : 0,
-    }));
+  it("writes full-tree spouse pairs without per-pair lookups", async () => {
+    const query = vi.fn(async (_text: string, _values?: unknown[]) => ({ rows: [], rowCount: 0 }));
     const timestamps = {
       created_at: "2026-08-02T00:00:00.000Z",
       updated_at: "2026-08-02T00:00:00.000Z",
@@ -46,9 +43,10 @@ describe("snapshot relationship writes", () => {
       new Map(),
     );
 
-    const spouseLookup = query.mock.calls.find(([text]) => text.startsWith("SELECT u.id"))?.[0];
-    expect(spouseLookup).toContain("b.union_id=u.id AND b.member_id=$3");
-    expect(spouseLookup).not.toContain("snapshot.union_id");
+    expect(query.mock.calls.some(([text]) => text.startsWith("SELECT u.id"))).toBe(false);
+    expect(
+      query.mock.calls.filter(([text]) => text.startsWith("INSERT INTO app.unions")),
+    ).toHaveLength(1);
   });
 
   it("persists the husband's spouse order even when wife rows appear first", async () => {
@@ -107,9 +105,12 @@ describe("snapshot relationship writes", () => {
       new Map(),
     );
 
-    const unionOrders = query.mock.calls
-      .filter(([text]) => text.startsWith("INSERT INTO app.unions"))
-      .map(([, values]) => values?.[2]);
+    const unionInsert = query.mock.calls.find(([text]) =>
+      text.startsWith("INSERT INTO app.unions"),
+    );
+    const unionOrders = JSON.parse(String(unionInsert?.[1]?.[2])).map(
+      ({ display_order }: { display_order: number }) => display_order,
+    );
     expect(unionOrders).toEqual([203, 202]);
   });
 });

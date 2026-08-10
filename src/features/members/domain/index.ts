@@ -6,6 +6,7 @@ export {
   ensureParentsAreSpouses,
   linkSpouses,
   removeMember,
+  removeMembers,
   removeSpouseAttachment,
   setMotherRelationship,
   toggleDivorce,

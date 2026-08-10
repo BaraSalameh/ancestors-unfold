@@ -81,7 +81,7 @@ export function FamilyTreeComposition(props: Props) {
       }}
       onViewportChange={(viewport) => {
         refs.viewportRef.current = viewport;
-        ui.setViewport(viewport);
+        ui.commitViewport(viewport);
       }}
       chronologicalOverlay={chronologicalOverlay(props)}
       marqueeRect={graph.marqueeRect}

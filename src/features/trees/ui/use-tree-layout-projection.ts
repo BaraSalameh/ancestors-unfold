@@ -1,11 +1,13 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import type { FamilyMember } from "@/features/members";
 import { familyStore } from "../client/family-store";
-import type { ChronologicalPeriod, TreePreviewType } from "../domain/canvas-preview";
+import type { CanvasDetail, ChronologicalPeriod, TreePreviewType } from "../domain/canvas-preview";
 import { layout } from "./family-tree-layout";
+import { useTreeLayoutGeometry } from "./use-tree-layout-geometry";
 
 interface Params {
   canEdit: boolean;
+  detail: CanvasDetail;
   chronologicalPeriod: ChronologicalPeriod;
   collapsed: Set<string>;
   highlightId: string | null;
@@ -41,22 +43,15 @@ export function useTreeLayoutProjection(params: Params) {
         : familyStore.getSubfamilyMembers(params.selectedSubfamilyId),
     [params.members, params.selectedSubfamilyId, params.subfamilyFilterEnabled],
   );
-  const graph = useMemo(
-    () =>
-      layout(
-        visibleMembers,
-        params.collapsed,
-        params.onOpen,
-        params.onAddParent,
-        params.onAddChild,
-        params.onRequestRemove,
-        params.highlightId,
-        params.canEdit,
-        params.previewType === "chronological",
-        params.chronologicalPeriod,
-        onToggleCollapsed,
-      ),
-    [
+  const geometry = useTreeLayoutGeometry(
+    visibleMembers,
+    params.collapsed,
+    params.previewType === "chronological",
+    params.chronologicalPeriod,
+  );
+  const projectedGraph = useMemo(() => {
+    if (!geometry) return undefined;
+    return layout(
       visibleMembers,
       params.collapsed,
       params.onOpen,
@@ -65,10 +60,34 @@ export function useTreeLayoutProjection(params: Params) {
       params.onRequestRemove,
       params.highlightId,
       params.canEdit,
-      params.previewType,
+      params.previewType === "chronological",
       params.chronologicalPeriod,
       onToggleCollapsed,
-    ],
-  );
-  return { ...graph, onToggleCollapsed, visibleMembers };
+      params.detail,
+      geometry,
+    );
+  }, [
+    visibleMembers,
+    params.collapsed,
+    params.onOpen,
+    params.onAddParent,
+    params.onAddChild,
+    params.onRequestRemove,
+    params.highlightId,
+    params.canEdit,
+    params.previewType,
+    params.chronologicalPeriod,
+    onToggleCollapsed,
+    geometry,
+    params.detail,
+  ]);
+  const lastGraph = useRef<NonNullable<typeof projectedGraph>>({ nodes: [], edges: [] });
+  if (projectedGraph) lastGraph.current = projectedGraph;
+  const graph = projectedGraph ?? lastGraph.current;
+  return {
+    ...graph,
+    focusPositions: geometry?.positions ?? {},
+    onToggleCollapsed,
+    visibleMembers,
+  };
 }

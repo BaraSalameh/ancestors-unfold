@@ -198,6 +198,45 @@ describe("family store loading and rejected updates", () => {
 });
 
 describe("family store draft persistence", () => {
+  it("sends only changed and deleted entities through the delta endpoint", async () => {
+    const patchSnapshot = vi.fn().mockResolvedValue({ version: 5 });
+    const members = [editableMember("member-one"), editableMember("member-two")];
+    vi.doMock("../api/tree-client", () => ({
+      treeClient: {
+        readSnapshot: vi.fn().mockResolvedValue({
+          version: 4,
+          access_scope: "tree",
+          members,
+          subfamilies: [],
+        }),
+        readPublicSnapshot: vi.fn(),
+        patchSnapshot,
+        saveSnapshot: vi.fn(),
+        deleteTree: vi.fn(),
+      },
+    }));
+    vi.stubGlobal("window", {});
+
+    const { familyStore } = await import("./family-store");
+    familyStore.activateTree("tree-id", "edit");
+    await vi.waitFor(() => expect(familyStore.getLoadState()).toBe("ready"));
+    familyStore.update("member-one", { name_en: "Updated member" });
+    familyStore.remove("member-two");
+
+    await familyStore.updateSnapshot();
+
+    expect(patchSnapshot).toHaveBeenCalledWith(
+      "tree-id",
+      expect.objectContaining({
+        expectedVersion: 4,
+        upsertMembers: [expect.objectContaining({ id: "member-one", name_en: "Updated member" })],
+        deleteMemberIds: ["member-two"],
+        upsertSubfamilies: [],
+        deleteSubfamilyIds: [],
+      }),
+    );
+  });
+
   it("uses a stable batch for retries and marks a successful draft saved", async () => {
     const { ApiClientError } = await import("@/shared/api/client");
     const member = {

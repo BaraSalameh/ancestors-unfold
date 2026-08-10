@@ -80,6 +80,7 @@ export function FamilyTreeView(props: FamilyTreeViewProps) {
         connectionLineStyle={{ stroke: "#0ea5e9", strokeWidth: 2, strokeDasharray: "6 4" }}
         deleteKeyCode={null}
         fitView
+        onlyRenderVisibleElements
         onMove={(_event, viewport) => props.onViewportChange(viewport)}
       >
         <Background
@@ -97,15 +98,17 @@ export function FamilyTreeView(props: FamilyTreeViewProps) {
         >
           {props.topbar.canEdit ? <EditToolbar {...props.topbar} /> : null}
           <FamilyTreeSidebar {...props.sidebar} />
-          <MiniMap
-            pannable
-            zoomable
-            position="top-right"
-            nodeStrokeWidth={3}
-            maskColor="color-mix(in oklab, var(--color-background) 72%, transparent)"
-            className="canvas-minimap! m-0! shrink-0 overflow-hidden! rounded-xl! border! border-border/80! bg-card/95! shadow-lg!"
-            style={{ position: "relative", inset: "auto" }}
-          />
+          {(props.flow.nodes?.length ?? 0) <= 2_000 ? (
+            <MiniMap
+              pannable
+              zoomable
+              position="top-right"
+              nodeStrokeWidth={3}
+              maskColor="color-mix(in oklab, var(--color-background) 72%, transparent)"
+              className="canvas-minimap! m-0! shrink-0 overflow-hidden! rounded-xl! border! border-border/80! bg-card/95! shadow-lg!"
+              style={{ position: "relative", inset: "auto" }}
+            />
+          ) : null}
         </Panel>
         <Controls
           showInteractive={false}

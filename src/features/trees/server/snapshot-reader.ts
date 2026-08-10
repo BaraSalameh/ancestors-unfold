@@ -50,15 +50,13 @@ function privateMemberFields(member: MemberRow, externalRows: ExternalRow[]) {
     image_public_id: member.image_public_id ?? undefined,
     image_asset_id: member.image_asset_id ?? undefined,
     notes: member.notes ?? undefined,
-    external_children: externalRows
-      .filter((child) => child.mother_id === member.id)
-      .map((child) => ({
-        id: child.id,
-        name: child.name,
-        other_parent_name: child.other_parent_name ?? undefined,
-        birth_year: child.birth_year == null ? undefined : String(child.birth_year),
-        notes: child.notes ?? undefined,
-      })),
+    external_children: externalRows.map((child) => ({
+      id: child.id,
+      name: child.name,
+      other_parent_name: child.other_parent_name ?? undefined,
+      birth_year: child.birth_year == null ? undefined : String(child.birth_year),
+      notes: child.notes ?? undefined,
+    })),
   };
 }
 
@@ -141,12 +139,24 @@ export async function loadRenderableSnapshot(
       )
     : { rows: [] as ExternalRow[], rowCount: 0 };
   const { spouseMap, divorceMap } = relationshipMaps(partners.rows);
+  const externalByMother = new Map<string, ExternalRow[]>();
+  for (const child of external.rows) {
+    const children = externalByMother.get(child.mother_id);
+    if (children) children.push(child);
+    else externalByMother.set(child.mother_id, [child]);
+  }
   return {
     version,
     access_scope: includePrivate ? ("tree" as const) : ("preview" as const),
     capabilities: { can_import_csv: false },
     members: members.rows.map((member) =>
-      projectMember(member, includePrivate, external.rows, spouseMap, divorceMap),
+      projectMember(
+        member,
+        includePrivate,
+        externalByMother.get(member.id) ?? [],
+        spouseMap,
+        divorceMap,
+      ),
     ),
     subfamilies: subfamilies.rows.map((subfamily) => ({
       id: subfamily.id,

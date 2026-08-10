@@ -10,11 +10,15 @@ type Persistence = {
   conflicted: boolean;
   error: string | null;
   importPending: boolean;
+  phase: "idle" | "preparing" | "uploading_images" | "saving" | "refreshing";
 };
 
 type Translate = (key: TranslationKey) => string;
 
 function saveLabel(persistence: Persistence, t: Translate) {
+  if (persistence.phase === "preparing") return t("preparing_tree_save");
+  if (persistence.phase === "uploading_images") return t("uploading_tree_images");
+  if (persistence.phase === "refreshing") return t("refreshing_tree");
   if (persistence.saving) return t("updating_tree");
   if (persistence.conflicted) return t("reload_latest");
   if (persistence.error) return t("retry_update");

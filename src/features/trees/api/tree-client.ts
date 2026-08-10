@@ -18,6 +18,15 @@ interface SaveTreeSnapshot extends Omit<
   expectedVersion: number;
 }
 
+export type SaveTreeDelta = {
+  batchId: string;
+  expectedVersion: number;
+  upsertMembers: FamilyMember[];
+  deleteMemberIds: string[];
+  upsertSubfamilies: SubFamily[];
+  deleteSubfamilyIds: string[];
+};
+
 export type FamilyCsvPreviewResponse = {
   expectedVersion: number;
   members: FamilyMember[];
@@ -67,6 +76,15 @@ export const treeClient = {
       if (error instanceof ApiClientError && error.code === "REQUEST_FAILED") {
         throw new ApiClientError("SAVE_FAILED", error.status);
       }
+      throw error;
+    }
+  },
+  async patchSnapshot(treeId: string, delta: SaveTreeDelta): Promise<{ version: number }> {
+    try {
+      return await apiRequest(`/api/trees/${treeId}/snapshot`, { method: "PATCH", body: delta });
+    } catch (error) {
+      if (error instanceof ApiClientError && error.code === "REQUEST_FAILED")
+        throw new ApiClientError("SAVE_FAILED", error.status);
       throw error;
     }
   },

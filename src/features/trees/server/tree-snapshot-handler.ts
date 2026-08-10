@@ -6,8 +6,10 @@ import {
   signMemberImageUpload,
 } from "@/features/members/server";
 import { parseBody, schemas } from "@/server/security";
+import { snapshotDeltaSchema } from "@/server/snapshot-delta-schema";
 import { jsonResponse as json } from "@/shared/http/response";
 import { importSnapshot } from "./snapshot-repository";
+import { applySnapshotDelta } from "./snapshot-delta-repository";
 import { readSnapshot } from "./snapshot-reader";
 
 export async function handleTreeSnapshotRequest(
@@ -24,6 +26,18 @@ export async function handleTreeSnapshotRequest(
     const result = await importSnapshot(session, requestId, snapshot[1], {
       ...input,
       members: input.members.map((member) => ({
+        ...member,
+        citizen_status: member.citizen_status ?? "resident",
+      })),
+    });
+    await reconcileMemberImages(session, requestId, snapshot[1]);
+    return json(result);
+  }
+  if (snapshot && request.method === "PATCH") {
+    const input = await parseBody(request, snapshotDeltaSchema, 15 * 1024 * 1024);
+    const result = await applySnapshotDelta(session, requestId, snapshot[1], {
+      ...input,
+      upsertMembers: input.upsertMembers.map((member) => ({
         ...member,
         citizen_status: member.citizen_status ?? "resident",
       })),
