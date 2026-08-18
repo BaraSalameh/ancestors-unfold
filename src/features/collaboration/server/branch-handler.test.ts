@@ -19,6 +19,7 @@ import { handleBranchRequest } from "./branch-handler";
 
 const treeId = "10000000-0000-4000-8000-000000000001";
 const branchId = "20000000-0000-4000-8000-000000000002";
+const secondBranchId = "20000000-0000-4000-8000-000000000009";
 const session = {
   id: "session",
   user_id: "30000000-0000-4000-8000-000000000003",
@@ -202,5 +203,59 @@ describe("branch lifecycle handler", () => {
     expect(query.mock.calls[3][0]).not.toContain(
       "ownership_transfers WHERE tree_id=$1 AND branch_id",
     );
+  });
+
+  it("deletes selected inactive branches in one versioned mutation", async () => {
+    query
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ version: 4 }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] })
+      .mockResolvedValueOnce({
+        rowCount: 2,
+        rows: [
+          {
+            id: branchId,
+            name_en: "North",
+            name_ar: null,
+            status: "inactive",
+            linked_male_id: null,
+          },
+          {
+            id: secondBranchId,
+            name_en: "South",
+            name_ar: null,
+            status: "inactive",
+            linked_male_id: null,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ blocked: false }] })
+      .mockResolvedValueOnce({ rowCount: 2, rows: [] })
+      .mockResolvedValueOnce({ rowCount: 2, rows: [] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ version: 5 }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] });
+    const request = new Request(`http://localhost/api/trees/${treeId}/branches`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        branchIds: [branchId, secondBranchId],
+        batchId: "40000000-0000-4000-8000-000000000004",
+        expectedVersion: 4,
+      }),
+    });
+
+    const response = await handleBranchRequest(
+      request,
+      new URL(request.url),
+      session,
+      "50000000-0000-4000-8000-000000000005",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(await response?.json()).toEqual({
+      deleted: [branchId, secondBranchId],
+      version: 5,
+    });
+    expect(query.mock.calls[2][0]).toContain("id=ANY($2::uuid[])");
+    expect(query.mock.calls[2][1]).toEqual([treeId, [branchId, secondBranchId]]);
   });
 });

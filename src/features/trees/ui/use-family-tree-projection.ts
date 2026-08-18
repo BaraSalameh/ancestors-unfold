@@ -1,5 +1,9 @@
 import type { TreeAccessMode } from "../domain/access-policy";
-import type { ChronologicalPeriod, TreePreviewType } from "../domain/canvas-preview";
+import {
+  canvasDetailForZoom,
+  type ChronologicalPeriod,
+  type TreePreviewType,
+} from "../domain/canvas-preview";
 import { useCanvasWheel } from "./use-canvas-wheel";
 import type { FamilyTreeState } from "./use-family-tree-state";
 import { useTreeGenerationNavigation } from "./use-tree-generation-navigation";
@@ -32,6 +36,7 @@ export function useFamilyTreeProjection(params: Params) {
   });
   const layout = useTreeLayoutProjection({
     canEdit,
+    detail: canvasDetailForZoom(ui.viewport.zoom),
     chronologicalPeriod: params.chronologicalPeriod,
     collapsed,
     highlightId: selection.highlightId,

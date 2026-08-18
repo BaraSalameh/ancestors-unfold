@@ -4,6 +4,7 @@ import {
   ensureParentsAreSpouses,
   linkSpouses,
   removeMember,
+  removeMembers,
   removeSpouseAttachment,
   setMotherRelationship,
   toggleDivorce as toggleDivorceRelationship,
@@ -367,10 +368,9 @@ function createMemberRemovalCommands(ctx: MemberCommandContext) {
       };
       if (!removable.length) return result;
       ctx.commit(() => {
-        for (const member of removable) {
-          ctx.state = removeMember(ctx.state, member.id);
-          ctx.stagedImages.delete(member.id);
-        }
+        const removedIds = new Set(removable.map(({ id }) => id));
+        ctx.state = removeMembers(ctx.state, removedIds);
+        for (const id of removedIds) ctx.stagedImages.delete(id);
       });
       ctx.replaceStagedImages(ctx.stagedImages);
       ctx.emit();

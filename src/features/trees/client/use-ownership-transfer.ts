@@ -19,7 +19,6 @@ export function useOwnershipTransfer(
   tree: CurrentTree | undefined,
   transfer: OwnershipTransfer | null,
   reload: () => Promise<void>,
-  invalidate: () => void,
 ) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -73,7 +72,6 @@ export function useOwnershipTransfer(
     setAction(nextAction);
     try {
       await post(`/api/ownership-transfers/${transfer.id}/${nextAction}`);
-      invalidate();
       const key =
         nextAction === "accept"
           ? "ownership_transfer_accepted"

@@ -1,5 +1,6 @@
 import { ArrowLeft, Plus } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { useI18n } from "@/shared/i18n";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
@@ -11,6 +12,7 @@ import { BranchEditor } from "./branch-editor";
 import { InviteDialog } from "./dashboard-invite-dialog";
 import { ContributorRemovalDialog } from "./contributor-removal-dialog";
 import { PendingBranchInvitations } from "./pending-branch-invitations";
+import { BulkBranchActions } from "./bulk-branch-actions";
 
 interface Props {
   data: BranchesData;
@@ -26,7 +28,9 @@ interface Props {
 export function BranchesWorkspace(props: Props) {
   const { lang, t } = useI18n();
   const owner = props.data.tree.role === "owner";
+  const [selectedBranchIds, setSelectedBranchIds] = useState<Set<string>>(() => new Set());
   const selected = props.data.branches.find(({ id }) => id === props.selectedId);
+  const selectedBranches = props.data.branches.filter(({ id }) => selectedBranchIds.has(id));
   const local = (en?: string | null, ar?: string | null) =>
     lang === "ar" ? ar || en || "" : en || ar || "";
   return (
@@ -51,12 +55,24 @@ export function BranchesWorkspace(props: Props) {
           </Button>
         ) : null}
       </div>
+      {owner && selectedBranches.length ? (
+        <BulkBranchActions
+          branches={selectedBranches}
+          tree={props.data.tree}
+          treeDirty={props.treeDirty}
+          onSaved={props.onSaved}
+          onClear={() => setSelectedBranchIds(new Set())}
+        />
+      ) : null}
       <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <BranchList
           branches={props.data.branches}
           selectedId={props.selectedId}
           setSelectedId={props.setSelectedId}
           local={local}
+          owner={owner}
+          selectedBranchIds={selectedBranchIds}
+          setSelectedBranchIds={setSelectedBranchIds}
         />
         <SelectedBranchEditor {...props} owner={owner} selected={selected} />
       </div>
@@ -133,55 +149,98 @@ function BranchList({
   selectedId,
   setSelectedId,
   local,
+  owner,
+  selectedBranchIds,
+  setSelectedBranchIds,
 }: {
   branches: Props["data"]["branches"];
   selectedId?: string;
   setSelectedId: Props["setSelectedId"];
   local: (en?: string | null, ar?: string | null) => string;
+  owner: boolean;
+  selectedBranchIds: Set<string>;
+  setSelectedBranchIds: React.Dispatch<React.SetStateAction<Set<string>>>;
 }) {
   const { t } = useI18n();
+  const allSelected = branches.length > 0 && branches.every(({ id }) => selectedBranchIds.has(id));
+  const toggle = (id: string) =>
+    setSelectedBranchIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   return (
     <Card className="h-fit">
-      <CardHeader>
+      <CardHeader className="gap-3">
         <CardTitle>{t("branches")}</CardTitle>
+        {owner && branches.length ? (
+          <label className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              aria-checked={selectedBranchIds.size > 0 && !allSelected ? "mixed" : allSelected}
+              onChange={() =>
+                setSelectedBranchIds(
+                  allSelected ? new Set() : new Set(branches.map(({ id }) => id)),
+                )
+              }
+              className="h-4 w-4 accent-primary"
+            />
+            {t("select_all_branches")}
+          </label>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-2">
         {branches.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("no_assigned_branches")}</p>
         ) : null}
         {branches.map((branch) => (
-          <button
-            type="button"
+          <div
             key={branch.id}
-            onClick={() => setSelectedId(branch.id)}
-            className={`flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-start hover:bg-accent ${selectedId === branch.id ? "border-primary bg-primary/5" : ""}`}
+            className={`flex items-start gap-2 rounded-lg border p-3 hover:bg-accent ${selectedId === branch.id ? "border-primary bg-primary/5" : ""}`}
           >
-            <span className="min-w-0">
-              <span className="block truncate font-medium">
-                {local(branch.name_en, branch.name_ar)}
-              </span>
-              <span className="block text-xs text-muted-foreground">
-                {t("branch_people_recorded", { count: branch.member_count })}
-              </span>
-              {branch.contributor_user_id ? (
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  <span className="block truncate">
-                    {local(branch.contributor_name_en, branch.contributor_name_ar)}
-                  </span>
-                  <span className="block truncate" dir="ltr">
-                    {branch.contributor_email}
-                  </span>
+            {owner ? (
+              <input
+                type="checkbox"
+                checked={selectedBranchIds.has(branch.id)}
+                onChange={() => toggle(branch.id)}
+                aria-label={`${t("select_branch")}: ${local(branch.name_en, branch.name_ar)}`}
+                className="mt-1 h-4 w-4 shrink-0 accent-primary"
+              />
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setSelectedId(branch.id)}
+              className="flex min-w-0 flex-1 items-center justify-between gap-3 text-start"
+            >
+              <span className="min-w-0">
+                <span className="block truncate font-medium">
+                  {local(branch.name_en, branch.name_ar)}
                 </span>
-              ) : (
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  {t("branch_no_contributor_assigned")}
+                <span className="block text-xs text-muted-foreground">
+                  {t("branch_people_recorded", { count: branch.member_count })}
                 </span>
-              )}
-            </span>
-            <Badge variant={branch.status === "active" ? "default" : "secondary"}>
-              {t(branch.status === "active" ? "branch_active" : "branch_inactive")}
-            </Badge>
-          </button>
+                {branch.contributor_user_id ? (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    <span className="block truncate">
+                      {local(branch.contributor_name_en, branch.contributor_name_ar)}
+                    </span>
+                    <span className="block truncate" dir="ltr">
+                      {branch.contributor_email}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {t("branch_no_contributor_assigned")}
+                  </span>
+                )}
+              </span>
+              <Badge variant={branch.status === "active" ? "default" : "secondary"}>
+                {t(branch.status === "active" ? "branch_active" : "branch_inactive")}
+              </Badge>
+            </button>
+          </div>
         ))}
       </CardContent>
     </Card>

@@ -1,6 +1,8 @@
 import type { ChronologicalPeriod, TreePreviewType } from "../domain/canvas-preview";
+import { branchesWidgetVisible } from "../domain/canvas-widgets";
 import { DECADE_ROW_H } from "./family-tree-layout";
 import { FamilyTreeView } from "./family-tree-view";
+import { useTreeCenter } from "./use-tree-center";
 import type { FamilyTreeInteractions } from "./use-family-tree-interactions";
 import type { FamilyTreeProjection } from "./use-family-tree-projection";
 import type { FamilyTreeState } from "./use-family-tree-state";
@@ -20,8 +22,12 @@ export function FamilyTreeComposition(props: Props) {
   const { core, refs, selection, ui } = props.state;
   const { actions, canEdit, generation, onCanvasWheel } = props.projection;
   const { graph, onEdgeClick, pickMother, search } = props.interactions;
-  const toggleWidget = (widget: keyof typeof ui.collapsedWidgets) =>
-    ui.setCollapsedWidgets((current) => ({ ...current, [widget]: !current[widget] }));
+  const centerTree = useTreeCenter({
+    canvasRef: refs.canvasRef,
+    nodes: graph.nodes,
+    setViewport: props.state.flow.setViewport,
+    viewportRef: refs.viewportRef,
+  });
   return (
     <FamilyTreeView
       canvasRef={refs.canvasRef}
@@ -39,6 +45,7 @@ export function FamilyTreeComposition(props: Props) {
         canMutate: canEdit,
         lang: core.lang,
         matches: search.matches,
+        members: core.members,
         onAutoLayout: graph.onAutoLayout,
         onFocusMember: search.focusMember,
         query: ui.query,
@@ -48,6 +55,7 @@ export function FamilyTreeComposition(props: Props) {
         onCsvImportOpenChange: props.onCsvImportOpenChange,
       }}
       flowKey={props.previewType}
+      onCenter={centerTree}
       flow={{
         nodes: graph.nodes,
         edges: graph.edges,
@@ -81,13 +89,12 @@ export function FamilyTreeComposition(props: Props) {
       }}
       onViewportChange={(viewport) => {
         refs.viewportRef.current = viewport;
-        ui.setViewport(viewport);
+        ui.commitViewport(viewport);
       }}
       chronologicalOverlay={chronologicalOverlay(props)}
       marqueeRect={graph.marqueeRect}
       sidebar={{
         activeGeneration: generation.activeGeneration ?? undefined,
-        canManageSubfamilies: core.canManageSubfamilies,
         chronologicalPeriod: props.chronologicalPeriod,
         collapsedWidgets: ui.collapsedWidgets,
         generationYear: ui.generationYear,
@@ -95,6 +102,7 @@ export function FamilyTreeComposition(props: Props) {
         overviewMode: props.overviewMode,
         periodDraft: ui.periodDraft,
         previewType: props.previewType,
+        registeredMemberCount: core.members.length,
         scrollToGeneration: generation.scrollToGeneration,
         selectedSubfamilyId: selection.selectedSubfamilyId,
         setGenerationYear: ui.setGenerationYear,
@@ -102,8 +110,10 @@ export function FamilyTreeComposition(props: Props) {
         setSelectedSubfamilyId: selection.setSelectedSubfamilyId,
         setSubfamilyFilterEnabled: selection.setSubfamilyFilterEnabled,
         subfamilyFilterEnabled: selection.subfamilyFilterEnabled,
+        showSubfamilies: branchesWidgetVisible(core.canManageSubfamilies, props.overviewMode),
         t: core.t,
-        toggleWidget,
+        toggleWidget: (widget) => toggleCollapsedWidget(ui, widget),
+        viewport: ui.viewport,
       }}
       dialogs={{
         canEdit,
@@ -126,6 +136,13 @@ export function FamilyTreeComposition(props: Props) {
       }}
     />
   );
+}
+
+function toggleCollapsedWidget(
+  ui: FamilyTreeState["ui"],
+  widget: keyof FamilyTreeState["ui"]["collapsedWidgets"],
+) {
+  ui.setCollapsedWidgets((current) => ({ ...current, [widget]: !current[widget] }));
 }
 
 function chronologicalOverlay(props: Props) {

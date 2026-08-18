@@ -23,16 +23,20 @@ export function BranchDeactivationDialog({
   open,
   onOpenChange,
   branch,
+  branches,
   tree,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   branch: Branch;
+  branches?: Branch[];
   tree: CurrentTree;
   onSaved: () => Promise<void>;
 }) {
   const { lang, t } = useI18n();
+  const targets = branches ?? [branch];
+  const bulk = targets.length > 1;
   const [confirmation, setConfirmation] = useState("");
   const [challenge, setChallenge] = useState<Challenge>();
   const [code, setCode] = useState("");
@@ -52,12 +56,17 @@ export function BranchDeactivationDialog({
     setPendingAction("request");
     try {
       const response = await fetch(
-        `/api/trees/${tree.id}/branches/${branch.id}/deactivation-requests`,
+        bulk
+          ? `/api/trees/${tree.id}/branches/deactivation-requests`
+          : `/api/trees/${tree.id}/branches/${branch.id}/deactivation-requests`,
         {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ confirmation }),
+          body: JSON.stringify({
+            confirmation,
+            ...(bulk ? { branchIds: targets.map(({ id }) => id) } : {}),
+          }),
         },
       );
       const body = (await response.json()) as Challenge & { code?: string };
@@ -99,7 +108,9 @@ export function BranchDeactivationDialog({
       }
       changeOpen(false);
       await onSaved();
-      toast.success(t("branch_deactivated"));
+      toast.success(
+        t(bulk ? "branches_deactivated" : "branch_deactivated", { count: targets.length }),
+      );
     } catch {
       toast.error(t("branch_deactivation_failed"));
     } finally {
@@ -110,11 +121,19 @@ export function BranchDeactivationDialog({
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("deactivate_branch")}</DialogTitle>
+          <DialogTitle>
+            {t(bulk ? "deactivate_selected_branches" : "deactivate_branch", {
+              count: targets.length,
+            })}
+          </DialogTitle>
         </DialogHeader>
         {!challenge ? (
           <>
-            <p className="text-sm text-muted-foreground">{t("branch_deactivation_warning")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t(bulk ? "branches_deactivation_warning" : "branch_deactivation_warning", {
+                count: targets.length,
+              })}
+            </p>
             <div className="space-y-2">
               <Label htmlFor="branch-deactivation-confirmation">
                 {t("type_delete_to_confirm")}
@@ -178,7 +197,9 @@ export function BranchDeactivationDialog({
                 disabled={busy || code.length !== 6}
                 onClick={() => void confirm()}
               >
-                {t("deactivate_branch")}
+                {t(bulk ? "deactivate_selected_branches" : "deactivate_branch", {
+                  count: targets.length,
+                })}
               </Button>
             </DialogFooter>
           </>

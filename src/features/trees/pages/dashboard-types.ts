@@ -1,4 +1,3 @@
-import type { ActivityItem } from "../domain/activity-label";
 import type { AuthenticityLevel, EarnedAuthenticityLevel } from "../domain/authenticity-progress";
 
 export interface CurrentTree {
@@ -89,13 +88,12 @@ export interface OwnershipTransfer {
   created_at: string;
 }
 
-export interface DashboardData {
-  tree: CurrentTree;
-  stats: Statistics;
-  branches: Branch[];
-  invitations: Invitation[];
-  activity: ActivityItem[];
-  ownershipTransfer: OwnershipTransfer | null;
+export interface DashboardResource<Value> {
+  data: Value | undefined;
+  pending: boolean;
+  fetching: boolean;
+  error: boolean;
+  retry: () => void;
 }
 
 export interface DashboardQualityInsights {
@@ -124,9 +122,12 @@ export interface DashboardBranchHealth {
 export interface DashboardInsights {
   quality?: DashboardQualityInsights;
   branches: DashboardBranchHealth[];
-  loading: boolean;
-  error: boolean;
-  retry: () => void;
+  qualityPending: boolean;
+  qualityError: boolean;
+  retryQuality: () => void;
+  branchesPending: boolean;
+  branchesError: boolean;
+  retryBranches: () => void;
 }
 
 export interface SearchOption {

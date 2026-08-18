@@ -1,10 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { Activity, AlertTriangle, CheckCircle2, CircleAlert, Info, RotateCw } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, CircleAlert, Info } from "lucide-react";
 import { useI18n } from "@/shared/i18n";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Skeleton } from "@/shared/ui/skeleton";
 import { activityDescription } from "../domain/activity-label";
 import {
   dashboardAttentionItems,
@@ -12,7 +11,17 @@ import {
   canEditDashboardTree,
   type AttentionItem,
 } from "../pages/dashboard-projections";
-import type { DashboardData, DashboardInsights } from "../pages/dashboard-types";
+import type { ActivityItem } from "../domain/activity-label";
+import type {
+  Branch,
+  CurrentTree,
+  DashboardInsights,
+  DashboardResource,
+  Invitation,
+  OwnershipTransfer,
+  Statistics,
+} from "../pages/dashboard-types";
+import { DashboardResourceState } from "./dashboard-resource-state";
 
 function attentionLabel(item: AttentionItem, t: ReturnType<typeof useI18n>["t"]) {
   const labels = {
@@ -43,19 +52,19 @@ function AttentionIcon({ severity }: Pick<AttentionItem, "severity">) {
   return <Info className="h-4 w-4 text-primary" aria-hidden="true" />;
 }
 
-function AttentionAction({ item, data }: { item: AttentionItem; data: DashboardData }) {
+function AttentionAction({ item, tree }: { item: AttentionItem; tree: CurrentTree }) {
   const { t } = useI18n();
   if (item.id === "pending_invitations" || item.id === "inactive_branches") {
     return (
       <Button asChild variant="ghost" size="sm">
-        <Link to="/branches" search={{ treeId: data.tree.id }}>
+        <Link to="/branches" search={{ treeId: tree.id }}>
           {t("review")}
         </Link>
       </Button>
     );
   }
   if (item.analysis) {
-    const branchId = data.tree.role === "contributor" ? data.tree.assigned_branch_id : undefined;
+    const branchId = tree.role === "contributor" ? tree.assigned_branch_id : undefined;
     return (
       <Button asChild variant="ghost" size="sm">
         <Link
@@ -82,14 +91,40 @@ function AttentionAction({ item, data }: { item: AttentionItem; data: DashboardD
 }
 
 export function NeedsAttentionCard({
-  data,
+  tree,
+  statistics,
+  branches,
+  invitations,
+  ownershipTransfer,
   insights,
 }: {
-  data: DashboardData;
+  tree: CurrentTree;
+  statistics: DashboardResource<Statistics>;
+  branches: DashboardResource<Branch[]>;
+  invitations: DashboardResource<Invitation[]>;
+  ownershipTransfer: DashboardResource<OwnershipTransfer | null>;
   insights: DashboardInsights;
 }) {
   const { t } = useI18n();
-  const items = dashboardAttentionItems(data, insights.quality);
+  const items = dashboardAttentionItems(
+    {
+      tree,
+      stats: statistics.data,
+      branches: branches.data,
+      invitations: invitations.data,
+      ownershipTransfer: ownershipTransfer.data,
+    },
+    insights.quality,
+  );
+  const pending =
+    statistics.pending ||
+    branches.pending ||
+    invitations.pending ||
+    ownershipTransfer.pending ||
+    insights.qualityPending;
+  const failures = [statistics, branches, invitations, ownershipTransfer].filter(
+    (resource) => resource.error,
+  );
   return (
     <Card>
       <CardHeader>
@@ -105,38 +140,37 @@ export function NeedsAttentionCard({
                 {t("dashboard_attention_count", { count: item.count })}
               </p>
             </div>
-            <AttentionAction item={item} data={data} />
+            <AttentionAction item={item} tree={tree} />
           </div>
         ))}
-        {insights.loading && !insights.quality ? (
-          <div className="space-y-2" role="status">
-            <span className="sr-only">{t("dashboard_checking_quality")}</span>
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
+        {pending ? (
+          <DashboardResourceState pending error={false} retry={() => {}} rows={2} />
         ) : null}
-        {!insights.loading && items.length === 0 ? (
+        {!pending && items.length === 0 ? (
           <div className="rounded-lg border border-dashed p-6 text-center">
             <CheckCircle2 className="mx-auto h-7 w-7 text-primary" aria-hidden="true" />
             <p className="mt-2 font-medium">{t("all_caught_up")}</p>
             <p className="mt-1 text-sm text-muted-foreground">{t("all_caught_up_description")}</p>
           </div>
         ) : null}
-        {insights.error ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
-            <span>{t("dashboard_insights_unavailable")}</span>
-            <Button variant="ghost" size="sm" onClick={insights.retry}>
-              <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
-              {t("retry")}
-            </Button>
-          </div>
+        {failures.map((resource, index) => (
+          <DashboardResourceState key={index} pending={false} error retry={resource.retry} />
+        ))}
+        {insights.qualityError ? (
+          <DashboardResourceState pending={false} error retry={insights.retryQuality} />
         ) : null}
       </CardContent>
     </Card>
   );
 }
 
-export function RecentActivityCard({ data }: { data: DashboardData }) {
+export function RecentActivityCard({
+  tree,
+  activity,
+}: {
+  tree: CurrentTree;
+  activity: DashboardResource<ActivityItem[]>;
+}) {
   const { t, lang } = useI18n();
   return (
     <Card>
@@ -147,20 +181,28 @@ export function RecentActivityCard({ data }: { data: DashboardData }) {
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
-        {data.activity.length === 0 ? (
+        {!activity.data ? (
+          <DashboardResourceState
+            pending={activity.pending}
+            error={activity.error}
+            retry={activity.retry}
+            rows={3}
+          />
+        ) : null}
+        {activity.data?.length === 0 ? (
           <div className="rounded-lg border border-dashed p-5 text-center">
             <Activity className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
             <p className="mt-2 text-sm font-medium">{t("no_activity")}</p>
-            {canEditDashboardTree(data.tree) ? (
+            {canEditDashboardTree(tree) ? (
               <Button asChild variant="link" size="sm" className="mt-1">
-                <Link to="/tree/$id" params={{ id: data.tree.id }} search={{ mode: "edit" }}>
+                <Link to="/tree/$id" params={{ id: tree.id }} search={{ mode: "edit" }}>
                   {t("start_editing")}
                 </Link>
               </Button>
             ) : null}
           </div>
         ) : null}
-        {data.activity.map((item) => {
+        {activity.data?.map((item) => {
           return (
             <div key={item.id} className="flex gap-3 border-b pb-3 last:border-0 last:pb-0">
               <span className="mt-0.5 shrink-0 self-start rounded-full bg-primary/10 p-1.5 text-primary">
@@ -188,6 +230,9 @@ export function RecentActivityCard({ data }: { data: DashboardData }) {
             </div>
           );
         })}
+        {activity.data && activity.error ? (
+          <DashboardResourceState pending={false} error retry={activity.retry} />
+        ) : null}
       </CardContent>
     </Card>
   );

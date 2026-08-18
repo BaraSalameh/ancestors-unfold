@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { NodeProps } from "reactflow";
 import type { FamilyMember } from "@/features/members";
+import type { CanvasDetail } from "../domain/canvas-preview";
 import { familyStore } from "../client/family-store";
 import { MemberNodeCard } from "./member-node-card";
 import { MemberNodeConnectors } from "./member-node-connectors";
@@ -17,6 +18,8 @@ export interface MemberNodeData {
   collapsed?: boolean;
   onToggleCollapsed?: (id: string) => void;
   editable: boolean;
+  detail?: CanvasDetail;
+  aggregateCount?: number;
 }
 
 function MemberNodeImpl({ data, selected }: NodeProps<MemberNodeData>) {

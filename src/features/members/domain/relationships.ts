@@ -66,16 +66,40 @@ export function toggleDivorce(
 }
 
 export function removeMember(members: FamilyMember[], id: string): FamilyMember[] {
-  return members
-    .filter((member) => member.id !== id)
-    .map((member) => ({
-      ...member,
-      father_id: member.father_id === id ? undefined : member.father_id,
-      mother_id: member.mother_id === id ? undefined : member.mother_id,
-      spouse_id: member.spouse_id === id ? undefined : member.spouse_id,
-      spouse_ids: member.spouse_ids?.filter((value) => value !== id),
-      divorced_from: member.divorced_from?.filter((value) => value !== id),
-    }));
+  return removeMembers(members, new Set([id]));
+}
+
+export function removeMembers(
+  members: FamilyMember[],
+  removedIds: ReadonlySet<string>,
+): FamilyMember[] {
+  if (!removedIds.size) return members;
+  const withoutRemoved = (values: string[] | undefined) => {
+    if (!values?.some((value) => removedIds.has(value))) return values;
+    return values.filter((value) => !removedIds.has(value));
+  };
+  const remaining: FamilyMember[] = [];
+  for (const member of members) {
+    if (removedIds.has(member.id)) continue;
+    const father_id =
+      member.father_id && !removedIds.has(member.father_id) ? member.father_id : undefined;
+    const mother_id =
+      member.mother_id && !removedIds.has(member.mother_id) ? member.mother_id : undefined;
+    const spouse_id =
+      member.spouse_id && !removedIds.has(member.spouse_id) ? member.spouse_id : undefined;
+    const spouse_ids = withoutRemoved(member.spouse_ids);
+    const divorced_from = withoutRemoved(member.divorced_from);
+    const changed =
+      father_id !== member.father_id ||
+      mother_id !== member.mother_id ||
+      spouse_id !== member.spouse_id ||
+      spouse_ids !== member.spouse_ids ||
+      divorced_from !== member.divorced_from;
+    remaining.push(
+      changed ? { ...member, father_id, mother_id, spouse_id, spouse_ids, divorced_from } : member,
+    );
+  }
+  return remaining;
 }
 
 type ParentRole = "father_id" | "mother_id";

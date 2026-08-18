@@ -86,18 +86,35 @@ async function prepareSnapshotMembers(
       "UPDATE app.family_members SET deleted_at=now() WHERE tree_id=$1 AND deleted_at IS NULL",
       [treeId],
     );
-  for (const sf of isBranchEditor ? [] : (snapshot.subfamilies ?? [])) {
-    const id = /^[0-9a-f]{8}-/.test(sf.id) ? sf.id : randomUUID();
-    subfamilyIds.set(sf.id, id);
+  const branchRows = (isBranchEditor ? [] : (snapshot.subfamilies ?? [])).map((branch) => {
+    const id = /^[0-9a-f]{8}-/.test(branch.id) ? branch.id : randomUUID();
+    subfamilyIds.set(branch.id, id);
+    return {
+      id,
+      source_id: sourceBranchIds.get(branch.id) ?? branch.id,
+      name_en: branch.name_en,
+      name_ar: branch.name_ar || null,
+      notes: branch.notes || null,
+    };
+  });
+  if (branchRows.length) {
     await client.query(
-      `INSERT INTO app.subfamilies(id,tree_id,name_en,name_ar,notes) VALUES($1,$2,$3,$4,$5)
-        ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,notes=excluded.notes,deleted_at=NULL`,
-      [id, treeId, sf.name_en, sf.name_ar || null, sf.notes || null],
+      `INSERT INTO app.subfamilies(id,tree_id,name_en,name_ar,notes)
+       SELECT id,$2,name_en,name_ar,notes
+       FROM jsonb_to_recordset($1::jsonb) AS input(
+         id uuid,source_id text,name_en text,name_ar text,notes text
+       )
+       ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,
+         notes=excluded.notes,deleted_at=NULL`,
+      [JSON.stringify(branchRows), treeId],
     );
     await client.query(
       `INSERT INTO app.import_id_map(import_batch_id,entity_type,source_id,target_id,status)
-       VALUES($1,'subfamily',$2,$3,'mapped') ON CONFLICT DO NOTHING`,
-      [batchId, sourceBranchIds.get(sf.id) ?? sf.id, id],
+       SELECT $2,'subfamily',source_id,id,'mapped'
+       FROM jsonb_to_recordset($1::jsonb) AS input(
+         id uuid,source_id text,name_en text,name_ar text,notes text
+       ) ON CONFLICT DO NOTHING`,
+      [JSON.stringify(branchRows), batchId],
     );
   }
   return { memberIds, subfamilyIds };
@@ -116,6 +133,19 @@ async function upsertSnapshotMembers(
   subfamilyIds: Map<string, string>,
   sourceMemberIds: ReadonlyMap<string, string>,
 ): Promise<void> {
+  if (!isBranchEditor) {
+    await bulkUpsertSnapshotMembers(
+      client,
+      treeId,
+      userId,
+      batchId,
+      editablePayloadMembers,
+      memberIds,
+      subfamilyIds,
+      sourceMemberIds,
+    );
+    return;
+  }
   for (const m of editablePayloadMembers) {
     const id = /^[0-9a-f]{8}-/.test(m.id) ? m.id : randomUUID();
     memberIds.set(m.id, id);
@@ -154,6 +184,72 @@ async function upsertSnapshotMembers(
       [batchId, sourceMemberIds.get(m.id) ?? m.id, id],
     );
   }
+}
+
+async function bulkUpsertSnapshotMembers(
+  client: PoolClient,
+  treeId: string,
+  userId: string,
+  batchId: string,
+  members: SnapshotMember[],
+  memberIds: Map<string, string>,
+  subfamilyIds: Map<string, string>,
+  sourceMemberIds: ReadonlyMap<string, string>,
+) {
+  const rows = members.map((member) => {
+    const id = /^[0-9a-f]{8}-/.test(member.id) ? member.id : randomUUID();
+    memberIds.set(member.id, id);
+    return {
+      ...member,
+      id,
+      source_id: sourceMemberIds.get(member.id) ?? member.id,
+      subfamily_id: member.subfamily_id ? (subfamilyIds.get(member.subfamily_id) ?? null) : null,
+      is_deceased: member.is_deceased ?? Boolean(member.death_date),
+      citizen_status: member.citizen_status ?? "resident",
+    };
+  });
+  if (!rows.length) return;
+  const serialized = JSON.stringify(rows);
+  await client.query(
+    `INSERT INTO app.family_members(
+       id,tree_id,name_en,name_ar,gender,birth_date,death_date,is_deceased,citizen_status,
+       image_url,image_public_id,image_asset_id,notes,is_unknown,pos_x,pos_y,subfamily_id,
+       created_by,updated_by
+     )
+     SELECT input.id,$2,input.name_en,input.name_ar,input.gender,input.birth_date,input.death_date,
+            input.is_deceased,input.citizen_status,input.image_url,input.image_public_id,
+            input.image_asset_id,input.notes,coalesce(input.is_unknown,false),input.pos_x,input.pos_y,
+            input.subfamily_id,$3,$3
+     FROM jsonb_to_recordset($1::jsonb) AS input(
+       id uuid,source_id text,name_en text,name_ar text,gender app.gender,birth_date date,
+       death_date date,is_deceased boolean,citizen_status app.citizen_status,image_url text,
+       image_public_id text,image_asset_id text,notes text,is_unknown boolean,
+       pos_x double precision,pos_y double precision,subfamily_id uuid
+     )
+     ON CONFLICT(id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar,
+       gender=excluded.gender,birth_date=excluded.birth_date,death_date=excluded.death_date,
+       is_deceased=excluded.is_deceased,citizen_status=excluded.citizen_status,
+       image_url=excluded.image_url,image_public_id=excluded.image_public_id,
+       image_asset_id=excluded.image_asset_id,notes=excluded.notes,is_unknown=excluded.is_unknown,
+       pos_x=excluded.pos_x,pos_y=excluded.pos_y,subfamily_id=excluded.subfamily_id,
+       updated_by=excluded.updated_by,updated_at=now(),version=app.family_members.version+1,
+       deleted_at=NULL`,
+    [serialized, treeId, userId],
+  );
+  await client.query(
+    `UPDATE app.users account SET profile_gender=member.gender,updated_at=now()
+     FROM app.family_members member
+     WHERE member.tree_id=$1 AND member.id=ANY($2::uuid[])
+       AND member.linked_user_id=account.id AND account.profile_gender<>member.gender`,
+    [treeId, rows.map(({ id }) => id)],
+  );
+  await client.query(
+    `INSERT INTO app.import_id_map(import_batch_id,entity_type,source_id,target_id,status)
+     SELECT $2,'member',source_id,id,'mapped'
+     FROM jsonb_to_recordset($1::jsonb) AS input(id uuid,source_id text)
+     ON CONFLICT DO NOTHING`,
+    [serialized, batchId],
+  );
 }
 
 function snapshotMemberValues(

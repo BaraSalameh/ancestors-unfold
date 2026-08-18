@@ -215,6 +215,69 @@ async function deleteBranch(
   return json(result);
 }
 
+async function deleteBranches(
+  request: Request,
+  treeId: string,
+  session: CollaborationSession,
+  requestId: string,
+) {
+  const body = await parseBody(request, schemas.branchBulkDelete);
+  const result = await transaction(session.user_id, session.id, requestId, async (client) => {
+    await beginTreeMutation(client, treeId, session.user_id, body.expectedVersion, body.batchId);
+    const branches = await client.query<{
+      id: string;
+      linked_male_id: string | null;
+      name_ar: string | null;
+      name_en: string;
+      status: string;
+    }>(
+      `SELECT id,name_en,name_ar,status,linked_male_id FROM app.subfamilies
+       WHERE tree_id=$1 AND id=ANY($2::uuid[]) AND deleted_at IS NULL FOR UPDATE`,
+      [treeId, body.branchIds],
+    );
+    if (branches.rowCount !== body.branchIds.length) throw new ApiError("BRANCH_UNAVAILABLE", 404);
+    if (branches.rows.some(({ status }) => status !== "inactive"))
+      throw new ApiError("BRANCH_MUST_BE_INACTIVE", 409);
+    const blockers = await client.query<{ blocked: boolean }>(
+      `SELECT (
+        EXISTS(SELECT 1 FROM app.subfamilies branch
+          WHERE branch.tree_id=$1 AND branch.id=ANY($2::uuid[])
+            AND branch.linked_male_id IS NOT NULL) OR
+        EXISTS(SELECT 1 FROM app.family_members
+          WHERE tree_id=$1 AND subfamily_id=ANY($2::uuid[]) AND deleted_at IS NULL) OR
+        EXISTS(SELECT 1 FROM app.subfamilies
+          WHERE tree_id=$1 AND parent_subfamily_id=ANY($2::uuid[])
+            AND NOT (id=ANY($2::uuid[])) AND deleted_at IS NULL) OR
+        EXISTS(SELECT 1 FROM app.branch_grants
+          WHERE tree_id=$1 AND root_subfamily_id=ANY($2::uuid[]) AND revoked_at IS NULL) OR
+        EXISTS(SELECT 1 FROM app.contributor_invitations
+          WHERE tree_id=$1 AND branch_id=ANY($2::uuid[]) AND status='pending') OR
+        EXISTS(SELECT 1 FROM app.ownership_transfers
+          WHERE tree_id=$1 AND previous_owner_branch_id=ANY($2::uuid[]) AND status='pending') OR
+        EXISTS(SELECT 1 FROM app.subfamily_attachments
+          WHERE tree_id=$1 AND subfamily_id=ANY($2::uuid[]))
+      ) blocked`,
+      [treeId, body.branchIds],
+    );
+    if (blockers.rows[0].blocked) throw new ApiError("BRANCH_IN_USE", 409);
+    await client.query(
+      `UPDATE app.subfamilies SET deleted_at=now(),version=version+1,updated_at=now()
+       WHERE tree_id=$1 AND id=ANY($2::uuid[])`,
+      [treeId, body.branchIds],
+    );
+    await client.query(
+      `INSERT INTO app.tree_activity(
+         tree_id,actor_user_id,action_type,target_type,target_id,target_name_en,target_name_ar
+       ) SELECT $1,$2,'branch_deleted','branch',branch.id,branch.name_en,branch.name_ar
+         FROM app.subfamilies branch WHERE branch.tree_id=$1 AND branch.id=ANY($3::uuid[])`,
+      [treeId, session.user_id, body.branchIds],
+    );
+    const version = await finishTreeMutation(client, treeId, body.expectedVersion, body.batchId);
+    return { deleted: body.branchIds, version };
+  });
+  return json(result);
+}
+
 export async function handleBranchRequest(
   request: Request,
   url: URL,
@@ -224,6 +287,8 @@ export async function handleBranchRequest(
   const collection = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/branches$/);
   if (collection && request.method === "POST")
     return createBranch(request, collection[1], session, requestId);
+  if (collection && request.method === "DELETE")
+    return deleteBranches(request, collection[1], session, requestId);
   const item = url.pathname.match(/^\/api\/trees\/([0-9a-f-]+)\/branches\/([0-9a-f-]+)$/);
   if (!item) return undefined;
   if (request.method === "PATCH")

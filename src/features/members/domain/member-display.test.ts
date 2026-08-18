@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { FamilyMember } from "./types";
-import { ancestorConnector, memberNameWithBirthYear, memberSearchLabel } from "./member-display";
+import {
+  ancestorConnector,
+  memberNameWithBirthYear,
+  memberPaternalSearchLabel,
+  memberSearchLabel,
+} from "./member-display";
 
 const member = (birth_date?: string): FamilyMember => ({
   id: "member-1",
@@ -52,4 +57,32 @@ describe("member display", () => {
       expect(memberNameWithBirthYear(member(birthDate), "en")).toBe("Ahmad");
     },
   );
+
+  it("builds the Explorer-style paternal name chain and caps it at four records", () => {
+    const person = { ...member("1984-03-12"), father_id: "father" };
+    const father = { ...member(), id: "father", name_en: "Ali", father_id: "grandfather" };
+    const grandfather = {
+      ...member(),
+      id: "grandfather",
+      name_en: "Hassan",
+      father_id: "great-grandfather",
+    };
+    const greatGrandfather = {
+      ...member(),
+      id: "great-grandfather",
+      name_en: "Omar",
+      father_id: "fifth-name",
+    };
+    const fifthName = { ...member(), id: "fifth-name", name_en: "Nimer" };
+    const membersById = new Map(
+      [person, father, grandfather, greatGrandfather, fifthName].map((relative) => [
+        relative.id,
+        relative,
+      ]),
+    );
+
+    expect(memberPaternalSearchLabel(person, membersById, "en")).toBe(
+      "Ahmad Ali Hassan Omar (1984)",
+    );
+  });
 });

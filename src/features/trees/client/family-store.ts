@@ -16,6 +16,12 @@ import {
   type TreeAccessScope,
 } from "../domain/access-policy";
 import { buildFamilyCsvDraft, type FamilyCsvMappingSelections } from "./family-csv-draft";
+import {
+  applyEntityChanges,
+  entityChanges,
+  mapsEqual,
+  type EntityChange,
+} from "./family-store-history";
 
 let activeTreeId = "";
 let activeAccessMode: TreeAccessMode = "edit";
@@ -28,13 +34,25 @@ let accessScope: TreeAccessScope = "preview";
 let assignedBranchId: string | undefined;
 let canImportCsv = false;
 const listeners = new Set<() => void>();
-type DraftSnapshot = { members: FamilyMember[]; stagedImages: Map<string, File> };
-let past: DraftSnapshot[] = [];
-let future: DraftSnapshot[] = [];
+type DraftChange = {
+  members: EntityChange<FamilyMember>[];
+  subfamilies: EntityChange<SubFamily>[];
+  beforeImages: Map<string, File>;
+  afterImages: Map<string, File>;
+};
+const MAX_HISTORY = 100;
+let past: DraftChange[] = [];
+let future: DraftChange[] = [];
 let stagedImages = new Map<string, File>();
 let stagedImageUrls = new Map<string, string>();
 let baselineMembers: FamilyMember[] = [];
 let baselineSubfamilies: SubFamily[] = [];
+let memberById = new Map<string, FamilyMember>();
+let baselineMemberById = new Map<string, FamilyMember>();
+let baselineSubfamilyById = new Map<string, SubFamily>();
+let branchRootIds = new Set<string>();
+let dirtyMemberIds = new Set<string>();
+let dirtySubfamilyIds = new Set<string>();
 let remoteVersion = 1;
 let persistenceError: string | null = null;
 let saveInFlight = false;
@@ -56,6 +74,7 @@ export type PersistenceState = {
   error: string | null;
   conflicted: boolean;
   importPending: boolean;
+  phase: "idle" | "preparing" | "uploading_images" | "saving" | "refreshing";
 };
 
 type DraftCheckpoint = {
@@ -70,7 +89,9 @@ let cachedPersistenceState: PersistenceState = {
   error: null,
   conflicted: false,
   importPending: false,
+  phase: "idle",
 };
+let savePhase: PersistenceState["phase"] = "idle";
 export type FamilyLoadState = "idle" | "loading" | "ready" | "error";
 let loadState: FamilyLoadState = "idle";
 
@@ -95,6 +116,8 @@ async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
     subfamilies = cloneSubfamilies(snapshot.subfamilies);
     baselineMembers = cloneMembers(state);
     baselineSubfamilies = cloneSubfamilies(subfamilies);
+    rebuildIndexes();
+    resetDirtyTracking();
     past = [];
     future = [];
     replaceStagedImages(new Map());
@@ -118,6 +141,7 @@ async function updateRemoteSnapshot() {
   const batchId = pendingBatchId ?? crypto.randomUUID();
   pendingBatchId = batchId;
   saveInFlight = true;
+  savePhase = stagedImages.size ? "uploading_images" : "preparing";
   emit();
   try {
     for (const [memberId, file] of [...stagedImages]) {
@@ -135,32 +159,54 @@ async function updateRemoteSnapshot() {
     const members = cloneMembers(state);
     const currentSubfamilies = cloneSubfamilies(subfamilies);
     const activeImport = pendingCsvImport;
-    const result = activeImport
-      ? await treeClient.applyFamilyCsv(treeId, {
-          batchId,
-          expectedVersion: activeImport.expectedVersion,
-          members,
-          subfamilies: currentSubfamilies,
-          sourceMemberIds: members.map(({ id: targetId }) => ({
-            targetId,
-            sourceId: activeImport.sourceMemberIds.get(targetId) ?? `draft|member|${targetId}`,
-          })),
-          sourceBranchIds: currentSubfamilies.map(({ id: targetId }) => ({
-            targetId,
-            sourceId: activeImport.sourceBranchIds.get(targetId) ?? `draft|branch|${targetId}`,
-          })),
-        })
-      : await treeClient.saveSnapshot(treeId, {
-          batchId,
-          expectedVersion: remoteVersion,
-          members,
-          subfamilies: currentSubfamilies,
-        });
+    savePhase = "saving";
+    emit();
+    let result: { version: number };
+    if (activeImport) {
+      result = await treeClient.applyFamilyCsv(treeId, {
+        batchId,
+        expectedVersion: activeImport.expectedVersion,
+        members,
+        subfamilies: currentSubfamilies,
+        sourceMemberIds: members.map(({ id: targetId }) => ({
+          targetId,
+          sourceId: activeImport.sourceMemberIds.get(targetId) ?? `draft|member|${targetId}`,
+        })),
+        sourceBranchIds: currentSubfamilies.map(({ id: targetId }) => ({
+          targetId,
+          sourceId: activeImport.sourceBranchIds.get(targetId) ?? `draft|branch|${targetId}`,
+        })),
+      });
+    } else if (typeof treeClient.patchSnapshot === "function") {
+      const currentMembersById = new Map(members.map((member) => [member.id, member]));
+      const currentBranchesById = new Map(currentSubfamilies.map((branch) => [branch.id, branch]));
+      result = await treeClient.patchSnapshot(treeId, {
+        batchId,
+        expectedVersion: remoteVersion,
+        upsertMembers: [...dirtyMemberIds]
+          .map((id) => currentMembersById.get(id))
+          .filter((member): member is FamilyMember => member !== undefined),
+        deleteMemberIds: [...dirtyMemberIds].filter((id) => !currentMembersById.has(id)),
+        upsertSubfamilies: [...dirtySubfamilyIds]
+          .map((id) => currentBranchesById.get(id))
+          .filter((branch): branch is SubFamily => branch !== undefined),
+        deleteSubfamilyIds: [...dirtySubfamilyIds].filter((id) => !currentBranchesById.has(id)),
+      });
+    } else {
+      result = await treeClient.saveSnapshot(treeId, {
+        batchId,
+        expectedVersion: remoteVersion,
+        members,
+        subfamilies: currentSubfamilies,
+      });
+    }
     if (activeTreeId === treeId) {
       remoteVersion = result.version;
       if (activeImport) {
         pendingCsvImport = null;
         loadState = "loading";
+        savePhase = "refreshing";
+        emit();
         await hydrateFromServer(treeId, activeAccessMode);
       } else {
         baselineMembers = members;
@@ -169,6 +215,8 @@ async function updateRemoteSnapshot() {
         future = [];
         pendingBatchId = null;
         persistenceError = null;
+        rebuildBaselineIndexes();
+        resetDirtyTracking();
       }
     }
   } catch (error) {
@@ -180,6 +228,7 @@ async function updateRemoteSnapshot() {
           : "NETWORK_ERROR";
   } finally {
     saveInFlight = false;
+    savePhase = "idle";
     emit();
   }
 }
@@ -206,8 +255,8 @@ function isDirty() {
   return (
     Boolean(pendingCsvImport) ||
     stagedImages.size > 0 ||
-    JSON.stringify(baselineMembers) !== JSON.stringify(state) ||
-    JSON.stringify(baselineSubfamilies) !== JSON.stringify(subfamilies)
+    dirtyMemberIds.size > 0 ||
+    dirtySubfamilyIds.size > 0
   );
 }
 
@@ -218,6 +267,7 @@ function emit() {
     error: persistenceError,
     conflicted: persistenceError === "VERSION_CONFLICT",
     importPending: Boolean(pendingCsvImport),
+    phase: savePhase,
   };
   for (const l of listeners) l();
 }
@@ -237,16 +287,61 @@ function cloneSubfamilies(items: SubFamily[]): SubFamily[] {
   }));
 }
 
+function rebuildIndexes() {
+  memberById = new Map(state.map((member) => [member.id, member]));
+  branchRootIds = new Set(
+    subfamilies
+      .filter(({ linked_male_id, status }) => linked_male_id && status !== "inactive")
+      .map(({ linked_male_id }) => linked_male_id!),
+  );
+}
+
+function rebuildBaselineIndexes() {
+  baselineMemberById = new Map(baselineMembers.map((member) => [member.id, member]));
+  baselineSubfamilyById = new Map(baselineSubfamilies.map((branch) => [branch.id, branch]));
+}
+
+function resetDirtyTracking() {
+  dirtyMemberIds = new Set();
+  dirtySubfamilyIds = new Set();
+  rebuildBaselineIndexes();
+}
+
+function recalculateDirtyTracking() {
+  resetDirtyTracking();
+  const currentBranches = new Map(subfamilies.map((branch) => [branch.id, branch]));
+  for (const id of new Set([...memberById.keys(), ...baselineMemberById.keys()]))
+    if (!entityMatchesBaseline(memberById.get(id), baselineMemberById.get(id)))
+      dirtyMemberIds.add(id);
+  for (const id of new Set([...currentBranches.keys(), ...baselineSubfamilyById.keys()]))
+    if (!entityMatchesBaseline(currentBranches.get(id), baselineSubfamilyById.get(id)))
+      dirtySubfamilyIds.add(id);
+}
+
+function entityMatchesBaseline<T>(entity: T | undefined, baseline: T | undefined) {
+  return entity === baseline || JSON.stringify(entity) === JSON.stringify(baseline);
+}
+
+function refreshDirtyTracking(change: DraftChange) {
+  for (const { id } of change.members) {
+    if (entityMatchesBaseline(memberById.get(id), baselineMemberById.get(id)))
+      dirtyMemberIds.delete(id);
+    else dirtyMemberIds.add(id);
+  }
+  const currentBranches = new Map(subfamilies.map((branch) => [branch.id, branch]));
+  for (const { id } of change.subfamilies) {
+    if (entityMatchesBaseline(currentBranches.get(id), baselineSubfamilyById.get(id)))
+      dirtySubfamilyIds.delete(id);
+    else dirtySubfamilyIds.add(id);
+  }
+}
+
 function loadSubfamilies() {
   if (typeof window === "undefined") {
     subfamilies = [];
     return;
   }
   subfamilies = [];
-}
-
-function snapshot(): DraftSnapshot {
-  return { members: cloneMembers(state), stagedImages: new Map(stagedImages) };
 }
 
 function replaceStagedImages(next: ReadonlyMap<string, File>) {
@@ -259,7 +354,7 @@ function replaceStagedImages(next: ReadonlyMap<string, File>) {
 
 function discardUploadedDraftAssets() {
   for (const member of state) {
-    const baseline = baselineMembers.find(({ id }) => id === member.id);
+    const baseline = baselineMemberById.get(member.id);
     if (member.image_asset_id && member.image_asset_id !== baseline?.image_asset_id)
       void memberImageClient.discard(activeTreeId, member.image_asset_id).catch(() => undefined);
   }
@@ -267,31 +362,42 @@ function discardUploadedDraftAssets() {
 
 function commit(mutator: () => void) {
   if (!canEditActiveTree()) return;
-  const before = snapshot();
+  const beforeMembers = state;
+  const beforeSubfamilies = subfamilies;
+  const beforeImages = new Map(stagedImages);
   mutator();
-  if (
-    JSON.stringify(before.members) === JSON.stringify(state) &&
-    before.stagedImages.size === stagedImages.size
-  )
+  const change: DraftChange = {
+    members: entityChanges(beforeMembers, state),
+    subfamilies: entityChanges(beforeSubfamilies, subfamilies),
+    beforeImages,
+    afterImages: new Map(stagedImages),
+  };
+  if (!change.members.length && !change.subfamilies.length && mapsEqual(beforeImages, stagedImages))
     return;
-  past = [...past, before];
+  rebuildIndexes();
+  refreshDirtyTracking(change);
+  past = [...past, change].slice(-MAX_HISTORY);
   future = [];
   markDraftChanged();
   emit();
 }
 
-function applySnapshot(next: DraftSnapshot) {
+function applyChange(change: DraftChange, direction: "before" | "after") {
   if (!canEditActiveTree()) return;
+  const nextMembers = applyEntityChanges(state, change.members, direction);
   for (const member of state) {
     if (
       member.image_asset_id &&
-      !next.members.some((candidate) => candidate.image_asset_id === member.image_asset_id) &&
+      !nextMembers.some((candidate) => candidate.image_asset_id === member.image_asset_id) &&
       !baselineMembers.some((candidate) => candidate.image_asset_id === member.image_asset_id)
     )
       void memberImageClient.discard(activeTreeId, member.image_asset_id).catch(() => undefined);
   }
-  state = cloneMembers(next.members);
-  replaceStagedImages(next.stagedImages);
+  state = nextMembers;
+  subfamilies = applyEntityChanges(subfamilies, change.subfamilies, direction);
+  replaceStagedImages(direction === "before" ? change.beforeImages : change.afterImages);
+  rebuildIndexes();
+  refreshDirtyTracking(change);
   markDraftChanged();
   emit();
 }
@@ -316,9 +422,7 @@ const memberCommandContext: MemberCommandContext = {
     return pendingCsvImport?.protectedMemberIds.get(id);
   },
   isBranchRoot(id) {
-    return subfamilies.some(
-      ({ linked_male_id, status }) => linked_male_id === id && status !== "inactive",
-    );
+    return branchRootIds.has(id);
   },
 };
 
@@ -336,7 +440,6 @@ const subfamilyCommandContext: SubfamilyCommandContext = {
     subfamilies = next;
   },
   commit,
-  markDraftChanged,
   emit,
   canDeleteSubfamily(id) {
     return !pendingCsvImport?.protectedBranchIds.has(id);
@@ -400,6 +503,8 @@ export const familyStore = {
     replaceStagedImages(new Map());
     state = cloneMembers(baselineMembers);
     subfamilies = cloneSubfamilies(baselineSubfamilies);
+    rebuildIndexes();
+    resetDirtyTracking();
     past = [];
     future = [];
     pendingBatchId = null;
@@ -419,6 +524,8 @@ export const familyStore = {
     if (saveInFlight || !canEditActiveTree()) return;
     state = cloneMembers(checkpoint.members);
     subfamilies = cloneSubfamilies(checkpoint.subfamilies);
+    rebuildIndexes();
+    recalculateDirtyTracking();
     replaceStagedImages(checkpoint.stagedImages);
     past = [];
     future = [];
@@ -459,6 +566,7 @@ export const familyStore = {
     replaceStagedImages(new Map());
     state = draft.members;
     subfamilies = draft.subfamilies;
+    rebuildIndexes();
     pendingCsvImport = {
       expectedVersion: preview.expectedVersion,
       sourceMemberIds: draft.sourceMemberIds,
@@ -478,28 +586,28 @@ export const familyStore = {
     return canEditActiveTree();
   },
   get(id: string): FamilyMember | undefined {
-    return state.find((m) => m.id === id);
+    return memberById.get(id);
   },
   getStagedMemberImage(id: string): File | undefined {
     return stagedImages.get(id);
   },
   getMemberImageSrc(id: string): string | undefined {
-    return stagedImageUrls.get(id) ?? state.find((member) => member.id === id)?.image_url;
+    return stagedImageUrls.get(id) ?? memberById.get(id)?.image_url;
   },
   ...createMemberCommands(memberCommandContext),
   undo(): void {
     if (!past.length) return;
     const previous = past[past.length - 1];
-    future = [snapshot(), ...future];
+    future = [previous, ...future].slice(0, MAX_HISTORY);
     past = past.slice(0, -1);
-    applySnapshot(previous);
+    applyChange(previous, "before");
   },
   redo(): void {
     if (!future.length) return;
     const next = future[0];
-    past = [...past, snapshot()];
+    past = [...past, next].slice(-MAX_HISTORY);
     future = future.slice(1);
-    applySnapshot(next);
+    applyChange(next, "after");
   },
   canUndo(): boolean {
     return past.length > 0;

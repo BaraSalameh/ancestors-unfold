@@ -15,18 +15,16 @@ export function CollaborationDashboard() {
   const { t, lang } = useI18n();
   const { session } = useAuth();
   const dashboard = useCollaborationDashboard(lang);
-  const data = dashboard.data;
-  const tree = data?.tree;
+  const tree = dashboard.tree.data;
   const insights = useDashboardInsights(tree);
   const treeControls = useDashboardTreeControls(tree, dashboard.updateTree);
   const transfer = useOwnershipTransfer(
     tree,
-    data?.ownershipTransfer ?? null,
-    () => dashboard.load(true),
-    dashboard.invalidate,
+    dashboard.ownershipTransfer.data ?? null,
+    dashboard.refresh,
   );
   const accountDeletion = useContributorAccountDeletion();
-  if (!data && dashboard.error) {
+  if (!tree && dashboard.tree.error) {
     return (
       <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-xl items-center px-4 py-10">
         <Card className="w-full">
@@ -38,15 +36,13 @@ export function CollaborationDashboard() {
                 {t("dashboard_load_failed_description")}
               </p>
             </div>
-            <Button onClick={() => void dashboard.load(true).catch(() => undefined)}>
-              {t("retry")}
-            </Button>
+            <Button onClick={dashboard.tree.retry}>{t("retry")}</Button>
           </CardContent>
         </Card>
       </main>
     );
   }
-  if (!data) {
+  if (!tree) {
     const local = (en?: string | null, ar?: string | null) =>
       lang === "ar" ? ar || en || "" : en || ar || "";
     return (
@@ -59,7 +55,12 @@ export function CollaborationDashboard() {
   }
   return (
     <DashboardLoaded
-      data={data}
+      tree={tree}
+      statistics={dashboard.statistics}
+      branches={dashboard.branches}
+      activity={dashboard.activity}
+      invitations={dashboard.invitations}
+      ownershipTransfer={dashboard.ownershipTransfer}
       insights={insights}
       treeControls={treeControls}
       transfer={transfer}

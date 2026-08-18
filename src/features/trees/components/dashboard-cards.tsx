@@ -4,32 +4,51 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { useI18n } from "@/shared/i18n";
-import type { DashboardData, DashboardInsights } from "../pages/dashboard-types";
+import type {
+  Branch,
+  CurrentTree,
+  DashboardInsights,
+  DashboardResource,
+  Statistics,
+} from "../pages/dashboard-types";
 import { AuthenticityRoadmap } from "./authenticity-roadmap";
 import { DashboardFact } from "./dashboard-components";
 import { canEditDashboardTree, dashboardBranches } from "../pages/dashboard-projections";
+import { DashboardResourceState } from "./dashboard-resource-state";
 
 type Local = (en?: string | null, ar?: string | null) => string;
 
 export function BranchesCard({
-  data,
+  tree,
+  branchResource,
+  statistics,
   insights,
   local,
 }: {
-  data: DashboardData;
+  tree: CurrentTree;
+  branchResource: DashboardResource<Branch[]>;
+  statistics: DashboardResource<Statistics>;
   insights: DashboardInsights;
   local: Local;
 }) {
   const { t } = useI18n();
-  const branches = dashboardBranches(data.tree, data.branches, insights.branches);
+  const branches = dashboardBranches(tree, branchResource.data ?? [], insights.branches);
   const healthById = new Map(insights.branches.map((branch) => [branch.id, branch]));
   return (
     <Card id="branches" className="scroll-mt-20">
       <CardHeader className="flex-row items-center justify-between">
-        <CardTitle>{data.tree.role === "owner" ? t("branches") : t("assigned_branch")}</CardTitle>
+        <CardTitle>{tree.role === "owner" ? t("branches") : t("assigned_branch")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {branches.length === 0 ? (
+        {!branchResource.data ? (
+          <DashboardResourceState
+            pending={branchResource.pending}
+            error={branchResource.error}
+            retry={branchResource.retry}
+            rows={2}
+          />
+        ) : null}
+        {branchResource.data && branches.length === 0 ? (
           <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">
             {t("no_assigned_branches")}
           </p>
@@ -47,7 +66,9 @@ export function BranchesCard({
                   {t("branch_responsible", {
                     name: branch.contributor_name_en
                       ? local(branch.contributor_name_en, branch.contributor_name_ar)
-                      : local(data.stats.owner_name_en, data.stats.owner_name_ar),
+                      : statistics.data
+                        ? local(statistics.data.owner_name_en, statistics.data.owner_name_ar)
+                        : t("tree_owner"),
                   })}
                 </p>
                 {health ? (
@@ -80,7 +101,7 @@ export function BranchesCard({
                 <Badge variant={branch.status === "active" ? "default" : "secondary"}>
                   {t(branch.status === "active" ? "branch_active" : "branch_inactive")}
                 </Badge>
-                {data.tree.analysis_enabled !== false ? (
+                {tree.analysis_enabled !== false ? (
                   <Button asChild size="sm" variant="outline">
                     <Link
                       to="/analysis"
@@ -90,9 +111,9 @@ export function BranchesCard({
                     </Link>
                   </Button>
                 ) : null}
-                {data.tree.role === "contributor" && canEditDashboardTree(data.tree) ? (
+                {tree.role === "contributor" && canEditDashboardTree(tree) ? (
                   <Button asChild size="sm">
-                    <Link to="/tree/$id" params={{ id: data.tree.id }} search={{ mode: "edit" }}>
+                    <Link to="/tree/$id" params={{ id: tree.id }} search={{ mode: "edit" }}>
                       {t("continue_branch")}
                     </Link>
                   </Button>
@@ -101,14 +122,40 @@ export function BranchesCard({
             </div>
           );
         })}
+        {branchResource.data && branchResource.error ? (
+          <DashboardResourceState pending={false} error retry={branchResource.retry} />
+        ) : null}
+        {insights.branchesError ? (
+          <DashboardResourceState pending={false} error retry={insights.retryBranches} />
+        ) : null}
       </CardContent>
     </Card>
   );
 }
 
-export function AuthenticityCard({ data, local }: { data: DashboardData; local: Local }) {
+export function AuthenticityCard({
+  statistics,
+  local,
+}: {
+  statistics: DashboardResource<Statistics>;
+  local: Local;
+}) {
   const { t } = useI18n();
-  const stats = data.stats;
+  const stats = statistics.data;
+  if (!stats) {
+    return (
+      <Card id="authenticity" className="scroll-mt-20">
+        <CardContent className="p-5">
+          <DashboardResourceState
+            pending={statistics.pending}
+            error={statistics.error}
+            retry={statistics.retry}
+            rows={3}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
   const levelLabel = {
     new: t("new_family_tree"),
     growing: t("growing_family_tree"),
@@ -168,6 +215,9 @@ export function AuthenticityCard({ data, local }: { data: DashboardData; local: 
             value={new Date(stats.tree_created_at).toLocaleDateString()}
           />
         </dl>
+        {statistics.error ? (
+          <DashboardResourceState pending={false} error retry={statistics.retry} />
+        ) : null}
       </CardContent>
     </Card>
   );

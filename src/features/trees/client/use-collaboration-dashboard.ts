@@ -1,96 +1,115 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import type { ActivityPageResponse } from "../domain/activity-label";
-import { shouldRefreshDashboard } from "../pages/dashboard-owner-controls";
 import type {
   Branch,
   CurrentTree,
-  DashboardData,
+  DashboardResource,
   Invitation,
   OwnershipTransfer,
   Statistics,
 } from "../pages/dashboard-types";
-import {
-  invalidateDashboardCache,
-  readDashboardCache,
-  writeDashboardCache,
-} from "./dashboard-cache";
+import { dashboardQueryKeys, invalidateDashboardQueries } from "./dashboard-queries";
 
 const DASHBOARD_STALE_MS = 60_000;
 
-async function getJson<Value>(url: string): Promise<Value> {
-  const response = await fetch(url, { credentials: "include" });
-  if (!response.ok) throw new Error((await response.json()).code ?? "REQUEST_FAILED");
+async function getJson<Value>(url: string, signal?: AbortSignal): Promise<Value> {
+  const response = await fetch(url, { credentials: "include", signal });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { code?: string };
+    throw new Error(body.code ?? "REQUEST_FAILED");
+  }
   return response.json() as Promise<Value>;
 }
 
-async function fetchDashboard(lang: string): Promise<DashboardData> {
-  const tree = await getJson<CurrentTree>("/api/tree/current");
-  const [stats, branches, activity, ownershipTransfer] = await Promise.all([
-    getJson<Statistics>(`/api/trees/${tree.id}/statistics`),
-    getJson<Branch[]>(`/api/trees/${tree.id}/branches`),
-    getJson<ActivityPageResponse>(`/api/trees/${tree.id}/activity?limit=5&locale=${lang}`).then(
-      (page) => page.items,
-    ),
-    getJson<OwnershipTransfer | null>(`/api/trees/${tree.id}/ownership-transfers`),
-  ]);
-  const invitations =
-    tree.role === "owner" ? await getJson<Invitation[]>(`/api/trees/${tree.id}/invitations`) : [];
-  return { tree, stats, branches, activity, invitations, ownershipTransfer };
+function resource<Value>(query: UseQueryResult<Value>): DashboardResource<Value> {
+  return {
+    data: query.data,
+    pending: query.isPending,
+    fetching: query.isFetching,
+    error: query.isError,
+    retry: () => void query.refetch(),
+  };
 }
 
 export function useCollaborationDashboard(lang: string) {
-  const [data, setData] = useState<DashboardData>();
-  const [error, setError] = useState(false);
-  const mounted = useRef(false);
-  const loadInFlight = useRef<Promise<DashboardData> | undefined>(undefined);
-  const load = useCallback(
-    async (force = false) => {
-      setError(false);
-      const cached = readDashboardCache();
-      if (!force && cached.data) {
-        setData(cached.data);
-        if (Date.now() - cached.updatedAt < DASHBOARD_STALE_MS) return;
-      }
-      loadInFlight.current ??= fetchDashboard(lang).finally(() => {
-        loadInFlight.current = undefined;
-      });
-      try {
-        const next = await loadInFlight.current;
-        writeDashboardCache(next);
-        if (mounted.current) setData(next);
-      } catch (requestError) {
-        if (mounted.current) setError(true);
-        throw requestError;
-      }
-    },
-    [lang],
-  );
-  useEffect(() => {
-    mounted.current = true;
-    void load().catch(() => {
-      if (mounted.current && !readDashboardCache().data) setData(undefined);
-    });
-    const refreshWhenVisible = () => {
-      const cached = readDashboardCache();
-      if (
-        shouldRefreshDashboard(
-          document.visibilityState,
-          cached.updatedAt,
-          Date.now(),
-          DASHBOARD_STALE_MS,
-        )
-      ) {
-        void load(true).catch(() => undefined);
-      }
-    };
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => {
-      mounted.current = false;
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
-  }, [load]);
-  const updateTree = (tree: CurrentTree) => {
-    setData((current) => (current ? { ...current, tree } : current));
+  const queryClient = useQueryClient();
+  const treeQuery = useQuery({
+    queryKey: dashboardQueryKeys.currentTree,
+    queryFn: ({ signal }) => getJson<CurrentTree>("/api/tree/current", signal),
+    staleTime: DASHBOARD_STALE_MS,
+    refetchOnMount: "always",
+  });
+  const tree = treeQuery.data;
+  const treeId = tree?.id ?? "pending";
+  const enabled = Boolean(tree);
+  const statisticsQuery = useQuery({
+    queryKey: dashboardQueryKeys.statistics(treeId),
+    queryFn: ({ signal }) => getJson<Statistics>(`/api/trees/${treeId}/statistics`, signal),
+    enabled,
+    staleTime: DASHBOARD_STALE_MS,
+    refetchOnMount: "always",
+  });
+  const branchesQuery = useQuery({
+    queryKey: dashboardQueryKeys.branches(treeId),
+    queryFn: ({ signal }) => getJson<Branch[]>(`/api/trees/${treeId}/branches`, signal),
+    enabled,
+    staleTime: DASHBOARD_STALE_MS,
+    refetchOnMount: "always",
+  });
+  const activityQuery = useQuery({
+    queryKey: dashboardQueryKeys.activity(treeId, lang),
+    queryFn: ({ signal }) =>
+      getJson<ActivityPageResponse>(
+        `/api/trees/${treeId}/activity?limit=5&locale=${lang}`,
+        signal,
+      ).then((page) => page.items),
+    enabled,
+    staleTime: DASHBOARD_STALE_MS,
+    refetchOnMount: "always",
+  });
+  const invitationsQuery = useQuery({
+    queryKey: dashboardQueryKeys.invitations(treeId),
+    queryFn: ({ signal }) => getJson<Invitation[]>(`/api/trees/${treeId}/invitations`, signal),
+    enabled: enabled && tree?.role === "owner",
+    staleTime: DASHBOARD_STALE_MS,
+    refetchOnMount: "always",
+  });
+  const ownershipTransferQuery = useQuery({
+    queryKey: dashboardQueryKeys.ownershipTransfer(treeId),
+    queryFn: ({ signal }) =>
+      getJson<OwnershipTransfer | null>(`/api/trees/${treeId}/ownership-transfers`, signal),
+    enabled,
+    staleTime: DASHBOARD_STALE_MS,
+    refetchOnMount: "always",
+  });
+  const refresh = async () => {
+    if (!tree) {
+      await treeQuery.refetch();
+      return;
+    }
+    await invalidateDashboardQueries(queryClient, tree.id);
   };
-  return { data, error, load, updateTree, invalidate: invalidateDashboardCache };
+  const updateTree = (updated: CurrentTree) => {
+    queryClient.setQueryData(dashboardQueryKeys.currentTree, updated);
+    void invalidateDashboardQueries(queryClient, updated.id);
+  };
+  return {
+    tree: resource(treeQuery),
+    statistics: resource(statisticsQuery),
+    branches: resource(branchesQuery),
+    activity: resource(activityQuery),
+    invitations:
+      tree?.role === "owner"
+        ? resource(invitationsQuery)
+        : ({
+            data: [],
+            pending: false,
+            fetching: false,
+            error: false,
+            retry: () => {},
+          } satisfies DashboardResource<Invitation[]>),
+    ownershipTransfer: resource(ownershipTransferQuery),
+    refresh,
+    updateTree,
+  };
 }

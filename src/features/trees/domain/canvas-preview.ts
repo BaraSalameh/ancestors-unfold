@@ -1,10 +1,16 @@
 import type { FamilyMember } from "@/features/members";
 
 export type TreePreviewType = "lineage" | "chronological";
+export type CanvasDetail = "overview" | "compact" | "full";
 export const MIN_CHRONOLOGICAL_PERIOD = 1;
 export const MAX_CHRONOLOGICAL_PERIOD = 50;
 export const DEFAULT_CHRONOLOGICAL_PERIOD = 10;
 export type ChronologicalPeriod = number;
+
+export function canvasDetailForZoom(zoom: number): CanvasDetail {
+  void zoom;
+  return "full";
+}
 
 export interface ChronologicalBand {
   start: number;

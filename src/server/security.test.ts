@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import { ApiError, assertJsonRequest, assertSameOrigin, parseBody, schemas } from "./security";
+import { snapshotDeltaSchema } from "./snapshot-delta-schema";
 
 const member = {
   id: "member-1",
@@ -12,6 +13,20 @@ const member = {
 };
 
 describe("snapshot trust boundary", () => {
+  it("accepts disjoint UUID-based snapshot deltas and rejects conflicting changes", () => {
+    const id = "00000000-0000-4000-8000-000000000001";
+    const input = {
+      batchId: "00000000-0000-4000-8000-000000000002",
+      expectedVersion: 4,
+      upsertMembers: [{ ...member, id }],
+      deleteMemberIds: [],
+      upsertSubfamilies: [],
+      deleteSubfamilyIds: [],
+    };
+    expect(snapshotDeltaSchema.parse(input).upsertMembers[0].citizen_status).toBe("resident");
+    expect(() => snapshotDeltaSchema.parse({ ...input, deleteMemberIds: [id] })).toThrow();
+  });
+
   it("accepts the current versioned snapshot contract", () => {
     const parsed = schemas.snapshot.parse({
       batchId: "2dbd0eb8-23bd-4cc4-bf83-e17eea903655",
@@ -135,6 +150,17 @@ describe("automatic branch management inputs", () => {
         confirmation: "delete",
         code: "012345",
       }),
+    ).toThrow();
+  });
+
+  it("requires unique branch ids for bulk lifecycle mutations", () => {
+    const branchIds = [rootFamilyMemberId, "00000000-0000-4000-8000-000000000003"];
+    expect(schemas.branchBulkDelete.parse({ ...version, branchIds }).branchIds).toEqual(branchIds);
+    expect(
+      schemas.branchBulkDeactivationRequest.parse({ confirmation: "DELETE", branchIds }).branchIds,
+    ).toEqual(branchIds);
+    expect(() =>
+      schemas.branchBulkDelete.parse({ ...version, branchIds: [branchIds[0], branchIds[0]] }),
     ).toThrow();
   });
 

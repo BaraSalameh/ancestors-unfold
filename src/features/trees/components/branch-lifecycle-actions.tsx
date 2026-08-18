@@ -5,7 +5,6 @@ import { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -64,7 +63,10 @@ export function BranchLifecycleActions({
     }
   };
   const remove = async () => {
-    if (await mutate("DELETE", path, {}, "delete")) toast.success(t("branch_deleted"));
+    if (await mutate("DELETE", path, {}, "delete")) {
+      setConfirmDelete(false);
+      toast.success(t("branch_deleted"));
+    }
   };
   return (
     <section className="flex flex-wrap gap-2 border-t pt-5">
@@ -103,20 +105,27 @@ export function BranchLifecycleActions({
           {t("delete_branch")}
         </Button>
       ) : null}
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      <AlertDialog
+        open={confirmDelete}
+        onOpenChange={(open) => {
+          if (saving !== "delete") setConfirmDelete(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("delete_subfamily_title")}</AlertDialogTitle>
             <AlertDialogDescription>{t("delete_subfamily_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground"
+            <AlertDialogCancel disabled={saving === "delete"}>{t("cancel")}</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              loading={saving === "delete"}
+              disabled={Boolean(saving)}
               onClick={() => void remove()}
             >
               {t("delete")}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

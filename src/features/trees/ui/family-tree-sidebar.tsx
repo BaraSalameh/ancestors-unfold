@@ -1,6 +1,7 @@
 import { CalendarRange, ChevronDown } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import type { Dispatch, SetStateAction } from "react";
+import type { Viewport } from "reactflow";
 import { SubfamilyPanel } from "@/features/subfamilies";
 import type { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
@@ -13,6 +14,7 @@ import {
   type ChronologicalPeriod,
   type TreePreviewType,
 } from "../domain/canvas-preview";
+import { registeredMembersLabelKey } from "../domain/canvas-widgets";
 
 type I18n = ReturnType<typeof useI18n>;
 export interface CollapsedTreeWidgets {
@@ -28,7 +30,6 @@ interface GenerationBand {
 
 export interface FamilyTreeSidebarProps {
   activeGeneration?: GenerationBand;
-  canManageSubfamilies: boolean;
   chronologicalPeriod: ChronologicalPeriod;
   collapsedWidgets: CollapsedTreeWidgets;
   generationYear: string;
@@ -36,6 +37,7 @@ export interface FamilyTreeSidebarProps {
   overviewMode: boolean;
   periodDraft: string;
   previewType: TreePreviewType;
+  registeredMemberCount: number;
   scrollToGeneration: () => void;
   selectedSubfamilyId: string | null;
   setGenerationYear: (year: string) => void;
@@ -43,19 +45,21 @@ export interface FamilyTreeSidebarProps {
   setSelectedSubfamilyId: (id: string | null) => void;
   setSubfamilyFilterEnabled: Dispatch<SetStateAction<boolean>>;
   subfamilyFilterEnabled: boolean;
+  showSubfamilies: boolean;
   t: I18n["t"];
   toggleWidget: (widget: keyof CollapsedTreeWidgets) => void;
+  viewport: Viewport;
 }
 
 export function FamilyTreeSidebar(props: FamilyTreeSidebarProps) {
   const hasWidgets =
-    props.overviewMode || props.previewType === "chronological" || props.canManageSubfamilies;
+    props.overviewMode || props.previewType === "chronological" || props.showSubfamilies;
   if (!hasWidgets) return null;
   return (
-    <div className="flex min-h-0 w-72 max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto">
+    <div className="pointer-events-none flex min-h-0 w-72 max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto">
       {props.overviewMode && <PreviewWidget {...props} />}
       {props.previewType === "chronological" && <GenerationWidget {...props} />}
-      {props.canManageSubfamilies ? <SubfamiliesWidget {...props} /> : null}
+      {props.showSubfamilies ? <SubfamiliesWidget {...props} /> : null}
     </div>
   );
 }
@@ -95,7 +99,10 @@ function PreviewWidget(props: FamilyTreeSidebarProps) {
       search: { mode: "preview", preview, period: props.chronologicalPeriod },
     });
   return (
-    <div className="rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
+    <div
+      className="pointer-events-auto rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur"
+      data-canvas-widget
+    >
       <WidgetHeader
         collapsed={props.collapsedWidgets.preview}
         label={props.t("preview_type")}
@@ -133,7 +140,10 @@ function PreviewButton(props: { active: boolean; label: string; onClick: () => v
 function GenerationWidget(props: FamilyTreeSidebarProps) {
   const invalid = props.periodDraft.length > 0 && !isChronologicalPeriod(Number(props.periodDraft));
   return (
-    <div className="rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
+    <div
+      className="pointer-events-auto rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur"
+      data-canvas-widget
+    >
       <WidgetHeader
         collapsed={props.collapsedWidgets.generation}
         icon={<CalendarRange className="h-4 w-4 text-primary" />}
@@ -201,11 +211,15 @@ function GenerationWidget(props: FamilyTreeSidebarProps) {
 }
 
 function SubfamiliesWidget(props: FamilyTreeSidebarProps) {
+  const countKey = registeredMembersLabelKey(props.registeredMemberCount);
   return (
-    <div className="rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
+    <div
+      className="pointer-events-auto rounded-xl border border-border/80 bg-card/95 p-3 text-xs shadow-lg backdrop-blur"
+      data-canvas-widget
+    >
       <WidgetHeader
         collapsed={props.collapsedWidgets.subfamilies}
-        label={props.t("subfamilies")}
+        label={`${props.t("subfamilies")} (${props.t(countKey, { count: props.registeredMemberCount })})`}
         onClick={() => props.toggleWidget("subfamilies")}
       />
       {!props.collapsedWidgets.subfamilies && (

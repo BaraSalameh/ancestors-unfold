@@ -1,12 +1,13 @@
 import { LayoutGrid, Search, X } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { useMemo } from "react";
 import type { FamilyMember } from "@/features/members";
-import { memberNameWithBirthYear } from "@/features/members";
 import type { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { familyStore } from "../client/family-store";
 import { FamilyCsvImportDialog } from "./family-csv-import-dialog";
+import { canvasSearchResultLabel } from "./canvas-search-result";
 
 type I18n = ReturnType<typeof useI18n>;
 
@@ -16,6 +17,7 @@ export interface FamilyTreeTopbarProps {
   canMutate: boolean;
   lang: I18n["lang"];
   matches: FamilyMember[];
+  members: FamilyMember[];
   onAutoLayout: () => void;
   onFocusMember: (id: string) => void;
   query: string;
@@ -33,7 +35,19 @@ export function FamilyTreeTopbar(props: FamilyTreeTopbarProps) {
   );
 }
 
-function MemberSearch({ lang, matches, onFocusMember, query, setQuery, t }: FamilyTreeTopbarProps) {
+function MemberSearch({
+  lang,
+  matches,
+  members,
+  onFocusMember,
+  query,
+  setQuery,
+  t,
+}: FamilyTreeTopbarProps) {
+  const membersById = useMemo(
+    () => new Map(members.map((member) => [member.id, member])),
+    [members],
+  );
   return (
     <div className="pointer-events-auto w-full max-w-sm">
       <div className="relative">
@@ -58,18 +72,26 @@ function MemberSearch({ lang, matches, onFocusMember, query, setQuery, t }: Fami
           {matches.length === 0 ? (
             <div className="p-3 text-sm text-muted-foreground">{t("no_results")}</div>
           ) : (
-            matches.map((member) => (
-              <button
-                key={member.id}
-                onClick={() => onFocusMember(member.id)}
-                className="block w-full p-2 text-start text-sm hover:bg-accent"
-              >
-                <div className="font-medium">{memberNameWithBirthYear(member, lang)}</div>
-                <div className="text-xs text-muted-foreground">
-                  {lang === "ar" ? member.name_en : member.name_ar}
-                </div>
-              </button>
-            ))
+            matches.map((member) => {
+              const primary = canvasSearchResultLabel(member, membersById, lang);
+              const alternate = canvasSearchResultLabel(
+                member,
+                membersById,
+                lang === "ar" ? "en" : "ar",
+              );
+              return (
+                <button
+                  key={member.id}
+                  onClick={() => onFocusMember(member.id)}
+                  className="block w-full p-2 text-start text-sm hover:bg-accent"
+                >
+                  <div className="font-medium">{primary}</div>
+                  {alternate && alternate !== primary ? (
+                    <div className="text-xs text-muted-foreground">{alternate}</div>
+                  ) : null}
+                </button>
+              );
+            })
           )}
         </div>
       )}
@@ -88,7 +110,10 @@ export function EditToolbar({
   const canImport = familyStore.canImportFamilyCsv();
   return (
     <>
-      <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1 rounded-xl border border-border/80 bg-card/95 p-1 shadow-[0_4px_18px_-8px_rgba(15,23,42,0.28)] backdrop-blur">
+      <div
+        className="pointer-events-auto flex flex-wrap items-center justify-end gap-1 rounded-xl border border-border/80 bg-card/95 p-1 shadow-[0_4px_18px_-8px_rgba(15,23,42,0.28)] backdrop-blur"
+        data-canvas-widget
+      >
         <Button asChild size="sm" variant="ghost">
           <Link to="/">{t("back_to_dashboard")}</Link>
         </Button>

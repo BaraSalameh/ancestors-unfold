@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FamilyMember } from "@/features/members";
 import {
+  canvasDetailForZoom,
   canvasCapabilities,
   canvasRectBetween,
   canvasRectsIntersect,
@@ -57,6 +58,16 @@ describe("chronological periods", () => {
       { start: 1970, end: 1979 },
       { start: 2000, end: 2009 },
     ]);
+  });
+});
+
+describe("semantic canvas detail", () => {
+  it("keeps the established full-card presentation at every zoom level", () => {
+    expect(canvasDetailForZoom(0.1)).toBe("full");
+    expect(canvasDetailForZoom(0.349)).toBe("full");
+    expect(canvasDetailForZoom(0.35)).toBe("full");
+    expect(canvasDetailForZoom(0.699)).toBe("full");
+    expect(canvasDetailForZoom(0.7)).toBe("full");
   });
 });
 

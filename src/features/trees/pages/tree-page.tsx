@@ -1,5 +1,6 @@
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 import { FamilyTree } from "@/features/trees";
 import { familyStore, useFamilyLoadState } from "@/features/trees";
 import { useI18n } from "@/shared/i18n";
@@ -10,9 +11,14 @@ export function TreePage() {
   const { id } = useParams({ from: "/tree/$id" });
   const navigate = useNavigate();
   const { t } = useI18n();
-  familyStore.activateTree(id, mode);
+  const activationKey = `${id}:${mode}`;
+  const [activeKey, setActiveKey] = useState<string>();
+  useEffect(() => {
+    familyStore.activateTree(id, mode);
+    setActiveKey(activationKey);
+  }, [activationKey, id, mode]);
   const loadState = useFamilyLoadState();
-  if (loadState === "loading" || loadState === "idle")
+  if (activeKey !== activationKey || loadState === "loading" || loadState === "idle")
     return <TreeLoadingIndicator label={t("loading_tree")} />;
   if (loadState === "error")
     return (

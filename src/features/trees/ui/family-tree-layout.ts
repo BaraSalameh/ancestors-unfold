@@ -3,14 +3,20 @@ import { MarkerType, type Edge, type Node } from "reactflow";
 import { computeWivesByHusband, wifeColorFor } from "../domain/wife-colors";
 import type { FamilyMember } from "@/features/members";
 import type { MemberNodeData } from "./member-node";
-import { alignDecadeSingleChildren, routeParentEdges } from "../domain/route-edges";
 import {
+  alignDecadeSingleChildren,
+  MAX_DETAILED_CHRONOLOGICAL_ROUTES,
+} from "../domain/route-edges";
+import {
+  type CanvasDetail,
   chronologicalBandForYear,
   hierarchyPositions,
   DEFAULT_CHRONOLOGICAL_PERIOD,
   type ChronologicalBand,
   type ChronologicalPeriod,
 } from "../domain/canvas-preview";
+import type { TreeLayoutGeometry } from "../domain/tree-layout-geometry";
+import { aggregateOverviewGraph } from "./family-tree-overview";
 
 export const NODE_W = 260;
 export const NODE_H = 130;
@@ -193,6 +199,8 @@ function appendSpouseEdges(
   }
 }
 
+// Edge construction branches across father, mother-only, spouse, and editable projections.
+// eslint-disable-next-line complexity
 function buildLayoutEdges(
   members: FamilyMember[],
   memberById: Map<string, FamilyMember>,
@@ -200,7 +208,7 @@ function buildLayoutEdges(
   wifeHusbandOf: Map<string, string>,
   hidden: Set<string>,
   renderedIds: string[],
-  graph: dagre.graphlib.Graph,
+  graph: dagre.graphlib.Graph | undefined,
   editable: boolean,
   onRequestRemove: (relationship: { parentId: string; childId: string; motherId?: string }) => void,
 ): Edge[] {
@@ -234,7 +242,7 @@ function buildLayoutEdges(
           color = divorced ? DIVORCED_COLOR : wifeColorFor(idx).stroke;
         }
       }
-      graph.setEdge(fId, m.id);
+      graph?.setEdge(fId, m.id);
       edges.push({
         id: `p:${fId}:${m.id}`,
         source: fId,
@@ -255,7 +263,7 @@ function buildLayoutEdges(
         },
       });
     } else if (mId && renderedIds.includes(mId)) {
-      graph.setEdge(mId, m.id);
+      graph?.setEdge(mId, m.id);
       edges.push({
         id: `p:${mId}:${m.id}`,
         source: mId,
@@ -283,6 +291,8 @@ function buildLayoutEdges(
   return edges;
 }
 
+// Layout preserves legacy fixed positions, chronological rows, and editable callbacks.
+// eslint-disable-next-line complexity
 export function layout(
   members: FamilyMember[],
   collapsed: Set<string>,
@@ -295,17 +305,19 @@ export function layout(
   chronological = false,
   chronologicalPeriod: ChronologicalPeriod = DEFAULT_CHRONOLOGICAL_PERIOD,
   onToggleCollapsed?: (id: string) => void,
+  detail: CanvasDetail = "full",
+  providedGeometry?: TreeLayoutGeometry,
 ) {
   const { memberById, wivesByHusband, wifeHusbandOf, childrenMap, hidden, renderedIds } =
     layoutVisibility(members, collapsed);
 
-  const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "TB", nodesep: 120, ranksep: 180, marginx: 40, marginy: 40 });
-  g.setDefaultEdgeLabel(() => ({}));
+  const g = providedGeometry ? undefined : new dagre.graphlib.Graph();
+  g?.setGraph({ rankdir: "TB", nodesep: 120, ranksep: 180, marginx: 40, marginy: 40 });
+  g?.setDefaultEdgeLabel(() => ({}));
 
   for (const id of renderedIds) {
     const h = memberById.get(id)?.gender === "male" ? NODE_H_HUSBAND : NODE_H;
-    g.setNode(id, { width: NODE_W, height: h });
+    g?.setNode(id, { width: NODE_W, height: h });
   }
 
   const edges = buildLayoutEdges(
@@ -319,8 +331,10 @@ export function layout(
     editable,
     onRequestRemove,
   );
-  dagre.layout(g);
-  const hierarchy = hierarchyPositions(members, new Set(renderedIds));
+  if (g) dagre.layout(g);
+  const hierarchy = providedGeometry
+    ? new Map(Object.entries(providedGeometry.positions))
+    : hierarchyPositions(members, new Set(renderedIds));
 
   // Generation depth â€” sons, cousins, second cousins etc. share a level.
   const genCache = new Map<string, number>();
@@ -338,33 +352,38 @@ export function layout(
     return g;
   };
 
+  // Node projection deliberately combines persisted, automatic, and chronological coordinates.
+  // eslint-disable-next-line complexity
   const nodes: Node<MemberNodeData>[] = renderedIds.map((id) => {
     const m = memberById.get(id)!;
-    const pos = g.node(id);
-    const band = generationBandFor(m, chronologicalPeriod);
-    const earliestBand = Math.min(
-      ...members
-        .map((member) => generationBandFor(member, chronologicalPeriod))
-        .filter((value): value is ChronologicalBand => value !== null)
-        .map((value) => value.start),
-    );
+    const pos = g?.node(id);
+    const band = providedGeometry ? null : generationBandFor(m, chronologicalPeriod);
+    const earliestBand = providedGeometry
+      ? 0
+      : Math.min(
+          ...members
+            .map((member) => generationBandFor(member, chronologicalPeriod))
+            .filter((value): value is ChronologicalBand => value !== null)
+            .map((value) => value.start),
+        );
     const autoY =
       chronological && band && Number.isFinite(earliestBand)
         ? ((band.start - earliestBand) / chronologicalPeriod) * DECADE_ROW_H
         : genOf(id) * FAMILY_ROW_H;
     const hierarchyPosition = hierarchy.get(id);
     const autoX = chronological
-      ? pos.x - pos.width / 2
-      : (hierarchyPosition?.x ?? pos.x - pos.width / 2);
+      ? (pos?.x ?? 0) - (pos?.width ?? NODE_W) / 2
+      : (hierarchyPosition?.x ?? (pos?.x ?? 0) - (pos?.width ?? NODE_W) / 2);
     const hierarchyY = hierarchyPosition?.y ?? genOf(id) * FAMILY_ROW_H;
     const hasCustom = typeof m.pos_x === "number" && typeof m.pos_y === "number";
     return {
       id,
       type: "member",
       position:
-        hasCustom && !chronological
+        providedGeometry?.positions[id] ??
+        (hasCustom && !chronological
           ? { x: m.pos_x!, y: m.pos_y! }
-          : { x: autoX, y: chronological ? autoY : hierarchyY },
+          : { x: autoX, y: chronological ? autoY : hierarchyY }),
       data: {
         member: m,
         highlighted: highlightId === id,
@@ -376,6 +395,7 @@ export function layout(
         collapsed: collapsed.has(id),
         onToggleCollapsed,
         editable,
+        detail,
       },
       draggable: editable,
       connectable: editable,
@@ -383,9 +403,10 @@ export function layout(
   });
 
   // Collision resolution â€” enforce min horizontal gap per generation row.
-  resolveLayoutCollisions(nodes, members, chronological, hierarchy);
-  if (chronological) alignDecadeSingleChildren(nodes, edges, DECADE_CARD_GAP);
-  const routedEdges = routeParentEdges(nodes, edges, chronological);
-
-  return { nodes, edges: routedEdges };
+  if (!providedGeometry) resolveLayoutCollisions(nodes, members, chronological, hierarchy);
+  if (chronological && nodes.length <= MAX_DETAILED_CHRONOLOGICAL_ROUTES)
+    alignDecadeSingleChildren(nodes, edges, DECADE_CARD_GAP);
+  return detail === "overview" && nodes.length > 2_000
+    ? aggregateOverviewGraph(nodes, edges, chronological)
+    : { nodes, edges };
 }

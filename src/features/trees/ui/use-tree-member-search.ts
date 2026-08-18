@@ -1,11 +1,11 @@
 import { useMemo } from "react";
-import type { Node, ReactFlowInstance } from "reactflow";
-import type { FamilyMember } from "@/features/members";
+import type { ReactFlowInstance } from "reactflow";
+import { memberPaternalSearchLabel, type FamilyMember } from "@/features/members";
 import type { TreePreviewType } from "../domain/canvas-preview";
 import { NODE_H, NODE_W } from "./family-tree-layout";
 
 interface Params {
-  initialNodes: Node[];
+  positions: Readonly<Record<string, { x: number; y: number }>>;
   members: FamilyMember[];
   previewType: TreePreviewType;
   query: string;
@@ -20,10 +20,13 @@ export function useTreeMemberSearch(params: Params) {
     const query = params.query.trim();
     if (!query) return [];
     const normalized = query.toLowerCase();
+    const membersById = new Map(params.members.map((member) => [member.id, member]));
     return params.members
-      .filter(
-        (member) =>
-          member.name_en.toLowerCase().includes(normalized) || member.name_ar.includes(query),
+      .filter((member) =>
+        [
+          memberPaternalSearchLabel(member, membersById, "en"),
+          memberPaternalSearchLabel(member, membersById, "ar"),
+        ].some((label) => label.toLowerCase().includes(normalized)),
       )
       .slice(0, 8);
   }, [params.members, params.query]);
@@ -31,9 +34,9 @@ export function useTreeMemberSearch(params: Params) {
   const focusMember = (id: string) => {
     params.setHighlightId(id);
     params.setQuery("");
-    const node = params.initialNodes.find((candidate) => candidate.id === id);
-    if (node) {
-      params.setCenter(node.position.x + NODE_W / 2, node.position.y + NODE_H / 2, {
+    const position = params.positions[id];
+    if (position) {
+      params.setCenter(position.x + NODE_W / 2, position.y + NODE_H / 2, {
         zoom: 1.1,
         duration: 500,
       });

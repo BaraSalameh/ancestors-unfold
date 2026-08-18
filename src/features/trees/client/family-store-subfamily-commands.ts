@@ -5,7 +5,6 @@ export interface SubfamilyCommandContext {
   state: FamilyMember[];
   subfamilies: SubFamily[];
   commit(mutator: () => void): void;
-  markDraftChanged(): void;
   emit(): void;
   canDeleteSubfamily?(id: string): boolean;
 }
@@ -30,9 +29,9 @@ export function createSubfamilyCommands(ctx: SubfamilyCommandContext) {
         created_at: now,
         updated_at: now,
       };
-      ctx.subfamilies = [...ctx.subfamilies, sf];
-      ctx.markDraftChanged();
-      ctx.emit();
+      ctx.commit(() => {
+        ctx.subfamilies = [...ctx.subfamilies, sf];
+      });
       return sf;
     },
 
@@ -45,25 +44,25 @@ export function createSubfamilyCommands(ctx: SubfamilyCommandContext) {
       patch: Partial<Omit<SubFamily, "id" | "created_at" | "updated_at">>,
     ): void {
       const now = new Date().toISOString();
-      ctx.subfamilies = ctx.subfamilies.map((sf) =>
-        sf.id === id ? { ...sf, ...patch, updated_at: now } : sf,
-      );
-      ctx.markDraftChanged();
-      ctx.emit();
+      ctx.commit(() => {
+        ctx.subfamilies = ctx.subfamilies.map((sf) =>
+          sf.id === id ? { ...sf, ...patch, updated_at: now } : sf,
+        );
+      });
     },
 
     deleteSubfamily(id: string): void {
       if (ctx.canDeleteSubfamily && !ctx.canDeleteSubfamily(id)) return;
-      ctx.subfamilies = ctx.subfamilies
-        .filter((sf) => sf.id !== id)
-        .map((sf) =>
-          sf.parent_subfamily_id === id ? { ...sf, parent_subfamily_id: undefined } : sf,
+      ctx.commit(() => {
+        ctx.subfamilies = ctx.subfamilies
+          .filter((sf) => sf.id !== id)
+          .map((sf) =>
+            sf.parent_subfamily_id === id ? { ...sf, parent_subfamily_id: undefined } : sf,
+          );
+        ctx.state = ctx.state.map((m) =>
+          m.subfamily_id === id ? { ...m, subfamily_id: undefined } : m,
         );
-      ctx.state = ctx.state.map((m) =>
-        m.subfamily_id === id ? { ...m, subfamily_id: undefined } : m,
-      );
-      ctx.markDraftChanged();
-      ctx.emit();
+      });
     },
 
     assignSubfamily(memberId: string, subfamilyId: string | undefined): void {

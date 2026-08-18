@@ -1,13 +1,15 @@
 import type { HTMLAttributes, RefObject } from "react";
+import { Focus } from "lucide-react";
 import ReactFlow, {
   Background,
   BackgroundVariant,
+  ControlButton,
   Controls,
-  MiniMap,
   Panel,
   type ReactFlowProps,
   type Viewport,
 } from "reactflow";
+import { CanvasNavigationWidget } from "./canvas-navigation-widget";
 import { FamilyTreeDialogs, type FamilyTreeDialogsProps } from "./family-tree-dialogs";
 import { FamilyTreeSidebar, type FamilyTreeSidebarProps } from "./family-tree-sidebar";
 import { FamilyTreeTopbar, type FamilyTreeTopbarProps } from "./family-tree-topbar";
@@ -47,6 +49,7 @@ interface FamilyTreeViewProps {
   flow: ReactFlowProps;
   flowKey: string;
   marqueeRect: MarqueeRect | null;
+  onCenter: () => void;
   onViewportChange: (viewport: Viewport) => void;
   sidebar: FamilyTreeSidebarProps;
   topbar: FamilyTreeTopbarProps;
@@ -80,6 +83,7 @@ export function FamilyTreeView(props: FamilyTreeViewProps) {
         connectionLineStyle={{ stroke: "#0ea5e9", strokeWidth: 2, strokeDasharray: "6 4" }}
         deleteKeyCode={null}
         fitView
+        onlyRenderVisibleElements
         onMove={(_event, viewport) => props.onViewportChange(viewport)}
       >
         <Background
@@ -92,26 +96,32 @@ export function FamilyTreeView(props: FamilyTreeViewProps) {
         {props.chronologicalOverlay && <ChronologicalGuide {...props.chronologicalOverlay} />}
         <Panel
           position="top-right"
-          className="z-10! flex max-h-[calc(100%-5rem)] max-w-[calc(100%-2rem)] flex-col items-end gap-2"
+          className="pointer-events-none! z-10! flex max-h-[calc(100%-5rem)] max-w-[calc(100%-2rem)] flex-col items-end gap-2"
           style={{ margin: 0, right: 16, top: 64 }}
         >
           {props.topbar.canEdit ? <EditToolbar {...props.topbar} /> : null}
           <FamilyTreeSidebar {...props.sidebar} />
-          <MiniMap
-            pannable
-            zoomable
-            position="top-right"
-            nodeStrokeWidth={3}
-            maskColor="color-mix(in oklab, var(--color-background) 72%, transparent)"
-            className="canvas-minimap! m-0! shrink-0 overflow-hidden! rounded-xl! border! border-border/80! bg-card/95! shadow-lg!"
-            style={{ position: "relative", inset: "auto" }}
+          <CanvasNavigationWidget
+            nodes={props.flow.nodes ?? []}
+            t={props.sidebar.t}
+            viewport={props.sidebar.viewport}
           />
         </Panel>
         <Controls
           showInteractive={false}
+          showFitView={false}
           position="bottom-left"
-          className="canvas-controls! overflow-hidden! rounded-xl! border! border-border/80! bg-card/95! p-1! shadow-lg!"
-        />
+          className="canvas-controls! pointer-events-auto! overflow-hidden! rounded-xl! border! border-border/80! bg-card/95! p-1! shadow-lg!"
+          data-canvas-widget
+        >
+          <ControlButton
+            onClick={props.onCenter}
+            title={props.sidebar.t("fit_view")}
+            aria-label={props.sidebar.t("fit_view")}
+          >
+            <Focus aria-hidden="true" />
+          </ControlButton>
+        </Controls>
       </ReactFlow>
       {props.marqueeRect && <Marquee rect={props.marqueeRect} />}
       <FamilyTreeDialogs {...props.dialogs} />

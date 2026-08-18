@@ -1,5 +1,14 @@
 import { useI18n } from "@/shared/i18n";
-import type { DashboardData, DashboardInsights } from "../pages/dashboard-types";
+import type { ActivityItem } from "../domain/activity-label";
+import type {
+  Branch,
+  CurrentTree,
+  DashboardInsights,
+  DashboardResource,
+  Invitation,
+  OwnershipTransfer,
+  Statistics,
+} from "../pages/dashboard-types";
 import type { DashboardTreeControls } from "../client/use-dashboard-tree-controls";
 import type { OwnershipTransferController } from "../client/use-ownership-transfer";
 import type { ContributorAccountDeletionController } from "../client/use-contributor-account-deletion";
@@ -12,7 +21,12 @@ import { OwnershipTransferPrompt, OwnershipTransferStatus } from "./dashboard-co
 import { NeedsAttentionCard, RecentActivityCard } from "./dashboard-work-cards";
 
 interface DashboardLoadedProps {
-  data: DashboardData;
+  tree: CurrentTree;
+  statistics: DashboardResource<Statistics>;
+  branches: DashboardResource<Branch[]>;
+  activity: DashboardResource<ActivityItem[]>;
+  invitations: DashboardResource<Invitation[]>;
+  ownershipTransfer: DashboardResource<OwnershipTransfer | null>;
   insights: DashboardInsights;
   treeControls: DashboardTreeControls;
   transfer: OwnershipTransferController;
@@ -20,7 +34,12 @@ interface DashboardLoadedProps {
 }
 
 export function DashboardLoaded({
-  data,
+  tree,
+  statistics,
+  branches,
+  activity,
+  invitations,
+  ownershipTransfer,
   insights,
   treeControls,
   transfer,
@@ -29,54 +48,67 @@ export function DashboardLoaded({
   const { lang } = useI18n();
   const local = (en?: string | null, ar?: string | null) =>
     lang === "ar" ? ar || en || "" : en || ar || "";
-  const ownershipTransfer = data.ownershipTransfer;
+  const transferData = ownershipTransfer.data;
   return (
     <main className="min-h-[calc(100vh-3.5rem)] bg-muted/25">
       <DashboardHeader
-        tree={data.tree}
-        stats={data.stats}
-        branches={data.branches}
+        tree={tree}
+        statistics={statistics}
+        branchResource={branches}
         insights={insights}
         treeControls={treeControls}
         accountDeletion={accountDeletion}
         transfer={transfer}
-        ownershipTransfer={ownershipTransfer}
+        ownershipTransfer={transferData ?? null}
       />
       <section className="mx-auto grid max-w-7xl gap-5 px-4 py-8 sm:px-6 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
-          {data.tree.role === "contributor" &&
-            ownershipTransfer?.proposed_owner_user_id &&
-            ownershipTransfer.verified && (
+          {tree.role === "contributor" &&
+            transferData?.proposed_owner_user_id &&
+            transferData.verified && (
               <div id="ownership-transfer" className="scroll-mt-20">
                 <OwnershipTransferPrompt
-                  transfer={ownershipTransfer}
+                  transfer={transferData}
                   local={local}
                   action={transfer.action}
                   onAction={transfer.act}
                 />
               </div>
             )}
-          {data.tree.role === "owner" && ownershipTransfer && (
+          {tree.role === "owner" && transferData && (
             <div id="ownership-transfer" className="scroll-mt-20">
               <OwnershipTransferStatus
-                transfer={ownershipTransfer}
+                transfer={transferData}
                 controller={transfer}
                 local={local}
               />
             </div>
           )}
-          <NeedsAttentionCard data={data} insights={insights} />
-          <BranchesCard data={data} insights={insights} local={local} />
+          <NeedsAttentionCard
+            tree={tree}
+            statistics={statistics}
+            branches={branches}
+            invitations={invitations}
+            ownershipTransfer={ownershipTransfer}
+            insights={insights}
+          />
+          <BranchesCard
+            tree={tree}
+            branchResource={branches}
+            statistics={statistics}
+            insights={insights}
+            local={local}
+          />
         </div>
         <div className="space-y-5">
-          <RecentActivityCard data={data} />
-          <AuthenticityCard data={data} local={local} />
+          <RecentActivityCard tree={tree} activity={activity} />
+          <AuthenticityCard statistics={statistics} local={local} />
         </div>
       </section>
       <OwnershipTransferDialog
         controller={transfer}
-        transfer={ownershipTransfer}
-        branches={data.branches.filter(
+        transfer={transferData ?? null}
+        branches={(branches.data ?? []).filter(
           (branch) => branch.status === "active" && Boolean(branch.contributor_user_id),
         )}
         local={local}

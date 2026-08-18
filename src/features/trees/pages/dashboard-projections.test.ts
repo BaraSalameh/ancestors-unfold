@@ -7,9 +7,10 @@ import {
   dashboardRelativeTime,
 } from "./dashboard-projections";
 import type {
+  Branch,
   CurrentTree,
-  DashboardData,
   DashboardQualityInsights,
+  Invitation,
   Statistics,
 } from "./dashboard-types";
 
@@ -53,13 +54,20 @@ const quality: DashboardQualityInsights = {
   graph_cycles: 1,
 };
 
-function dashboard(overrides: Partial<DashboardData> = {}): DashboardData {
+interface AttentionData {
+  tree: CurrentTree;
+  stats?: Statistics;
+  branches?: Branch[];
+  invitations?: Invitation[];
+  ownershipTransfer?: null;
+}
+
+function dashboard(overrides: Partial<AttentionData> = {}): AttentionData {
   return {
     tree,
     stats,
     branches: [],
     invitations: [],
-    activity: [],
     ownershipTransfer: null,
     ...overrides,
   };
@@ -88,8 +96,8 @@ describe("dashboard projections", () => {
     const items = dashboardAttentionItems(
       dashboard({
         stats: { ...stats, serious_complaints: 2 },
-        invitations: [{ status: "pending" }, { status: "pending" }] as DashboardData["invitations"],
-        branches: [{ status: "inactive" }] as DashboardData["branches"],
+        invitations: [{ status: "pending" }, { status: "pending" }] as Invitation[],
+        branches: [{ status: "inactive" }] as Branch[],
       }),
       quality,
     );
@@ -132,7 +140,7 @@ describe("dashboard projections", () => {
       { id: "healthy", name_en: "Healthy", status: "active" },
       { id: "inactive", name_en: "Inactive", status: "inactive" },
       { id: "needs-work", name_en: "Needs work", status: "active" },
-    ] as DashboardData["branches"];
+    ] as Branch[];
     const health = [
       { id: "healthy", name_en: "Healthy", name_ar: null, total: 10, completeness_percent: 90 },
       { id: "inactive", name_en: "Inactive", name_ar: null, total: 10, completeness_percent: 80 },

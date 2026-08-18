@@ -23,6 +23,7 @@ const CARD_CLEARANCE = 32;
 const BUNDLE_GAP = 44;
 const BRANCH_GAP = 36;
 const ROW_NUDGE = 8;
+export const MAX_DETAILED_CHRONOLOGICAL_ROUTES = 400;
 
 const dimension = (value: number | null | undefined, fallback: number) =>
   Number.isFinite(value) && value! > 0 ? value! : fallback;
@@ -330,5 +331,7 @@ export function routeParentEdges(
   edges: Edge[],
   chronological: boolean,
 ): Edge[] {
-  return chronological ? routeDecadeBundles(nodes, edges) : edges;
+  return chronological && nodes.length <= MAX_DETAILED_CHRONOLOGICAL_ROUTES
+    ? routeDecadeBundles(nodes, edges)
+    : edges;
 }

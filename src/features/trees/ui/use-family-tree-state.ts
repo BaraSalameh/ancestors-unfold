@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { useReactFlow } from "reactflow";
@@ -54,6 +54,21 @@ export function useFamilyTreeState({
     setSubfamilyFilterEnabled(Boolean(initialBranchId));
   }, [initialBranchId]);
   const viewportRef = useRef(viewport);
+  const viewportTimer = useRef<number | undefined>(undefined);
+  const commitViewport = useCallback((next: typeof viewport) => {
+    viewportRef.current = next;
+    if (viewportTimer.current !== undefined) return;
+    viewportTimer.current = window.setTimeout(() => {
+      viewportTimer.current = undefined;
+      setViewport(viewportRef.current);
+    }, 80);
+  }, []);
+  useEffect(
+    () => () => {
+      if (viewportTimer.current !== undefined) window.clearTimeout(viewportTimer.current);
+    },
+    [],
+  );
   const refs = {
     canvasRef: useRef<HTMLDivElement>(null),
     didFit: useRef(false),
@@ -92,6 +107,7 @@ export function useFamilyTreeState({
       setPeriodDraft,
       setQuery,
       setViewport,
+      commitViewport,
       viewport,
     },
   };

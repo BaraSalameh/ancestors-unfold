@@ -50,7 +50,7 @@ export function useFamilyTreeInteractions(params: Params) {
     visibleNodePositions: refs.visibleNodePositions,
   });
   const search = useTreeMemberSearch({
-    initialNodes: layout.nodes,
+    positions: layout.focusPositions,
     members: core.members,
     previewType: params.previewType,
     query: ui.query,
