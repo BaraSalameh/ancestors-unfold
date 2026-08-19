@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import argon2 from "argon2";
 import { query, transaction } from "@/shared/server/database";
 import { passwordResetMail, sendMail } from "@/shared/server/email";
+import { logError } from "@/shared/server/logger";
 import { jsonResponse as json } from "@/shared/http/response";
 import { ApiError, enforceRateLimit, parseBody, schemas } from "@/server/security";
 import { hashSessionToken as sha256, normalizeEmail } from "./auth-crypto";
@@ -44,7 +45,7 @@ async function requestPasswordReset(request: Request): Promise<Response> {
     try {
       await sendMail(passwordResetMail(email, token));
     } catch (error) {
-      console.error("Password reset email delivery failed", error);
+      logError("Password reset email delivery failed", error);
     }
   }
   await query(

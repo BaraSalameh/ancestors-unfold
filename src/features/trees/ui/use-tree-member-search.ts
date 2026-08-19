@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { ReactFlowInstance } from "reactflow";
-import { memberPaternalSearchLabel, type FamilyMember } from "@/features/members";
+import { memberPaternalSearchLabel, type FamilyMember } from "@/features/members/domain";
 import type { TreePreviewType } from "../domain/canvas-preview";
 import { NODE_H, NODE_W } from "./family-tree-layout";
 

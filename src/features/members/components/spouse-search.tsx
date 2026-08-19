@@ -10,7 +10,7 @@ import {
 } from "@/shared/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 import { useI18n } from "@/shared/i18n";
-import { memberSearchLabel } from "../domain/member-display";
+import { memberPaternalSearchLabel } from "../domain/member-display";
 import type { FamilyMember } from "../domain/types";
 
 interface SpouseSearchProps {
@@ -21,18 +21,23 @@ interface SpouseSearchProps {
   results: FamilyMember[];
   linkedIds: Set<string>;
   onSelect: (memberId: string) => void;
+  members: FamilyMember[];
 }
 
 function SearchResult({
   member,
   alreadyLinked,
   onSelect,
+  membersById,
 }: {
   member: FamilyMember;
   alreadyLinked: boolean;
   onSelect: () => void;
+  membersById: ReadonlyMap<string, FamilyMember>;
 }) {
   const { t, lang } = useI18n();
+  const primary = memberPaternalSearchLabel(member, membersById, lang);
+  const alternate = memberPaternalSearchLabel(member, membersById, lang === "ar" ? "en" : "ar");
   return (
     <CommandItem
       value={member.id}
@@ -42,10 +47,10 @@ function SearchResult({
     >
       <div className="flex w-full items-center gap-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm">{memberSearchLabel(member, lang)}</div>
-          <div className="truncate text-[11px] text-muted-foreground">
-            {lang === "ar" ? member.name_en : member.name_ar}
-          </div>
+          <div className="truncate text-sm">{primary}</div>
+          {alternate !== primary && (
+            <div className="truncate text-[11px] text-muted-foreground">{alternate}</div>
+          )}
         </div>
         {alreadyLinked && (
           <span className="shrink-0 text-[10px] text-muted-foreground">{t("already_wife")}</span>
@@ -57,6 +62,7 @@ function SearchResult({
 
 export function SpouseSearch(props: SpouseSearchProps) {
   const { t } = useI18n();
+  const membersById = new Map(props.members.map((member) => [member.id, member]));
   const hasQuery = Boolean(props.query.trim());
   return (
     <Popover open={props.open} onOpenChange={props.onOpenChange}>
@@ -92,6 +98,7 @@ export function SpouseSearch(props: SpouseSearchProps) {
                       member={member}
                       alreadyLinked={linked}
                       onSelect={() => !linked && props.onSelect(member.id)}
+                      membersById={membersById}
                     />
                   );
                 })}

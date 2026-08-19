@@ -114,7 +114,7 @@ export async function loadRenderableSnapshot(
     `SELECT m.id,coalesce(m.name_en, '') name_en,coalesce(m.name_ar, '') name_ar,
       m.gender,m.birth_date::text birth_date,m.death_date::text death_date,m.is_deceased,
       m.citizen_status,m.image_url,m.image_public_id,m.image_asset_id,m.notes,m.is_unknown,m.subfamily_id,
-      m.pos_x,m.pos_y,m.created_at,m.updated_at,
+      m.pos_x,m.pos_y,m.created_at::text created_at,m.updated_at::text updated_at,
       f.parent_id father_id,mo.parent_id mother_id FROM app.family_members m
     LEFT JOIN app.parent_child_relationships f ON f.child_id=m.id AND f.parent_role='father' AND f.deleted_at IS NULL
     LEFT JOIN app.parent_child_relationships mo ON mo.child_id=m.id AND mo.parent_role='mother' AND mo.deleted_at IS NULL
@@ -122,7 +122,8 @@ export async function loadRenderableSnapshot(
     [treeId],
   );
   const subfamilies = await runner.query<Record<string, unknown>>(
-    `SELECT id,name_en,name_ar,linked_male_id,parent_subfamily_id,status,notes,created_at,updated_at
+    `SELECT id,name_en,name_ar,linked_male_id,parent_subfamily_id,status,notes,
+      created_at::text created_at,updated_at::text updated_at
     FROM app.subfamilies WHERE tree_id=$1 AND deleted_at IS NULL`,
     [treeId],
   );
@@ -174,7 +175,7 @@ export async function loadRenderableSnapshot(
 
 export async function readPublicSnapshot(treeId: string) {
   const tree = await query<{ version: number }>(
-    "SELECT version FROM app.family_trees WHERE id=$1 AND deleted_at IS NULL",
+    "SELECT version FROM app.family_trees WHERE id=$1 AND visibility='public' AND deleted_at IS NULL",
     [treeId],
   );
   if (!tree.rowCount) throw new ApiError("NOT_FOUND", 404);
@@ -201,20 +202,48 @@ export function filterSnapshotMembers<T extends Awaited<ReturnType<typeof loadRe
   return { ...snapshot, members } as T;
 }
 
+export function filterSnapshotBranches<
+  T extends Awaited<ReturnType<typeof loadRenderableSnapshot>>,
+>(
+  snapshot: T,
+  visibleIds: ReadonlySet<string>,
+  visibleMemberIds: ReadonlySet<string> = new Set(snapshot.members.map(({ id }) => id)),
+): T {
+  return {
+    ...snapshot,
+    subfamilies: snapshot.subfamilies
+      .filter((branch) => visibleIds.has(String(branch.id)))
+      .map((branch) => ({
+        ...branch,
+        linked_male_id:
+          branch.linked_male_id && visibleMemberIds.has(String(branch.linked_male_id))
+            ? branch.linked_male_id
+            : undefined,
+        parent_subfamily_id:
+          branch.parent_subfamily_id && visibleIds.has(String(branch.parent_subfamily_id))
+            ? branch.parent_subfamily_id
+            : undefined,
+      })),
+  } as T;
+}
+
 export async function readSnapshot(session: SessionContext, requestId: string, treeId: string) {
   return transaction(session.user_id, session.id, requestId, async (client) => {
     const tree = await client.query<{ version: number }>(
-      `SELECT t.version FROM app.family_trees t JOIN app.tree_memberships m ON m.tree_id=t.id AND m.user_id=$2 AND m.revoked_at IS NULL WHERE t.id=$1 AND t.deleted_at IS NULL
-      UNION SELECT t.version FROM app.family_trees t JOIN app.branch_grants g ON g.tree_id=t.id AND g.user_id=$2 AND g.revoked_at IS NULL WHERE t.id=$1 AND t.deleted_at IS NULL`,
-      [treeId, session.user_id],
+      `SELECT t.version FROM app.family_trees t
+       WHERE t.id=$1 AND t.deleted_at IS NULL AND app.can_view_tree(t.id)`,
+      [treeId],
     );
-    if (!tree.rowCount) throw new Error("FORBIDDEN");
+    if (!tree.rowCount) throw new ApiError("FORBIDDEN", 403);
     const snapshot = await loadRenderableSnapshot(client, treeId, tree.rows[0].version, true);
     const fullAccess = await client.query<{ role: string }>(
       `SELECT CASE WHEN t.owner_user_id=$2 THEN 'owner' ELSE membership.role::text END role
        FROM app.family_trees t
        LEFT JOIN app.tree_memberships membership
-         ON membership.tree_id=t.id AND membership.user_id=$2 AND membership.revoked_at IS NULL
+         ON membership.tree_id=t.id AND membership.user_id=$2
+        AND membership.revoked_at IS NULL
+        AND membership.affiliation_status='active'
+        AND (membership.expires_at IS NULL OR membership.expires_at>now())
        WHERE t.id=$1
          AND (t.owner_user_id=$2 OR membership.role IN ('owner','administrator','editor'))
        LIMIT 1`,
@@ -243,10 +272,19 @@ export async function readSnapshot(session: SessionContext, requestId: string, t
        AND app.is_unattached_member(tree_id,id)`,
       [treeId, session.user_id],
     );
+    const visibleBranches = await client.query<{ id: string }>(
+      "SELECT subfamily_id id FROM app.branch_subfamilies($1,$2)",
+      [treeId, session.user_id],
+    );
+    const visibleMemberIds = new Set(
+      [...branchMembers.rows, ...ownedDrafts.rows].map(({ id }) => id),
+    );
+    const scoped = filterSnapshotMembers(snapshot, visibleMemberIds);
     return {
-      ...filterSnapshotMembers(
-        snapshot,
-        new Set([...branchMembers.rows, ...ownedDrafts.rows].map(({ id }) => id)),
+      ...filterSnapshotBranches(
+        scoped,
+        new Set(visibleBranches.rows.map(({ id }) => id)),
+        visibleMemberIds,
       ),
       access_scope: "branch" as const,
       assigned_branch_id: assignedBranch.rows[0]?.id,

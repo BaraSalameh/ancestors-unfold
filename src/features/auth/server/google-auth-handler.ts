@@ -2,16 +2,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { CodeChallengeMethod } from "google-auth-library";
 import { transaction } from "@/shared/server/database";
 import { ApiError } from "@/server/security";
-import {
-  cookieNamed,
-  createSession,
-  googleConfig,
-  normalizeEmail,
-  oauthCookie,
-  OAUTH_COOKIE,
-  safeRedirect,
-  sessionCookie,
-} from "@/features/auth/server";
+import { normalizeEmail } from "./auth-crypto";
+import { cookieNamed, oauthCookie, OAUTH_COOKIE, sessionCookie } from "./auth-cookies";
+import { googleConfig, safeRedirect } from "./oauth-config";
+import { createSession } from "./session-service";
 
 export async function handleGoogleAuthRequest(
   request: Request,

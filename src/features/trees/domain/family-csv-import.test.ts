@@ -8,8 +8,6 @@ import {
   validateFamilyImportGraph,
 } from "./family-csv-import";
 
-// The contract scenarios stay together so canonical and legacy CSV behavior is reviewed as one unit.
-// eslint-disable-next-line max-lines-per-function
 describe("family CSV import", () => {
   it("parses the UTF-8 bilingual template with an implicit unknown wife", () => {
     const result = parseFamilyCsv(familyCsvTemplate());

@@ -1,5 +1,4 @@
-import type { FamilyMember } from "@/features/members";
-import { memberPaternalSearchLabel } from "@/features/members";
+import { memberPaternalSearchLabel, type FamilyMember } from "@/features/members/domain";
 import type { Lang } from "@/shared/i18n";
 
 export function canvasSearchResultLabel(

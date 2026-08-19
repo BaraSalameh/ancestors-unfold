@@ -203,48 +203,64 @@ export async function reconcileTouchedParentRelationships(
     );
 }
 
-// Pair normalization intentionally handles reciprocal, ordered, and divorced relationship forms.
-// eslint-disable-next-line complexity
+type DesiredSpousePair = {
+  candidate_id: string;
+  a: string;
+  b: string;
+  status: string;
+  order: number;
+  authoritative: boolean;
+};
+
+function relationshipIds(member: DeltaMember) {
+  return [
+    ...(member.spouse_ids ?? []),
+    ...(member.spouse_id ? [member.spouse_id] : []),
+    ...(member.divorced_from ?? []),
+  ];
+}
+
+function spousePairOrder(
+  existing: DesiredSpousePair | undefined,
+  authoritative: boolean,
+  candidateOrder: number,
+) {
+  if (authoritative && !existing?.authoritative) return candidateOrder;
+  if (existing?.authoritative && !authoritative) return existing.order;
+  return Math.min(existing?.order ?? Number.MAX_SAFE_INTEGER, candidateOrder);
+}
+
+function mergeSpousePair(
+  existing: DesiredSpousePair | undefined,
+  member: DeltaMember,
+  spouseId: string,
+  memberOrder: number,
+  spouseOrder: number,
+): DesiredSpousePair {
+  const [a, b] = [member.id, spouseId].sort();
+  const authoritative = member.gender === "male";
+  const candidateOrder = memberOrder * 101 + spouseOrder;
+  const divorced =
+    existing?.status === "divorced" || Boolean(member.divorced_from?.includes(spouseId));
+  return {
+    candidate_id: existing?.candidate_id ?? randomUUID(),
+    a,
+    b,
+    status: divorced ? "divorced" : "current",
+    order: spousePairOrder(existing, authoritative, candidateOrder),
+    authoritative: authoritative || Boolean(existing?.authoritative),
+  };
+}
+
+// Pair normalization handles reciprocal, ordered, and divorced relationship forms.
 function desiredSpousePairs(members: DeltaMember[]) {
-  const pairs = new Map<
-    string,
-    {
-      candidate_id: string;
-      a: string;
-      b: string;
-      status: string;
-      order: number;
-      authoritative: boolean;
-    }
-  >();
+  const pairs = new Map<string, DesiredSpousePair>();
   for (const [memberOrder, member] of members.entries())
-    for (const [spouseOrder, spouseId] of [
-      ...(member.spouse_ids ?? []),
-      ...(member.spouse_id ? [member.spouse_id] : []),
-      ...(member.divorced_from ?? []),
-    ].entries()) {
+    for (const [spouseOrder, spouseId] of relationshipIds(member).entries()) {
       if (spouseId === member.id) continue;
       const [a, b] = [member.id, spouseId].sort();
       const key = `${a}:${b}`;
-      const existing = pairs.get(key);
-      const authoritative = member.gender === "male";
-      const candidateOrder = memberOrder * 101 + spouseOrder;
-      pairs.set(key, {
-        candidate_id: existing?.candidate_id ?? randomUUID(),
-        a,
-        b,
-        status:
-          existing?.status === "divorced" || member.divorced_from?.includes(spouseId)
-            ? "divorced"
-            : "current",
-        order:
-          authoritative && !existing?.authoritative
-            ? candidateOrder
-            : existing?.authoritative && !authoritative
-              ? existing.order
-              : Math.min(existing?.order ?? Number.MAX_SAFE_INTEGER, candidateOrder),
-        authoritative: authoritative || (existing?.authoritative ?? false),
-      });
+      pairs.set(key, mergeSpousePair(pairs.get(key), member, spouseId, memberOrder, spouseOrder));
     }
   return [...pairs.values()];
 }

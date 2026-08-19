@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { query } from "@/shared/server/database";
 import { assertSameOrigin } from "./security";
-import { logError } from "@/shared/server/logger";
+import { logError, logInfo } from "@/shared/server/logger";
 import { jsonResponse as json } from "@/shared/http/response";
 import { handleOperationsRequest } from "@/app/server/operations-handler";
 import {
@@ -27,29 +27,42 @@ export async function handleApi(request: Request): Promise<Response | null> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/")) return null;
   const requestId = randomUUID();
+  const startedAt = performance.now();
+  let response: Response;
   try {
     assertSameOrigin(request);
-    const publicResponse = await handlePublicApi(request, url, requestId);
-    if (publicResponse) return publicResponse;
-    const session = await authenticate(request);
-    const currentSessionResponse = await handleCurrentSessionRequest(
-      request,
-      url,
-      session,
-      requestId,
-    );
-    if (currentSessionResponse) return currentSessionResponse;
-    if (!session) return json({ code: "UNAUTHENTICATED" }, 401);
-    const authenticatedResponse = await handleAuthenticatedApi(request, url, session, requestId);
-    return authenticatedResponse;
+    response = await dispatchApiRequest(request, url, requestId);
   } catch (error) {
     logError("API request failed", error, {
       requestId,
       method: request.method,
       path: url.pathname,
     });
-    return apiErrorResponse(error, url.pathname, requestId);
+    response = apiErrorResponse(error, url.pathname, requestId);
   }
+  logInfo("API request completed", {
+    requestId,
+    method: request.method,
+    path: url.pathname,
+    status: response.status,
+    durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+  });
+  return response;
+}
+
+async function dispatchApiRequest(request: Request, url: URL, requestId: string) {
+  const publicResponse = await handlePublicApi(request, url, requestId);
+  if (publicResponse) return publicResponse;
+  const session = await authenticate(request);
+  const currentSessionResponse = await handleCurrentSessionRequest(
+    request,
+    url,
+    session,
+    requestId,
+  );
+  if (currentSessionResponse) return currentSessionResponse;
+  if (!session) return json({ code: "UNAUTHENTICATED" }, 401);
+  return handleAuthenticatedApi(request, url, session, requestId);
 }
 
 async function handlePublicApi(

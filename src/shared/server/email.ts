@@ -1,3 +1,5 @@
+import nodemailer from "nodemailer";
+
 type Mail = { to: string; subject: string; text: string; html: string };
 
 const escapeHtml = (value: string) =>
@@ -152,44 +154,37 @@ export function ownershipTransferRequestedMail(
   };
 }
 
-// Delivery backends intentionally share one boundary so callers receive identical errors.
-// eslint-disable-next-line complexity
-export async function sendMail(mail: Mail): Promise<void> {
-  const delivery = process.env.AUTH_TOKEN_DELIVERY ?? "console";
-  if (delivery === "console") {
-    console.info(`[development email] to=${mail.to} subject=${mail.subject}\n${mail.text}`);
-    return;
+async function sendSmtp(mail: Mail) {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT ?? 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const from = process.env.EMAIL_FROM;
+  if (!host || !Number.isInteger(port) || !user || !pass || !from)
+    throw new Error("MAIL_NOT_CONFIGURED");
+  try {
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: process.env.SMTP_SECURE === "true",
+      auth: { user, pass },
+      connectionTimeout: 10_000,
+      socketTimeout: 15_000,
+    });
+    await transporter.sendMail({
+      from,
+      to: mail.to,
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html,
+    });
+  } catch {
+    throw new Error("MAIL_DELIVERY_FAILED");
   }
-  if (delivery === "smtp") {
-    const host = process.env.SMTP_HOST;
-    const port = Number(process.env.SMTP_PORT ?? 587);
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
-    const from = process.env.EMAIL_FROM;
-    if (!host || !Number.isInteger(port) || !user || !pass || !from)
-      throw new Error("MAIL_NOT_CONFIGURED");
-    try {
-      const transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: process.env.SMTP_SECURE === "true",
-        auth: { user, pass },
-        connectionTimeout: 10_000,
-        socketTimeout: 15_000,
-      });
-      await transporter.sendMail({
-        from,
-        to: mail.to,
-        subject: mail.subject,
-        text: mail.text,
-        html: mail.html,
-      });
-      return;
-    } catch {
-      throw new Error("MAIL_DELIVERY_FAILED");
-    }
-  }
-  if (delivery !== "resend" || !process.env.RESEND_API_KEY || !process.env.EMAIL_FROM)
+}
+
+async function sendResend(mail: Mail) {
+  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM)
     throw new Error("MAIL_NOT_CONFIGURED");
   let response: Response;
   try {
@@ -213,4 +208,12 @@ export async function sendMail(mail: Mail): Promise<void> {
   }
   if (!response.ok) throw new Error("MAIL_DELIVERY_FAILED");
 }
-import nodemailer from "nodemailer";
+
+// Delivery backends share one boundary and never write codes, addresses, or family content to logs.
+export async function sendMail(mail: Mail): Promise<void> {
+  const delivery = process.env.AUTH_TOKEN_DELIVERY ?? "console";
+  if (delivery === "console") return;
+  if (delivery === "smtp") return sendSmtp(mail);
+  if (delivery === "resend") return sendResend(mail);
+  throw new Error("MAIL_NOT_CONFIGURED");
+}

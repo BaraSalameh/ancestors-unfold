@@ -1,10 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
-import {
-  MemberDeletionDialog,
-  type FamilyMember,
-  type MemberDeletionPlan,
-} from "@/features/members";
+import { MemberDeletionDialog } from "@/features/members/components";
+import type { FamilyMember, MemberDeletionPlan } from "@/features/members/domain";
 import { displayName, ordinal, useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import {

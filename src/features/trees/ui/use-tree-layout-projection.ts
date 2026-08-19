@@ -1,7 +1,12 @@
 import { useCallback, useMemo, useRef } from "react";
 import type { FamilyMember } from "@/features/members";
 import { familyStore } from "../client/family-store";
-import type { CanvasDetail, ChronologicalPeriod, TreePreviewType } from "../domain/canvas-preview";
+import {
+  membersForCanvasPreview,
+  type CanvasDetail,
+  type ChronologicalPeriod,
+  type TreePreviewType,
+} from "../domain/canvas-preview";
 import { layout } from "./family-tree-layout";
 import { useTreeLayoutGeometry } from "./use-tree-layout-geometry";
 
@@ -23,26 +28,30 @@ interface Params {
 }
 
 export function useTreeLayoutProjection(params: Params) {
+  const { previewType, setCollapsedByPreview } = params;
   const onToggleCollapsed = useCallback(
     (id: string) => {
-      params.setCollapsedByPreview((current) => {
-        const next = new Set(current[params.previewType]);
+      setCollapsedByPreview((current) => {
+        const next = new Set(current[previewType]);
         if (next.has(id)) next.delete(id);
         else next.add(id);
-        return { ...current, [params.previewType]: next };
+        return { ...current, [previewType]: next };
       });
     },
-    // The callback is keyed to the explicit projection fields; the wrapper object is recreated.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [params.previewType, params.setCollapsedByPreview],
+    [previewType, setCollapsedByPreview],
   );
-  const visibleMembers = useMemo(
-    () =>
+  const visibleMembers = useMemo(() => {
+    const scopedMembers =
       !params.subfamilyFilterEnabled || !params.selectedSubfamilyId
         ? params.members
-        : familyStore.getSubfamilyMembers(params.selectedSubfamilyId),
-    [params.members, params.selectedSubfamilyId, params.subfamilyFilterEnabled],
-  );
+        : familyStore.getSubfamilyMembers(params.selectedSubfamilyId);
+    return membersForCanvasPreview(scopedMembers, params.previewType);
+  }, [
+    params.members,
+    params.previewType,
+    params.selectedSubfamilyId,
+    params.subfamilyFilterEnabled,
+  ]);
   const geometry = useTreeLayoutGeometry(
     visibleMembers,
     params.collapsed,

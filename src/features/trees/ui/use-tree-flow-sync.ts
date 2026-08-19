@@ -25,45 +25,69 @@ interface Params {
 }
 
 export function useTreeFlowSync(params: Params) {
+  const { cancelMarquee, initialNodes, previewType, visibleNodePositions } = params;
   useInitialGraphSync(params);
-  useVisiblePositionSync(params.nodes, params.visibleNodePositions);
+  useVisiblePositionSync(initialNodes, visibleNodePositions);
   useChronologicalEdgeRouting(params);
   useTreeKeyboardShortcuts(params);
   useEffect(() => {
-    params.cancelMarquee();
-    return params.cancelMarquee;
-    // The hook receives a fresh capability object; only stable callbacks and preview identity matter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.cancelMarquee, params.previewType]);
+    cancelMarquee();
+    return cancelMarquee;
+  }, [cancelMarquee, previewType]);
 }
 
 function useInitialGraphSync(params: Params) {
+  const {
+    chronologicalPeriod,
+    didFit,
+    fitView,
+    initialEdges,
+    initialNodes,
+    previousChronologicalPeriod,
+    previousPreviewType,
+    previewType,
+    replacePositionsOnNextLayout,
+    setEdges,
+    setNodes,
+  } = params;
   useEffect(() => {
-    const previewChanged = params.previousPreviewType.current !== params.previewType;
-    const periodChanged = params.previousChronologicalPeriod.current !== params.chronologicalPeriod;
-    params.previousPreviewType.current = params.previewType;
-    params.previousChronologicalPeriod.current = params.chronologicalPeriod;
-    if (previewChanged || periodChanged) params.didFit.current = false;
-    params.setNodes((current) => mergeNodes(params, current, previewChanged));
-    params.setEdges((current) => mergeEdges(params, current, previewChanged));
-    if (!params.didFit.current && params.initialNodes.length) {
-      requestAnimationFrame(() => params.fitView({ padding: 0.2, duration: 300 }));
-      params.didFit.current = true;
+    const previewChanged = previousPreviewType.current !== previewType;
+    const periodChanged = previousChronologicalPeriod.current !== chronologicalPeriod;
+    previousPreviewType.current = previewType;
+    previousChronologicalPeriod.current = chronologicalPeriod;
+    if (previewChanged || periodChanged) didFit.current = false;
+    setNodes((current) =>
+      mergeNodes(
+        { initialNodes, previewType, replacePositionsOnNextLayout },
+        current,
+        previewChanged,
+      ),
+    );
+    setEdges((current) => mergeEdges({ initialEdges, previewType }, current, previewChanged));
+    if (!didFit.current && initialNodes.length) {
+      requestAnimationFrame(() => fitView({ padding: 0.2, duration: 300 }));
+      didFit.current = true;
     }
-    // Individual graph inputs are the synchronization contract; the wrapper object is intentionally excluded.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    params.initialNodes,
-    params.initialEdges,
-    params.previewType,
-    params.chronologicalPeriod,
-    params.setNodes,
-    params.setEdges,
-    params.fitView,
+    chronologicalPeriod,
+    didFit,
+    fitView,
+    initialEdges,
+    initialNodes,
+    previousChronologicalPeriod,
+    previousPreviewType,
+    previewType,
+    replacePositionsOnNextLayout,
+    setEdges,
+    setNodes,
   ]);
 }
 
-function mergeNodes(params: Params, current: Node[], previewChanged: boolean) {
+function mergeNodes(
+  params: Pick<Params, "initialNodes" | "previewType" | "replacePositionsOnNextLayout">,
+  current: Node[],
+  previewChanged: boolean,
+) {
   const currentById = new Map(current.map((node) => [node.id, node]));
   const replacePositions = params.replacePositionsOnNextLayout.current;
   params.replacePositionsOnNextLayout.current = false;
@@ -82,7 +106,11 @@ function mergeNodes(params: Params, current: Node[], previewChanged: boolean) {
   });
 }
 
-function mergeEdges(params: Params, current: Edge[], previewChanged: boolean) {
+function mergeEdges(
+  params: Pick<Params, "initialEdges" | "previewType">,
+  current: Edge[],
+  previewChanged: boolean,
+) {
   if (previewChanged || params.previewType === "chronological") {
     const selected = new Set(current.filter((edge) => edge.selected).map((edge) => edge.id));
     return params.initialEdges.map((edge) => ({ ...edge, selected: selected.has(edge.id) }));
@@ -106,15 +134,15 @@ function useVisiblePositionSync(
 }
 
 function useChronologicalEdgeRouting(params: Params) {
+  const { nodes, previewType, setEdges } = params;
   useEffect(() => {
-    if (params.previewType !== "chronological") return;
-    params.setEdges((current) => routeParentEdges(params.nodes, current, true));
-    // Only graph identity and preview mode trigger route projection.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.nodes, params.previewType, params.setEdges]);
+    if (previewType !== "chronological") return;
+    setEdges((current) => routeParentEdges(nodes, current, true));
+  }, [nodes, previewType, setEdges]);
 }
 
 function useTreeKeyboardShortcuts(params: Params) {
+  const { cancelMarquee, canEdit, clearCanvasSelection } = params;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -124,11 +152,11 @@ function useTreeKeyboardShortcuts(params: Params) {
       )
         return;
       if (event.key === "Escape") {
-        params.cancelMarquee();
-        params.clearCanvasSelection();
+        cancelMarquee();
+        clearCanvasSelection();
         return;
       }
-      if (!(event.ctrlKey || event.metaKey) || !params.canEdit) return;
+      if (!(event.ctrlKey || event.metaKey) || !canEdit) return;
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
@@ -140,7 +168,5 @@ function useTreeKeyboardShortcuts(params: Params) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-    // Keyboard listeners depend only on the exposed stable commands and edit capability.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.cancelMarquee, params.canEdit, params.clearCanvasSelection]);
+  }, [cancelMarquee, canEdit, clearCanvasSelection]);
 }

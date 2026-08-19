@@ -16,7 +16,15 @@ function redactRecord(value: Record<string, unknown>): Record<string, unknown> {
 }
 
 export function logError(message: string, error: unknown, context: Record<string, unknown> = {}) {
-  const detail = error instanceof Error ? { name: error.name, message: error.message } : { error };
+  const code =
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    /^[A-Z0-9_]{1,80}$/i.test(error.code)
+      ? error.code
+      : undefined;
+  const detail = error instanceof Error ? { name: error.name, code } : { name: "UnknownError" };
   const event = { level: "error", message, ...redactRecord(context), ...redactRecord(detail) };
   if (process.env.NODE_ENV === "production") console.error(JSON.stringify(event));
   else console.error(message, event);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
@@ -12,8 +12,7 @@ import {
 import { Label } from "@/shared/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 import { type Lang, useI18n } from "@/shared/i18n";
-import { memberSearchLabel } from "../domain/member-display";
-import { searchParentCandidates } from "../domain/parent-selection";
+import { memberMatchesPaternalSearch, memberPaternalSearchLabel } from "../domain/member-display";
 import type { FamilyMember } from "../domain/types";
 
 interface RelationSearchProps {
@@ -21,6 +20,7 @@ interface RelationSearchProps {
   value: string;
   onChange: (value: string) => void;
   options: FamilyMember[];
+  members: FamilyMember[];
   lang: Lang;
   searchFirst?: boolean;
   selectedOption?: FamilyMember;
@@ -32,6 +32,7 @@ export function RelationSearch({
   value,
   onChange,
   options,
+  members,
   lang,
   searchFirst = false,
   selectedOption,
@@ -41,8 +42,16 @@ export function RelationSearch({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selected = options.find((member) => member.id === value) ?? selectedOption;
-  const results = searchFirst || query.trim() ? searchParentCandidates(options, query) : options;
-  const optionName = (member: FamilyMember) => memberSearchLabel(member, lang);
+  const membersById = useMemo(
+    () => new Map(members.map((member) => [member.id, member])),
+    [members],
+  );
+  const results =
+    searchFirst || query.trim()
+      ? options.filter((member) => memberMatchesPaternalSearch(member, membersById, query))
+      : options;
+  const optionName = (member: FamilyMember, labelLang = lang) =>
+    memberPaternalSearchLabel(member, membersById, labelLang);
   const select = (id: string) => {
     onChange(id);
     setQuery("");
@@ -95,7 +104,14 @@ export function RelationSearch({
                       <Check
                         className={`me-2 h-4 w-4 ${value === member.id ? "opacity-100" : "opacity-0"}`}
                       />
-                      <span className="truncate">{optionName(member)}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate">{optionName(member)}</span>
+                        {optionName(member, lang === "ar" ? "en" : "ar") !== optionName(member) && (
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {optionName(member, lang === "ar" ? "en" : "ar")}
+                          </span>
+                        )}
+                      </span>
                     </CommandItem>
                   ))}
                 </CommandGroup>

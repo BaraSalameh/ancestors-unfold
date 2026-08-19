@@ -53,8 +53,6 @@ const preview: FamilyCsvPreviewResponse = {
   },
 };
 
-// The scenarios share one complete preview fixture and verify append and explicit mapping together.
-// eslint-disable-next-line max-lines-per-function
 describe("family CSV draft append", () => {
   it("keeps the current tree and appends the imported family without connecting them", () => {
     const draft = buildFamilyCsvDraft(

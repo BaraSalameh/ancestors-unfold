@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 
 import { useTheme } from "@/app/providers/theme-context";
-import { familyStore } from "@/features/trees";
+import { familyStore } from "@/features/trees/client";
 import { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";

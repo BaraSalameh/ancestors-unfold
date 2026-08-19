@@ -1,12 +1,17 @@
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { TriangleAlert } from "lucide-react";
-import { useEffect, useState } from "react";
-import { FamilyTree } from "@/features/trees";
-import { familyStore, useFamilyLoadState } from "@/features/trees";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useI18n } from "@/shared/i18n";
 import { TreeLoadingIndicator } from "@/shared/ui/page-skeletons";
+import type { TreeSnapshot } from "../domain/tree-snapshot";
+import { familyStore } from "../client/family-store";
+import { useFamilyLoadState } from "../client/family-hooks";
 
-export function TreePage() {
+const FamilyTree = lazy(() =>
+  import("../ui/family-tree").then(({ FamilyTree: component }) => ({ default: component })),
+);
+
+export function TreePage({ initialSnapshot }: { initialSnapshot: TreeSnapshot }) {
   const { mode, preview, period, branchId, import: csvImport } = useSearch({ from: "/tree/$id" });
   const { id } = useParams({ from: "/tree/$id" });
   const navigate = useNavigate();
@@ -14,9 +19,9 @@ export function TreePage() {
   const activationKey = `${id}:${mode}`;
   const [activeKey, setActiveKey] = useState<string>();
   useEffect(() => {
-    familyStore.activateTree(id, mode);
+    familyStore.activateTree(id, mode, initialSnapshot);
     setActiveKey(activationKey);
-  }, [activationKey, id, mode]);
+  }, [activationKey, id, initialSnapshot, mode]);
   const loadState = useFamilyLoadState();
   if (activeKey !== activationKey || loadState === "loading" || loadState === "idle")
     return <TreeLoadingIndicator label={t("loading_tree")} />;
@@ -34,24 +39,25 @@ export function TreePage() {
     familyStore.getAccessScope() === "branch" ? familyStore.getAssignedBranchId() : branchId;
   return (
     <div className="h-[calc(100vh-3.5rem)] w-full">
-      <FamilyTree
-        readOnly={mode !== "edit"}
-        overviewMode={mode === "preview"}
-        preview={mode === "preview" ? (preview ?? "lineage") : "lineage"}
-        chronologicalPeriod={period ?? 10}
-        accessMode={mode}
-        initialBranchId={selectedBranchId}
-        csvImportOpen={csvImport === "csv"}
-        onCsvImportOpenChange={(open) => {
-          if (open) return;
-          void navigate({
-            to: "/tree/$id",
-            params: { id },
-            search: { mode, preview, period, branchId, import: undefined },
-            replace: true,
-          });
-        }}
-      />
+      <Suspense fallback={<TreeLoadingIndicator label={t("loading_tree")} />}>
+        <FamilyTree
+          readOnly={mode !== "edit"}
+          overviewMode={mode === "preview"}
+          preview={mode === "preview" ? (preview ?? "lineage") : "lineage"}
+          chronologicalPeriod={period ?? 10}
+          initialBranchId={selectedBranchId}
+          csvImportOpen={csvImport === "csv"}
+          onCsvImportOpenChange={(open) => {
+            if (open) return;
+            void navigate({
+              to: "/tree/$id",
+              params: { id },
+              search: { mode, preview, period, branchId, import: undefined },
+              replace: true,
+            });
+          }}
+        />
+      </Suspense>
     </div>
   );
 }

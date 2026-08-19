@@ -2,15 +2,8 @@ import { useParams, useSearch } from "@tanstack/react-router";
 import { TriangleAlert } from "lucide-react";
 import { TreeLoadingIndicator } from "@/shared/ui/page-skeletons";
 import { useI18n } from "@/shared/i18n";
-import {
-  familyStore,
-  getChildren,
-  getGeneration,
-  useFamily,
-  useFamilyLoadState,
-} from "@/features/trees";
-import { MemberDetailsView } from "../components/member-details-view";
-import { memberDescendants, memberSpouses, paternalAncestors } from "../domain/member-details";
+import { familyStore, useFamilyLoadState } from "@/features/trees/client";
+import { ActiveTreeMemberDetails } from "../components/active-tree-member-details";
 import type { MemberNavigationContext } from "../domain/member-navigation";
 
 function TreeUnavailable() {
@@ -38,31 +31,13 @@ export function MemberPage() {
   if (requestedTreeId) familyStore.activateTree(requestedTreeId, returnMode);
 
   const loadState = useFamilyLoadState();
-  const members = useFamily();
   const { t } = useI18n();
   if (requestedTreeId && (loadState === "loading" || loadState === "idle")) {
     return <TreeLoadingIndicator label={t("loading_tree")} />;
   }
   if (requestedTreeId && loadState === "error") return <TreeUnavailable />;
 
-  const member = members.find((candidate) => candidate.id === id);
-  if (!member) return <div className="p-8 text-center text-muted-foreground">{t("not_found")}</div>;
-
   const treeId = requestedTreeId ?? familyStore.getActiveTreeId();
   const navigation: MemberNavigationContext = { treeId, returnMode, returnPreview };
-  return (
-    <MemberDetailsView
-      member={member}
-      father={members.find((candidate) => candidate.id === member.father_id)}
-      mother={members.find((candidate) => candidate.id === member.mother_id)}
-      spouses={memberSpouses(member, members)}
-      children={getChildren(members, member.id)}
-      ancestors={paternalAncestors(member, members)}
-      descendants={memberDescendants(member, members)}
-      generation={getGeneration(members, member.id)}
-      imageSrc={familyStore.getMemberImageSrc(id)}
-      canEdit={familyStore.canEditActiveTree()}
-      navigation={navigation}
-    />
-  );
+  return <ActiveTreeMemberDetails memberId={id} navigation={navigation} />;
 }

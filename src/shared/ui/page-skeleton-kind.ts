@@ -4,6 +4,7 @@ type PageSkeletonKind =
   | "profile"
   | "settings"
   | "subfamilies"
+  | "branches"
   | "add-member"
   | "edit-member"
   | "member"
@@ -18,6 +19,7 @@ export function pageSkeletonKind(pathname: string): PageSkeletonKind {
   if (pathname === "/profile") return "profile";
   if (pathname === "/settings") return "settings";
   if (pathname === "/subfamilies") return "subfamilies";
+  if (pathname === "/branches") return "branches";
   if (pathname === "/auth") return "auth";
   if (pathname === "/reset-password") return "reset-password";
   if (/^\/invitation\/[^/]+$/.test(pathname)) return "invitation";

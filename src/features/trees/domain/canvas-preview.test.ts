@@ -13,6 +13,7 @@ import {
   hasCanvasDragStarted,
   hierarchyPositions,
   isDoublePanePress,
+  membersForCanvasPreview,
   strictDecadeOrder,
 } from "./canvas-preview";
 
@@ -83,6 +84,19 @@ const member = (id: string, patch: Partial<FamilyMember> = {}): FamilyMember =>
   }) as FamilyMember;
 
 describe("canvas preview capabilities", () => {
+  it("shows only members with birth dates in chronological preview", () => {
+    const members = [
+      member("dated", { birth_date: "1984-03-12" }),
+      member("undated"),
+      member("empty", { birth_date: "" }),
+    ];
+
+    expect(membersForCanvasPreview(members, "chronological").map(({ id }) => id)).toEqual([
+      "dated",
+    ]);
+    expect(membersForCanvasPreview(members, "lineage")).toEqual(members);
+  });
+
   it("keeps the chronological preview read-only even with edit access", () => {
     expect(canvasCapabilities(true, "chronological")).toEqual({
       canMutate: false,

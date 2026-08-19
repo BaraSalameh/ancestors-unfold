@@ -5,16 +5,23 @@ export function isMemberDescendant(
   ancestorId: string,
   targetId: string,
 ): boolean {
+  const childrenByParent = new Map<string, string[]>();
+  for (const member of members)
+    for (const parentId of [member.father_id, member.mother_id]) {
+      if (!parentId) continue;
+      const children = childrenByParent.get(parentId);
+      if (children) children.push(member.id);
+      else childrenByParent.set(parentId, [member.id]);
+    }
   const stack = [ancestorId];
   const seen = new Set<string>();
   while (stack.length) {
     const currentId = stack.pop()!;
     if (seen.has(currentId)) continue;
     seen.add(currentId);
-    for (const member of members) {
-      if (member.father_id !== currentId && member.mother_id !== currentId) continue;
-      if (member.id === targetId) return true;
-      stack.push(member.id);
+    for (const childId of childrenByParent.get(currentId) ?? []) {
+      if (childId === targetId) return true;
+      stack.push(childId);
     }
   }
   return false;

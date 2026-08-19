@@ -28,6 +28,7 @@ export function MemberRelationshipFields({
             value={form.draft.father_id}
             onChange={form.changeFather}
             options={form.eligibleFathers}
+            members={members}
             selectedOption={form.selectedFather}
             lang={lang}
             searchFirst
@@ -37,6 +38,7 @@ export function MemberRelationshipFields({
             value={form.draft.mother_id}
             onChange={(value) => form.patch("mother_id", value)}
             options={form.draft.father_id ? form.fatherWives : form.eligibleMothers}
+            members={members}
             selectedOption={form.selectedMother}
             lang={lang}
             searchFirst={!form.draft.father_id}
@@ -49,6 +51,7 @@ export function MemberRelationshipFields({
           value={form.draft.spouse_id}
           onChange={(value) => form.patch("spouse_id", value)}
           options={form.draft.gender === "male" ? form.females : form.males}
+          members={members}
           lang={lang}
           selectedOption={members.find((member) => member.id === form.draft.spouse_id)}
           disabled={lockedSpouse}

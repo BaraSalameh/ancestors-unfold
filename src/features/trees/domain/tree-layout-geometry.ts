@@ -21,21 +21,22 @@ const birthYear = (member: FamilyMember) => {
   return Number.isFinite(year) ? year : null;
 };
 
-// Visibility covers explicit collapse, inferred spouses, unknown wives, and parent links.
-// eslint-disable-next-line complexity
-function visibleMemberIds(members: FamilyMember[], collapsed: ReadonlySet<string>): string[] {
-  const byId = new Map(members.map((member) => [member.id, member]));
-  const wivesByHusband = computeWivesByHusband(members);
-  const hidden = new Set<string>();
+function childrenByParent(members: FamilyMember[]) {
   const children = new Map<string, string[]>();
-  for (const member of members) {
+  for (const member of members)
     for (const parentId of [member.father_id, member.mother_id]) {
       if (!parentId) continue;
       const current = children.get(parentId);
       if (current) current.push(member.id);
       else children.set(parentId, [member.id]);
     }
-  }
+  return children;
+}
+
+function inferredHiddenSpouses(members: FamilyMember[]) {
+  const byId = new Map(members.map((member) => [member.id, member]));
+  const wivesByHusband = computeWivesByHusband(members);
+  const hidden = new Set<string>();
   for (const wives of wivesByHusband.values())
     for (const wife of wives) {
       const hasFamily = Boolean(
@@ -44,6 +45,14 @@ function visibleMemberIds(members: FamilyMember[], collapsed: ReadonlySet<string
       );
       if (!hasFamily || wife.is_unknown) hidden.add(wife.id);
     }
+  return hidden;
+}
+
+function hideCollapsedDescendants(
+  hidden: Set<string>,
+  children: ReadonlyMap<string, string[]>,
+  collapsed: ReadonlySet<string>,
+) {
   const queue = [...collapsed];
   for (let index = 0; index < queue.length; index++) {
     for (const childId of children.get(queue[index]) ?? []) {
@@ -52,6 +61,12 @@ function visibleMemberIds(members: FamilyMember[], collapsed: ReadonlySet<string
       queue.push(childId);
     }
   }
+}
+
+// Visibility covers explicit collapse, inferred spouses, unknown wives, and parent links.
+function visibleMemberIds(members: FamilyMember[], collapsed: ReadonlySet<string>): string[] {
+  const hidden = inferredHiddenSpouses(members);
+  hideCollapsedDescendants(hidden, childrenByParent(members), collapsed);
   return members.filter(({ id }) => !hidden.has(id)).map(({ id }) => id);
 }
 

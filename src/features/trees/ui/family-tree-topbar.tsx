@@ -1,13 +1,18 @@
 import { LayoutGrid, Search, X } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import type { FamilyMember } from "@/features/members";
 import type { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { familyStore } from "../client/family-store";
-import { FamilyCsvImportDialog } from "./family-csv-import-dialog";
 import { canvasSearchResultLabel } from "./canvas-search-result";
+
+const FamilyCsvImportDialog = lazy(() =>
+  import("./family-csv-import-dialog").then(({ FamilyCsvImportDialog: component }) => ({
+    default: component,
+  })),
+);
 
 type I18n = ReturnType<typeof useI18n>;
 
@@ -142,8 +147,10 @@ export function EditToolbar({
           </Button>
         )}
       </div>
-      {canImport ? (
-        <FamilyCsvImportDialog open={csvImportOpen} onOpenChange={onCsvImportOpenChange} />
+      {canImport && csvImportOpen ? (
+        <Suspense fallback={null}>
+          <FamilyCsvImportDialog open onOpenChange={onCsvImportOpenChange} />
+        </Suspense>
       ) : null}
     </>
   );

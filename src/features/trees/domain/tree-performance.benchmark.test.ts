@@ -13,7 +13,8 @@ describe("large tree performance budgets", () => {
     const geometry = computeTreeLayoutGeometry(members, [], true, 10);
     const elapsed = performance.now() - started;
     expect(geometry.renderedIds).toHaveLength(count);
-    expect(elapsed).toBeLessThan(count === 10_000 ? 15_000 : 5_000);
+    const budget = count === 871 ? 1_000 : count === 2_000 ? 2_000 : 5_000;
+    expect(elapsed).toBeLessThan(budget);
   });
 
   it("removes 1,000 members in one pass", () => {

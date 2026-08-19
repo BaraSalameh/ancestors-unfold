@@ -9,34 +9,26 @@ import {
 } from "../domain/route-edges";
 import {
   type CanvasDetail,
-  chronologicalBandForYear,
   hierarchyPositions,
   DEFAULT_CHRONOLOGICAL_PERIOD,
-  type ChronologicalBand,
   type ChronologicalPeriod,
 } from "../domain/canvas-preview";
 import type { TreeLayoutGeometry } from "../domain/tree-layout-geometry";
 import { aggregateOverviewGraph } from "./family-tree-overview";
+import {
+  DECADE_CARD_GAP,
+  DIVORCED_COLOR,
+  NODE_H,
+  NODE_H_HUSBAND,
+  NODE_W,
+} from "./family-tree-layout-constants";
+import { createNodeProjectionContext, projectLayoutNodes } from "./family-tree-node-projection";
 
-export const NODE_W = 260;
-export const NODE_H = 130;
-const NODE_H_HUSBAND = 220;
-export const DECADE_ROW_H = 520;
-const DECADE_CARD_GAP = 140;
-export const DIVORCED_COLOR = "#94a3b8";
-const FAMILY_ROW_H = 340;
+export { DECADE_ROW_H, DIVORCED_COLOR, NODE_H, NODE_W } from "./family-tree-layout-constants";
 
 const birthYear = (member: FamilyMember) => {
   const year = Number.parseInt(member.birth_date?.slice(0, 4) ?? "", 10);
   return Number.isFinite(year) ? year : null;
-};
-
-const generationBandFor = (
-  member: FamilyMember,
-  period: ChronologicalPeriod,
-): ChronologicalBand | null => {
-  const year = birthYear(member);
-  return year === null ? null : chronologicalBandForYear(year, period);
 };
 
 interface LayoutVisibility {
@@ -199,8 +191,90 @@ function appendSpouseEdges(
   }
 }
 
-// Edge construction branches across father, mother-only, spouse, and editable projections.
-// eslint-disable-next-line complexity
+const edgeStyle = (color: string) => ({ stroke: color, strokeWidth: 2, strokeOpacity: 0.95 });
+const edgeArrow = (color: string) => ({
+  type: MarkerType.ArrowClosed,
+  color,
+  width: 16,
+  height: 16,
+});
+
+function fatherEdge(
+  member: FamilyMember,
+  fatherId: string,
+  context: {
+    memberById: Map<string, FamilyMember>;
+    wivesByHusband: ReturnType<typeof computeWivesByHusband>;
+    graph: dagre.graphlib.Graph | undefined;
+    editable: boolean;
+    onRequestRemove: (relationship: {
+      parentId: string;
+      childId: string;
+      motherId?: string;
+    }) => void;
+  },
+) {
+  const motherId = member.mother_id;
+  const wives = context.wivesByHusband.get(fatherId) ?? [];
+  const wifeIndex = motherId ? wives.findIndex(({ id }) => id === motherId) : -1;
+  const divorced = Boolean(
+    motherId && context.memberById.get(fatherId)?.divorced_from?.includes(motherId),
+  );
+  const color =
+    wifeIndex < 0 ? "#64748b" : divorced ? DIVORCED_COLOR : wifeColorFor(wifeIndex).stroke;
+  context.graph?.setEdge(fatherId, member.id);
+  return {
+    id: `p:${fatherId}:${member.id}`,
+    source: fatherId,
+    target: member.id,
+    sourceHandle: "child-out",
+    targetHandle: "parent-in",
+    type: "relationship",
+    style: edgeStyle(color),
+    markerEnd: edgeArrow(color),
+    data: {
+      parentId: fatherId,
+      childId: member.id,
+      motherId,
+      canRemove: context.editable,
+      onRequestRemove: () =>
+        context.onRequestRemove({ parentId: fatherId, childId: member.id, motherId }),
+      familyKey: `${fatherId}:${motherId ?? "unknown"}`,
+      kind: "parent",
+    },
+  } satisfies Edge;
+}
+
+function motherOnlyEdge(
+  member: FamilyMember,
+  motherId: string,
+  graph: dagre.graphlib.Graph | undefined,
+  editable: boolean,
+  onRequestRemove: (relationship: { parentId: string; childId: string; motherId?: string }) => void,
+) {
+  const color = "#64748b";
+  graph?.setEdge(motherId, member.id);
+  return {
+    id: `p:${motherId}:${member.id}`,
+    source: motherId,
+    target: member.id,
+    sourceHandle: "child-out",
+    targetHandle: "parent-in",
+    type: "relationship",
+    style: edgeStyle(color),
+    markerEnd: edgeArrow(color),
+    data: {
+      parentId: motherId,
+      childId: member.id,
+      motherId,
+      canRemove: editable,
+      familyKey: `${motherId}:mother-only`,
+      kind: "parent",
+      onRequestRemove: () => onRequestRemove({ parentId: motherId, childId: member.id, motherId }),
+    },
+  } satisfies Edge;
+}
+
 function buildLayoutEdges(
   members: FamilyMember[],
   memberById: Map<string, FamilyMember>,
@@ -213,86 +287,42 @@ function buildLayoutEdges(
   onRequestRemove: (relationship: { parentId: string; childId: string; motherId?: string }) => void,
 ): Edge[] {
   const edges: Edge[] = [];
-
-  const DEFAULT_EDGE_COLOR = "#64748b";
-  const mkStyle = (color: string) => ({ stroke: color, strokeWidth: 2, strokeOpacity: 0.95 });
-  const mkArrow = (color: string) => ({
-    type: MarkerType.ArrowClosed,
-    color,
-    width: 16,
-    height: 16,
-  });
-
-  // Parent - child edges. Source is the father's card (husband). Color reflects
-  // the mother's index in the father's wife list. If the wife is divorced from
-  // the father, use a neutral gray instead.
-  for (const m of members) {
-    if (hidden.has(m.id)) continue;
-    const fId = m.father_id && renderedIds.includes(m.father_id) ? m.father_id : undefined;
-    const mId = m.mother_id;
-
-    if (fId) {
-      let color = DEFAULT_EDGE_COLOR;
-      if (mId) {
-        const wives = wivesByHusband.get(fId) ?? [];
-        const idx = wives.findIndex((w) => w.id === mId);
-        if (idx >= 0) {
-          const father = memberById.get(fId);
-          const divorced = father?.divorced_from?.includes(mId);
-          color = divorced ? DIVORCED_COLOR : wifeColorFor(idx).stroke;
-        }
-      }
-      graph?.setEdge(fId, m.id);
-      edges.push({
-        id: `p:${fId}:${m.id}`,
-        source: fId,
-        target: m.id,
-        sourceHandle: "child-out",
-        targetHandle: "parent-in",
-        type: "relationship",
-        style: mkStyle(color),
-        markerEnd: mkArrow(color),
-        data: {
-          parentId: fId,
-          childId: m.id,
-          motherId: mId,
-          canRemove: editable,
-          onRequestRemove: () => onRequestRemove({ parentId: fId, childId: m.id, motherId: mId }),
-          familyKey: `${fId}:${mId ?? "unknown"}`,
-          kind: "parent",
-        },
-      });
-    } else if (mId && renderedIds.includes(mId)) {
-      graph?.setEdge(mId, m.id);
-      edges.push({
-        id: `p:${mId}:${m.id}`,
-        source: mId,
-        target: m.id,
-        sourceHandle: "child-out",
-        targetHandle: "parent-in",
-        type: "relationship",
-        style: mkStyle(DEFAULT_EDGE_COLOR),
-        markerEnd: mkArrow(DEFAULT_EDGE_COLOR),
-        data: {
-          parentId: mId,
-          childId: m.id,
-          motherId: mId,
-          canRemove: editable,
-          familyKey: `${mId}:mother-only`,
-          kind: "parent",
-          onRequestRemove: () => onRequestRemove({ parentId: mId, childId: m.id, motherId: mId }),
-        },
-      });
-    }
+  const visible = new Set(renderedIds);
+  for (const member of members) {
+    if (hidden.has(member.id)) continue;
+    if (member.father_id && visible.has(member.father_id))
+      edges.push(
+        fatherEdge(member, member.father_id, {
+          memberById,
+          wivesByHusband,
+          graph,
+          editable,
+          onRequestRemove,
+        }),
+      );
+    else if (member.mother_id && visible.has(member.mother_id))
+      edges.push(motherOnlyEdge(member, member.mother_id, graph, editable, onRequestRemove));
   }
-
-  // Spouse "married to" edges Ã¢â‚¬â€ only when both endpoints are still visible.
   appendSpouseEdges(edges, members, memberById, wifeHusbandOf, hidden);
   return edges;
 }
 
-// Layout preserves legacy fixed positions, chronological rows, and editable callbacks.
-// eslint-disable-next-line complexity
+function createLayoutGraph(
+  renderedIds: string[],
+  memberById: ReadonlyMap<string, FamilyMember>,
+  useProvidedGeometry: boolean,
+) {
+  if (useProvidedGeometry) return undefined;
+  const graph = new dagre.graphlib.Graph();
+  graph.setGraph({ rankdir: "TB", nodesep: 120, ranksep: 180, marginx: 40, marginy: 40 });
+  graph.setDefaultEdgeLabel(() => ({}));
+  for (const id of renderedIds) {
+    const height = memberById.get(id)?.gender === "male" ? NODE_H_HUSBAND : NODE_H;
+    graph.setNode(id, { width: NODE_W, height });
+  }
+  return graph;
+}
+
 export function layout(
   members: FamilyMember[],
   collapsed: Set<string>,
@@ -311,14 +341,7 @@ export function layout(
   const { memberById, wivesByHusband, wifeHusbandOf, childrenMap, hidden, renderedIds } =
     layoutVisibility(members, collapsed);
 
-  const g = providedGeometry ? undefined : new dagre.graphlib.Graph();
-  g?.setGraph({ rankdir: "TB", nodesep: 120, ranksep: 180, marginx: 40, marginy: 40 });
-  g?.setDefaultEdgeLabel(() => ({}));
-
-  for (const id of renderedIds) {
-    const h = memberById.get(id)?.gender === "male" ? NODE_H_HUSBAND : NODE_H;
-    g?.setNode(id, { width: NODE_W, height: h });
-  }
+  const g = createLayoutGraph(renderedIds, memberById, Boolean(providedGeometry));
 
   const edges = buildLayoutEdges(
     members,
@@ -336,70 +359,29 @@ export function layout(
     ? new Map(Object.entries(providedGeometry.positions))
     : hierarchyPositions(members, new Set(renderedIds));
 
-  // Generation depth â€” sons, cousins, second cousins etc. share a level.
-  const genCache = new Map<string, number>();
-  const genOf = (id: string, seen = new Set<string>()): number => {
-    if (genCache.has(id)) return genCache.get(id)!;
-    if (seen.has(id)) return 0;
-    seen.add(id);
-    const m = memberById.get(id);
-    if (!m) return 0;
-    const parents: number[] = [];
-    if (m.father_id && memberById.has(m.father_id)) parents.push(genOf(m.father_id, seen) + 1);
-    if (m.mother_id && memberById.has(m.mother_id)) parents.push(genOf(m.mother_id, seen) + 1);
-    const g = parents.length ? Math.max(...parents) : 0;
-    genCache.set(id, g);
-    return g;
-  };
-
-  // Node projection deliberately combines persisted, automatic, and chronological coordinates.
-  // eslint-disable-next-line complexity
-  const nodes: Node<MemberNodeData>[] = renderedIds.map((id) => {
-    const m = memberById.get(id)!;
-    const pos = g?.node(id);
-    const band = providedGeometry ? null : generationBandFor(m, chronologicalPeriod);
-    const earliestBand = providedGeometry
-      ? 0
-      : Math.min(
-          ...members
-            .map((member) => generationBandFor(member, chronologicalPeriod))
-            .filter((value): value is ChronologicalBand => value !== null)
-            .map((value) => value.start),
-        );
-    const autoY =
-      chronological && band && Number.isFinite(earliestBand)
-        ? ((band.start - earliestBand) / chronologicalPeriod) * DECADE_ROW_H
-        : genOf(id) * FAMILY_ROW_H;
-    const hierarchyPosition = hierarchy.get(id);
-    const autoX = chronological
-      ? (pos?.x ?? 0) - (pos?.width ?? NODE_W) / 2
-      : (hierarchyPosition?.x ?? (pos?.x ?? 0) - (pos?.width ?? NODE_W) / 2);
-    const hierarchyY = hierarchyPosition?.y ?? genOf(id) * FAMILY_ROW_H;
-    const hasCustom = typeof m.pos_x === "number" && typeof m.pos_y === "number";
-    return {
-      id,
-      type: "member",
-      position:
-        providedGeometry?.positions[id] ??
-        (hasCustom && !chronological
-          ? { x: m.pos_x!, y: m.pos_y! }
-          : { x: autoX, y: chronological ? autoY : hierarchyY }),
-      data: {
-        member: m,
-        highlighted: highlightId === id,
-        onOpen,
-        onAddParent,
-        onAddChild,
-        wives: wivesByHusband.get(id),
-        hasDescendants: (childrenMap.get(id)?.length ?? 0) > 0,
-        collapsed: collapsed.has(id),
-        onToggleCollapsed,
-        editable,
-        detail,
-      },
-      draggable: editable,
-      connectable: editable,
-    };
+  const projection = createNodeProjectionContext({
+    members,
+    memberById,
+    graph: g,
+    geometry: providedGeometry,
+    hierarchy,
+    chronological,
+    chronologicalPeriod,
+  });
+  const nodes = projectLayoutNodes({
+    renderedIds,
+    memberById,
+    wivesByHusband,
+    childrenMap,
+    collapsed,
+    projection,
+    highlightId,
+    onOpen,
+    onAddParent,
+    onAddChild,
+    onToggleCollapsed,
+    editable,
+    detail,
   });
 
   // Collision resolution â€” enforce min horizontal gap per generation row.

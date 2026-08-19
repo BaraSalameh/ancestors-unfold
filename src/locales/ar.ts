@@ -406,6 +406,7 @@ export const ar = {
   delete_selected_branches: "حذف {count} من الفروع المحددة",
   selected_branches: "تم تحديد {count} من الفروع",
   select_all_branches: "تحديد جميع الفروع",
+  select_branches: "تحديد",
   branches_deactivation_warning:
     "يؤدي هذا إلى إزالة جذور الفروع المحددة ووسومها وحذف حسابات المساهمين فيها نهائيًا. يبقى الأفراد والعلاقات والملفات.",
   branches_deactivated: "تم تعطيل {count} من الفروع",

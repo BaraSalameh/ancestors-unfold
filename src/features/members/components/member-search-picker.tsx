@@ -11,17 +11,19 @@ import {
 } from "@/shared/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 import { useI18n } from "@/shared/i18n";
-import { memberSearchLabel } from "../domain/member-display";
+import { memberMatchesPaternalSearch, memberPaternalSearchLabel } from "../domain/member-display";
 import type { FamilyMember } from "../domain/types";
 
 export function MemberSearchPicker({
   value,
   options,
+  members,
   onChange,
   disabled,
 }: {
   value: string;
   options: FamilyMember[];
+  members: FamilyMember[];
   onChange: (memberId: string) => void;
   disabled?: boolean;
 }) {
@@ -29,18 +31,18 @@ export function MemberSearchPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selected = options.find(({ id }) => id === value);
-  const normalized = query.trim().toLocaleLowerCase(lang);
-  const results = useMemo(
-    () =>
-      options.filter((member) => {
-        if (!normalized) return true;
-        const birthYear = member.birth_date?.slice(0, 4) ?? "";
-        return `${member.name_en} ${member.name_ar} ${birthYear}`
-          .toLocaleLowerCase(lang)
-          .includes(normalized);
-      }),
-    [lang, normalized, options],
+  const membersById = useMemo(
+    () => new Map(members.map((member) => [member.id, member])),
+    [members],
   );
+  const results = useMemo(
+    () => options.filter((member) => memberMatchesPaternalSearch(member, membersById, query)),
+    [membersById, options, query],
+  );
+  const labels = (member: FamilyMember) => ({
+    primary: memberPaternalSearchLabel(member, membersById, lang),
+    alternate: memberPaternalSearchLabel(member, membersById, lang === "ar" ? "en" : "ar"),
+  });
   const select = (memberId: string) => {
     onChange(memberId);
     setQuery("");
@@ -59,7 +61,7 @@ export function MemberSearchPicker({
           className="w-full justify-between font-normal"
         >
           <span className={selected ? "truncate" : "truncate text-muted-foreground"}>
-            {selected ? memberSearchLabel(selected, lang) : t("search_placeholder")}
+            {selected ? labels(selected).primary : t("search_placeholder")}
           </span>
           <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -81,7 +83,14 @@ export function MemberSearchPicker({
                     <Check
                       className={`me-2 h-4 w-4 ${value === member.id ? "opacity-100" : "opacity-0"}`}
                     />
-                    <span className="truncate">{memberSearchLabel(member, lang)}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate">{labels(member).primary}</span>
+                      {labels(member).alternate !== labels(member).primary && (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {labels(member).alternate}
+                        </span>
+                      )}
+                    </span>
                   </CommandItem>
                 ))}
               </CommandGroup>

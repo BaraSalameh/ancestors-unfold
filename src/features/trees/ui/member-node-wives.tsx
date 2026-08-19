@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { Heart, HelpCircle, UserPlus } from "lucide-react";
-import { isMemberDeceased, type FamilyMember } from "@/features/members";
+import { isMemberDeceased, type FamilyMember } from "@/features/members/domain";
 import { displayName, ordinal, useI18n } from "@/shared/i18n";
 import { wifeColorFor } from "../domain/wife-colors";
 

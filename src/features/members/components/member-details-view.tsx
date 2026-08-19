@@ -7,9 +7,9 @@ import { ExpandableProfileImage } from "../ui/expandable-profile-image";
 import { ancestorConnector } from "../domain/member-display";
 import { isMemberDeceased } from "../domain/member-status";
 import {
-  memberDetailsSearch,
+  memberDetailsDestination,
   memberReturnDestination,
-  type MemberNavigationContext,
+  type MemberDetailsNavigationContext,
 } from "../domain/member-navigation";
 import { type DescendantEntry, visibleDescendantEntries } from "../domain/member-details";
 import type { FamilyMember } from "../domain/types";
@@ -25,7 +25,7 @@ interface MemberDetailsViewProps {
   generation: number;
   imageSrc?: string;
   canEdit: boolean;
-  navigation: MemberNavigationContext;
+  navigation: MemberDetailsNavigationContext;
 }
 
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -51,7 +51,7 @@ function RelationshipCard({
 }: {
   label?: string;
   member?: FamilyMember;
-  navigation: MemberNavigationContext;
+  navigation: MemberDetailsNavigationContext;
 }) {
   const { t, lang } = useI18n();
   if (!member) {
@@ -64,9 +64,7 @@ function RelationshipCard({
   }
   return (
     <Link
-      to="/member/$id"
-      params={{ id: member.id }}
-      search={memberDetailsSearch(navigation)}
+      {...memberDetailsDestination(member.id, navigation)}
       className="block rounded-lg border bg-background p-3 text-sm hover:bg-accent"
     >
       {label && <div className="text-xs text-muted-foreground">{label}</div>}
@@ -83,7 +81,7 @@ function MemberToolbar({
 }: {
   memberId: string;
   canEdit: boolean;
-  navigation: MemberNavigationContext;
+  navigation: MemberDetailsNavigationContext;
 }) {
   const { t } = useI18n();
   return (
@@ -170,7 +168,7 @@ function SpouseSection({
 }: {
   member: FamilyMember;
   spouses: FamilyMember[];
-  navigation: MemberNavigationContext;
+  navigation: MemberDetailsNavigationContext;
 }) {
   const { t } = useI18n();
   return (
@@ -207,7 +205,7 @@ function AncestorSection({
   navigation,
 }: {
   ancestors: FamilyMember[];
-  navigation: MemberNavigationContext;
+  navigation: MemberDetailsNavigationContext;
 }) {
   const { t, lang, dir } = useI18n();
   return (
@@ -219,9 +217,7 @@ function AncestorSection({
           {ancestors.map((ancestor, index) => (
             <span key={ancestor.id} className="flex items-center gap-2">
               <Link
-                to="/member/$id"
-                params={{ id: ancestor.id }}
-                search={memberDetailsSearch(navigation)}
+                {...memberDetailsDestination(ancestor.id, navigation)}
                 className="rounded-md border px-2 py-1 hover:bg-accent"
               >
                 {displayName(ancestor, lang)}
@@ -242,7 +238,7 @@ function DescendantSection({
   navigation,
 }: {
   descendants: DescendantEntry[];
-  navigation: MemberNavigationContext;
+  navigation: MemberDetailsNavigationContext;
 }) {
   const { t, lang } = useI18n();
   const [collapsed, setCollapsed] = useState(
@@ -287,9 +283,7 @@ function DescendantSection({
                   </span>
                 )}
                 <Link
-                  to="/member/$id"
-                  params={{ id: member.id }}
-                  search={memberDetailsSearch(navigation)}
+                  {...memberDetailsDestination(member.id, navigation)}
                   className="hover:underline"
                 >
                   {displayName(member, lang)}

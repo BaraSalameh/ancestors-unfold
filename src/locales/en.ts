@@ -409,6 +409,7 @@ export const en = {
   delete_selected_branches: "Delete {count} selected branches",
   selected_branches: "{count} branches selected",
   select_all_branches: "Select all branches",
+  select_branches: "Select",
   branches_deactivation_warning:
     "This removes the selected branch roots and tags and permanently deletes their contributor accounts. Members, relationships, and files remain.",
   branches_deactivated: "{count} branches deactivated",

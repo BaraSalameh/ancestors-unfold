@@ -102,6 +102,7 @@ export function FamilyTreeView(props: FamilyTreeViewProps) {
           {props.topbar.canEdit ? <EditToolbar {...props.topbar} /> : null}
           <FamilyTreeSidebar {...props.sidebar} />
           <CanvasNavigationWidget
+            canvasRef={props.canvasRef}
             nodes={props.flow.nodes ?? []}
             t={props.sidebar.t}
             viewport={props.sidebar.viewport}

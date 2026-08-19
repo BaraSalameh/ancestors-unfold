@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { FamilyMember } from "./types";
 import {
   ancestorConnector,
-  memberNameWithBirthYear,
+  memberMatchesPaternalSearch,
   memberPaternalSearchLabel,
   memberSearchLabel,
 } from "./member-display";
@@ -26,8 +26,8 @@ describe("member display", () => {
   });
 
   it("appends a valid birth year to the localized member name", () => {
-    expect(memberNameWithBirthYear(member("1984-03-12"), "en")).toBe("Ahmad (1984)");
-    expect(memberNameWithBirthYear(member("1984-03-12"), "ar")).toBe("أحمد (1984)");
+    expect(memberSearchLabel(member("1984-03-12"), "en")).toBe("Ahmad (1984)");
+    expect(memberSearchLabel(member("1984-03-12"), "ar")).toBe("أحمد (1984)");
   });
 
   it("uses only the first two localized name words in search labels", () => {
@@ -54,7 +54,7 @@ describe("member display", () => {
   it.each([undefined, "", "unknown", "198x-03-12"])(
     "omits a missing or invalid birth year (%s)",
     (birthDate) => {
-      expect(memberNameWithBirthYear(member(birthDate), "en")).toBe("Ahmad");
+      expect(memberSearchLabel(member(birthDate), "en")).toBe("Ahmad");
     },
   );
 
@@ -84,5 +84,36 @@ describe("member display", () => {
     expect(memberPaternalSearchLabel(person, membersById, "en")).toBe(
       "Ahmad Ali Hassan Omar (1984)",
     );
+  });
+
+  it("matches either localized paternal chain and birth year", () => {
+    const person = { ...member("1984-03-12"), father_id: "father" };
+    const father = {
+      ...member(),
+      id: "father",
+      name_en: "Saleh",
+      name_ar: "صالح",
+    };
+    const membersById = new Map([person, father].map((relative) => [relative.id, relative]));
+
+    expect(memberMatchesPaternalSearch(person, membersById, "saleh")).toBe(true);
+    expect(memberMatchesPaternalSearch(person, membersById, "صالح")).toBe(true);
+    expect(memberMatchesPaternalSearch(person, membersById, "1984")).toBe(true);
+    expect(memberMatchesPaternalSearch(person, membersById, "nimer")).toBe(false);
+  });
+
+  it("falls back between languages and stops safely on cyclic ancestry", () => {
+    const person = { ...member(), name_ar: "", father_id: "father" };
+    const father = {
+      ...member(),
+      id: "father",
+      name_en: "Saleh",
+      name_ar: "صالح",
+      father_id: person.id,
+    };
+    const membersById = new Map([person, father].map((relative) => [relative.id, relative]));
+
+    expect(memberPaternalSearchLabel(person, membersById, "ar")).toBe("صالح");
+    expect(memberPaternalSearchLabel(person, membersById, "en")).toBe("Ahmad Saleh");
   });
 });

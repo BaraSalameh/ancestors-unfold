@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { chronologicalPeriodOrDefault, TreePage } from "@/features/trees";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { chronologicalPeriodOrDefault, treeSnapshotQueryOptions, TreePage } from "@/features/trees";
 
 interface TreeSearch {
   mode: "edit" | "view" | "preview";
@@ -40,6 +40,18 @@ export const Route = createFileRoute("/tree/$id")({
       ...(preview ? { preview } : {}),
     };
   },
+  loaderDeps: ({ search }) => ({ mode: search.mode }),
+  loader: ({ context, params, deps }) =>
+    context.queryClient.ensureQueryData(treeSnapshotQueryOptions(params.id, deps.mode)),
   head: () => ({ meta: [{ title: "Family Tree | Ancestors Unfold" }] }),
-  component: TreePage,
+  component: TreeRoute,
 });
+
+function TreeRoute() {
+  return (
+    <>
+      <TreePage initialSnapshot={Route.useLoaderData()} />
+      <Outlet />
+    </>
+  );
+}

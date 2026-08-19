@@ -13,10 +13,6 @@ export function ancestorConnector(dir: "ltr" | "rtl"): "→" | "←" {
   return dir === "rtl" ? "←" : "→";
 }
 
-export function memberNameWithBirthYear(member: FamilyMember, lang: Lang): string {
-  return memberSearchLabel(member, lang);
-}
-
 export function memberSearchLabel(member: SearchableMemberName, lang: Lang): string {
   const name = displayName(member, lang).trim().split(/\s+/u).slice(0, 2).join(" ");
   const birthYear = memberBirthYear(member);
@@ -44,6 +40,18 @@ export function memberPaternalSearchLabel(
   const name = lang === "ar" ? names.ar || names.en : names.en || names.ar;
   const birthYear = memberBirthYear(member);
   return birthYear ? `${name} (${birthYear})` : name;
+}
+
+export function memberMatchesPaternalSearch(
+  member: PaternalSearchMember,
+  membersById: ReadonlyMap<string, PaternalSearchMember>,
+  query: string,
+): boolean {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  return (["en", "ar"] as const).some((lang) =>
+    memberPaternalSearchLabel(member, membersById, lang).toLowerCase().includes(normalized),
+  );
 }
 
 function joinNames(names: string[]): string {

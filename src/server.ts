@@ -3,6 +3,7 @@ import "./shared/http/error-capture";
 import { consumeLastCapturedError } from "./shared/http/error-capture";
 import { renderErrorPage } from "./shared/http/error-page";
 import { handleApi } from "./server/api";
+import { logError } from "./shared/server/logger";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -31,7 +32,7 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
     return response;
   }
 
-  console.error(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`));
+  logError("SSR request failed", consumeLastCapturedError() ?? new Error("SSR_RENDER_FAILED"));
   return new Response(renderErrorPage(), {
     status: 500,
     headers: { "content-type": "text/html; charset=utf-8" },
@@ -47,7 +48,7 @@ export default {
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
-      console.error(error);
+      logError("Server request failed", error);
       return new Response(renderErrorPage(), {
         status: 500,
         headers: { "content-type": "text/html; charset=utf-8" },
