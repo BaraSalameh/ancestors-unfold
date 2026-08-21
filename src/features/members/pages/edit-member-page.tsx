@@ -2,7 +2,7 @@ import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { familyStore, useFamily } from "@/features/trees";
+import { familyStore, useFamily } from "@/features/trees/client";
 import { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import { MemberDeletionDialog } from "../components/member-deletion-dialog";

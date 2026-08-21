@@ -7,6 +7,22 @@ export interface MemberNavigationContext {
   returnPreview: MemberReturnPreview;
 }
 
+export interface TreeMemberRouteSearch {
+  mode: MemberReturnMode;
+  import?: "csv";
+  branchId?: string;
+  preview?: MemberReturnPreview;
+  period?: number;
+}
+
+export interface TreeModalMemberNavigationContext extends MemberNavigationContext {
+  presentation: "tree-modal";
+  treeSearch: TreeMemberRouteSearch;
+}
+
+export type MemberDetailsNavigationContext =
+  MemberNavigationContext | TreeModalMemberNavigationContext;
+
 interface ParsedMemberNavigationSearch {
   treeId?: string;
   returnMode: MemberReturnMode;
@@ -30,7 +46,32 @@ export function memberDetailsSearch(context: MemberNavigationContext) {
   return { ...context };
 }
 
-export function memberReturnDestination(context: MemberNavigationContext) {
+export function memberDetailsDestination(
+  memberId: string,
+  context: MemberDetailsNavigationContext,
+) {
+  if ("presentation" in context && context.presentation === "tree-modal") {
+    return {
+      to: "/tree/$id/member/$memberId" as const,
+      params: { id: context.treeId, memberId },
+      search: context.treeSearch,
+    };
+  }
+  return {
+    to: "/member/$id" as const,
+    params: { id: memberId },
+    search: memberDetailsSearch(context),
+  };
+}
+
+export function memberReturnDestination(context: MemberDetailsNavigationContext) {
+  if ("presentation" in context && context.presentation === "tree-modal") {
+    return {
+      to: "/tree/$id" as const,
+      params: { id: context.treeId },
+      search: context.treeSearch,
+    };
+  }
   return {
     to: "/tree/$id" as const,
     params: { id: context.treeId },

@@ -1,10 +1,18 @@
 import { useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
-import {
-  invitationRegistrationValues,
-  type AuthFormValues,
-  type InvitationPrefill,
-} from "../domain/auth-form";
+import { z } from "zod";
+import { validatedApiRequest } from "@/shared/api/client";
+import { invitationRegistrationValues, type AuthFormValues } from "../domain/auth-form";
+
+const invitationPrefillSchema = z
+  .object({
+    valid: z.literal(true),
+    invited_email: z.string().email(),
+    invited_name_en: z.string(),
+    invited_name_ar: z.string(),
+    member_gender: z.enum(["male", "female"]),
+  })
+  .passthrough();
 
 export function useAuthInvitation(
   invitationToken: string | undefined,
@@ -15,11 +23,10 @@ export function useAuthInvitation(
   useEffect(() => {
     if (!invitationToken) return;
     let active = true;
-    void fetch(`/api/invitations/${encodeURIComponent(invitationToken)}`)
-      .then(async (response) => {
-        if (!response.ok) throw new Error("INVALID_INVITATION");
-        return response.json() as Promise<InvitationPrefill>;
-      })
+    void validatedApiRequest(
+      invitationPrefillSchema,
+      `/api/invitations/${encodeURIComponent(invitationToken)}`,
+    )
       .then((invitation) => {
         if (!active) return;
         form.reset(invitationRegistrationValues(invitation));

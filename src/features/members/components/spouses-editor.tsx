@@ -77,6 +77,7 @@ export function SpousesEditor({
           results={results}
           linkedIds={linkedIds}
           onSelect={addExisting}
+          members={allMembers}
         />
         <Button
           type="button"

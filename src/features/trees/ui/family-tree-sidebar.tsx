@@ -2,7 +2,7 @@ import { CalendarRange, ChevronDown } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import type { Dispatch, SetStateAction } from "react";
 import type { Viewport } from "reactflow";
-import { SubfamilyPanel } from "@/features/subfamilies";
+import { SubfamilyPanel } from "@/features/branches/components";
 import type { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";

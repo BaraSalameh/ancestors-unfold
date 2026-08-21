@@ -40,4 +40,12 @@ describe("spouse editor projections", () => {
       spouseSearchResults("alice", [member("unknown", { name_en: "Alice", is_unknown: true })]),
     ).toEqual([]);
   });
+
+  it("searches wives by paternal ancestor name", () => {
+    const father = member("father", { gender: "male", name_en: "Khalil", name_ar: "خليل" });
+    const wife = member("wife", { name_en: "Maya", name_ar: "مايا", father_id: father.id });
+
+    expect(spouseSearchResults("khalil", [wife, father])).toEqual([wife]);
+    expect(spouseSearchResults("خليل", [wife, father])).toEqual([wife]);
+  });
 });

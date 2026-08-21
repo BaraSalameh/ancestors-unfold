@@ -1,4 +1,4 @@
-import { AuthError } from "@/features/auth";
+import { AuthError } from "@/features/auth/domain";
 import type { TranslationKey } from "@/locales";
 
 type Translate = (key: TranslationKey) => string;

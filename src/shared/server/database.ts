@@ -1,5 +1,6 @@
 import pg, { type PoolClient, type QueryResultRow } from "pg";
 import { serverConfig } from "./config";
+import { logError } from "./logger";
 
 const connectionString = serverConfig.DATABASE_URL;
 export const databaseConfigured = Boolean(connectionString);
@@ -16,7 +17,7 @@ async function closeDatabase() {
 }
 
 if (pool) {
-  pool.on("error", (error) => console.error("Unexpected PostgreSQL pool error", error));
+  pool.on("error", (error) => logError("Unexpected PostgreSQL pool error", error));
   const shutdown = () => void closeDatabase();
   process.once("SIGTERM", shutdown);
   process.once("SIGINT", shutdown);

@@ -1,7 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { Download, FileWarning, Upload } from "lucide-react";
-import { toast } from "sonner";
-import { ApiClientError } from "@/shared/api/client";
 import { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import {
@@ -13,21 +11,10 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { Label } from "@/shared/ui/label";
-import { treeClient, type FamilyCsvPreviewResponse } from "../api/tree-client";
-import { familyStore } from "../client/family-store";
-import {
-  familyCsvTemplate,
-  FAMILY_CSV_MAX_BYTES,
-  type FamilyCsvIssue,
-} from "../domain/family-csv-import";
+import type { FamilyCsvPreviewResponse } from "../api/tree-client";
+import { familyCsvTemplate, type FamilyCsvIssue } from "../domain/family-csv-import";
+import { useFamilyCsvImport, type FamilyCsvMappingState } from "./use-family-csv-import";
 
-type MappingState = {
-  linkedMembers: Record<string, string>;
-  grantedBranches: Record<string, string>;
-};
-
-// The wizard keeps file, preview, mapping, and draft-loading state within one modal lifecycle.
-// eslint-disable-next-line max-lines-per-function
 export function FamilyCsvImportDialog({
   open,
   onOpenChange,
@@ -36,118 +23,17 @@ export function FamilyCsvImportDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { t, lang } = useI18n();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [loading, setLoading] = useState(false);
-  const [fileName, setFileName] = useState("");
-  const [preview, setPreview] = useState<FamilyCsvPreviewResponse>();
-  const [issues, setIssues] = useState<FamilyCsvIssue[]>([]);
-  const [mappings, setMappings] = useState<MappingState>({
-    linkedMembers: {},
-    grantedBranches: {},
-  });
-  const dirty = familyStore.getPersistenceState().dirty;
-
-  const reset = () => {
-    setFileName("");
-    setPreview(undefined);
-    setIssues([]);
-    setMappings({ linkedMembers: {}, grantedBranches: {} });
-    if (inputRef.current) inputRef.current.value = "";
-  };
-  const changeOpen = (next: boolean) => {
-    onOpenChange(next);
-    if (!next) reset();
-  };
-
-  const selectFile = async (file: File | undefined) => {
-    if (!file || dirty) return;
-    if (file.size > FAMILY_CSV_MAX_BYTES) {
-      setFileName(file.name);
-      setPreview(undefined);
-      setIssues([
-        {
-          code: "FILE_TOO_LARGE",
-          message: t("family_csv_file_too_large"),
-          severity: "error",
-        },
-      ]);
-      return;
-    }
-    setLoading(true);
-    setFileName(file.name);
-    setIssues([]);
-    setPreview(undefined);
-    try {
-      const response = await treeClient.previewFamilyCsv(
-        familyStore.getActiveTreeId(),
-        await file.text(),
-      );
-      setPreview(response);
-      setMappings({ linkedMembers: {}, grantedBranches: {} });
-    } catch (caught) {
-      const payload = caught instanceof ApiClientError ? caught.payload : undefined;
-      const responseIssues = validationIssues(payload);
-      setIssues(
-        responseIssues.length
-          ? responseIssues
-          : [
-              {
-                code: caught instanceof ApiClientError ? caught.code : "REQUEST_FAILED",
-                message: t("family_csv_preview_failed"),
-                severity: "error",
-              },
-            ],
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const mappingComplete = useMemo(() => {
-    if (!preview) return false;
-    const memberValues = Object.values(mappings.linkedMembers).filter(Boolean);
-    const branchValues = Object.values(mappings.grantedBranches).filter(Boolean);
-    return (
-      preview.mappingRequirements.linkedMembers.every((requirement) => {
-        const selected = mappings.linkedMembers[requirement.target_member_id];
-        if (!selected) return true;
-        return preview.members.some(
-          (member) => member.id === selected && member.gender === requirement.gender,
-        );
-      }) &&
-      preview.mappingRequirements.grantedBranches.every((requirement) => {
-        const selected = mappings.grantedBranches[requirement.target_branch_id];
-        return !selected || preview.subfamilies.some((branch) => branch.id === selected);
-      }) &&
-      new Set(memberValues).size === memberValues.length &&
-      new Set(branchValues).size === branchValues.length
-    );
-  }, [mappings, preview]);
-
-  const loadDraft = () => {
-    if (!preview || !mappingComplete) return;
-    try {
-      familyStore.stageFamilyCsvImport(preview, mappings);
-      toast.success(t("family_csv_draft_loaded"));
-      changeOpen(false);
-    } catch (caught) {
-      toast.error(
-        caught instanceof ApiClientError && caught.code === "VERSION_CONFLICT"
-          ? t("tree_version_conflict")
-          : t("family_csv_mapping_invalid"),
-      );
-    }
-  };
+  const importState = useFamilyCsvImport(onOpenChange);
 
   return (
-    <Dialog open={open} onOpenChange={changeOpen}>
+    <Dialog open={open} onOpenChange={importState.changeOpen}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("family_csv_import_title")}</DialogTitle>
           <DialogDescription>{t("family_csv_import_description")}</DialogDescription>
         </DialogHeader>
 
-        {dirty ? (
+        {importState.dirty ? (
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
             {t("family_csv_save_or_discard")}
           </div>
@@ -157,8 +43,8 @@ export function FamilyCsvImportDialog({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => inputRef.current?.click()}
-                loading={loading}
+                onClick={() => importState.inputRef.current?.click()}
+                loading={importState.loading}
               >
                 <Upload aria-hidden="true" />
                 {t("family_csv_choose_file")}
@@ -171,48 +57,53 @@ export function FamilyCsvImportDialog({
                 <Download aria-hidden="true" />
                 {t("family_csv_download_template")}
               </Button>
-              {fileName ? <span className="text-sm text-muted-foreground">{fileName}</span> : null}
+              {importState.fileName ? (
+                <span className="text-sm text-muted-foreground">{importState.fileName}</span>
+              ) : null}
               <input
-                ref={inputRef}
+                ref={importState.inputRef}
                 className="sr-only"
                 type="file"
                 accept=".csv,text/csv"
-                onChange={(event) => void selectFile(event.target.files?.[0])}
+                onChange={(event) => void importState.selectFile(event.target.files?.[0])}
               />
             </div>
             <p className="text-xs text-muted-foreground">{t("family_csv_required_fields")}</p>
           </section>
         )}
 
-        {issues.length ? (
-          <IssueList issues={issues} onDownload={() => downloadIssues(issues)} />
+        {importState.issues.length ? (
+          <IssueList
+            issues={importState.issues}
+            onDownload={() => downloadIssues(importState.issues)}
+          />
         ) : null}
-        {preview ? (
+        {importState.preview ? (
           <>
-            <Summary preview={preview} />
-            {preview.warnings.length ? (
+            <Summary preview={importState.preview} />
+            {importState.preview.warnings.length ? (
               <IssueList
-                issues={preview.warnings as FamilyCsvIssue[]}
-                onDownload={() => downloadIssues(preview.warnings as FamilyCsvIssue[])}
+                issues={importState.preview.warnings as FamilyCsvIssue[]}
+                onDownload={() => downloadIssues(importState.preview!.warnings as FamilyCsvIssue[])}
               />
             ) : null}
             <MappingFields
-              preview={preview}
-              mappings={mappings}
-              setMappings={setMappings}
+              preview={importState.preview}
+              mappings={importState.mappings}
+              setMappings={importState.setMappings}
               lang={lang}
             />
           </>
         ) : null}
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => changeOpen(false)}>
+          <Button type="button" variant="outline" onClick={() => importState.changeOpen(false)}>
             {t("cancel")}
           </Button>
           <Button
             type="button"
-            disabled={!preview || !mappingComplete || dirty}
-            onClick={loadDraft}
+            disabled={!importState.preview || !importState.mappingComplete || importState.dirty}
+            onClick={importState.loadDraft}
           >
             {t("family_csv_load_draft")}
           </Button>
@@ -249,8 +140,8 @@ function MappingFields({
   lang,
 }: {
   preview: FamilyCsvPreviewResponse;
-  mappings: MappingState;
-  setMappings: React.Dispatch<React.SetStateAction<MappingState>>;
+  mappings: FamilyCsvMappingState;
+  setMappings: Dispatch<SetStateAction<FamilyCsvMappingState>>;
   lang: "en" | "ar";
 }) {
   const { t } = useI18n();
@@ -357,19 +248,6 @@ function IssueList({ issues, onDownload }: { issues: FamilyCsvIssue[]; onDownloa
         ))}
       </ul>
     </section>
-  );
-}
-
-function validationIssues(payload: unknown): FamilyCsvIssue[] {
-  if (
-    !payload ||
-    typeof payload !== "object" ||
-    !("issues" in payload) ||
-    !Array.isArray(payload.issues)
-  )
-    return [];
-  return payload.issues.filter((issue): issue is FamilyCsvIssue =>
-    Boolean(issue && typeof issue === "object" && "code" in issue && "message" in issue),
   );
 }
 

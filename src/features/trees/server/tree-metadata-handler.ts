@@ -61,7 +61,7 @@ async function updateMetadata(
     );
     return updated;
   });
-  return json(result);
+  return json({ ...result, version: Number(result.version) });
 }
 
 async function deleteTree(treeId: string, session: Session, requestId: string) {

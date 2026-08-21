@@ -1,4 +1,5 @@
 import type { FamilyMember } from "./types";
+import { memberMatchesPaternalSearch } from "./member-display";
 
 export function linkedSpouseIds(maleId: string, members: FamilyMember[]): Set<string> {
   const male = members.find((member) => member.id === maleId);
@@ -24,12 +25,9 @@ export function linkedSpouses(
 export function spouseSearchResults(query: string, members: FamilyMember[]): FamilyMember[] {
   const normalized = query.trim();
   if (!normalized) return [];
-  const lower = normalized.toLowerCase();
+  const membersById = new Map(members.map((member) => [member.id, member]));
   return members
     .filter((member) => member.gender === "female" && !member.is_unknown)
-    .filter(
-      (member) =>
-        member.name_en.toLowerCase().includes(lower) || member.name_ar.includes(normalized),
-    )
+    .filter((member) => memberMatchesPaternalSearch(member, membersById, normalized))
     .slice(0, 10);
 }

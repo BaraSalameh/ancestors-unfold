@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { familyStore, type FamilyLoadState, type PersistenceState } from "./family-store";
+import { familyStore } from "./family-store";
+import type { FamilyLoadState, PersistenceState } from "./family-store-types";
 
 export function useFamily() {
   return useSyncExternalStore(familyStore.subscribe, familyStore.getAll, familyStore.getAll);

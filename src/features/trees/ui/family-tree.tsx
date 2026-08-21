@@ -1,6 +1,5 @@
 import "reactflow/dist/style.css";
 import { ReactFlowProvider } from "reactflow";
-import type { TreeAccessMode } from "../domain/access-policy";
 import {
   DEFAULT_CHRONOLOGICAL_PERIOD,
   type ChronologicalPeriod,
@@ -12,7 +11,6 @@ import { useFamilyTreeProjection } from "./use-family-tree-projection";
 import { useFamilyTreeState } from "./use-family-tree-state";
 
 interface FamilyTreeProps {
-  accessMode?: TreeAccessMode;
   initialBranchId?: string;
   chronologicalPeriod?: ChronologicalPeriod;
   overviewMode?: boolean;
@@ -27,7 +25,6 @@ function Inner({
   overviewMode = false,
   preview = "lineage",
   chronologicalPeriod = DEFAULT_CHRONOLOGICAL_PERIOD,
-  accessMode = "edit",
   initialBranchId,
   csvImportOpen = false,
   onCsvImportOpenChange = () => undefined,
@@ -39,7 +36,6 @@ function Inner({
     readOnly,
   });
   const projection = useFamilyTreeProjection({
-    accessMode,
     chronologicalPeriod,
     previewType: preview,
     state,

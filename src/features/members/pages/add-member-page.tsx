@@ -1,14 +1,14 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { MemberForm } from "@/features/members";
-import { familyStore, useFamily } from "@/features/trees";
+import { familyStore, useFamily } from "@/features/trees/client";
 import { useI18n } from "@/shared/i18n";
 import { addMemberTitleKey } from "../domain/add-member-title";
 import { memberDetailsSearch } from "../domain/member-navigation";
 import { existingStagedSpouse, type StagedSpouse } from "../domain/staged-spouse";
 import { StagedSpousesEditor } from "../components/staged-spouses-editor";
 import type { FamilyMember } from "../domain/types";
+import { MemberForm } from "../ui/member-form";
 
 function lockedFatherForMother(
   parentRole: "father" | "mother" | undefined,

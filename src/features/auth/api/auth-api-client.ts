@@ -5,9 +5,44 @@ import {
   type RegistrationInput,
   type RegistrationResult,
 } from "../domain/auth-service";
-import { ApiClientError, apiRequest } from "@/shared/api/client";
+import { z } from "zod";
+import { ApiClientError, validatedApiRequest } from "@/shared/api/client";
 
-async function call<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+const authSessionSchema = z
+  .object({
+    user: z
+      .object({
+        id: z.string().min(1),
+        email: z.string().email(),
+        fullNameEn: z.string(),
+        fullNameAr: z.string(),
+        gender: z.enum(["male", "female"]).nullable(),
+      })
+      .strict(),
+    createdAt: z.string().datetime(),
+    currentTree: z
+      .object({
+        id: z.string().min(1),
+        nameEn: z.string().nullable(),
+        nameAr: z.string().nullable(),
+        role: z.enum(["owner", "contributor"]),
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+const registrationResultSchema = z
+  .object({ verificationRequired: z.literal(true), email: z.string().email() })
+  .strict();
+const successSchema = z.object({ ok: z.literal(true) }).passthrough();
+const deletionCodeSchema = z.object({ expiresAt: z.string().datetime() }).strict();
+
+async function call<T>(
+  schema: z.ZodType<T>,
+  path: string,
+  method = "GET",
+  body?: unknown,
+): Promise<T> {
   const known = [
     "EMAIL_EXISTS",
     "INVALID_CREDENTIALS",
@@ -23,7 +58,7 @@ async function call<T>(path: string, method = "GET", body?: unknown): Promise<T>
     "INVALID_INVITATION",
   ] as const;
   try {
-    return await apiRequest<T>(path, { method, body });
+    return await validatedApiRequest(schema, path, { method, body });
   } catch (error) {
     if (!(error instanceof ApiClientError)) throw new AuthError("STORAGE_ERROR");
     if (known.includes(error.code as (typeof known)[number])) {
@@ -36,46 +71,60 @@ async function call<T>(path: string, method = "GET", body?: unknown): Promise<T>
   }
 }
 
+async function callForSuccess(path: string, method: string, body?: unknown): Promise<void> {
+  await call(successSchema, path, method, body);
+}
+
 export const apiAuthService: AuthService = {
   register(input: RegistrationInput) {
-    return call<RegistrationResult>("/api/auth/register", "POST", input);
+    return call<RegistrationResult>(registrationResultSchema, "/api/auth/register", "POST", input);
   },
   confirmEmail(email, code) {
-    return call<AuthSession>("/api/auth/email-verification/confirm", "POST", { email, code });
-  },
-  resendEmailCode(email) {
-    return call<void>("/api/auth/email-verification/resend", "POST", { email });
-  },
-  requestPasswordReset(email) {
-    return call<void>("/api/auth/password-reset/request", "POST", { email });
-  },
-  confirmPasswordReset(token, password) {
-    return call<void>("/api/auth/password-reset/confirm", "POST", { token, password });
-  },
-  requestEmailChange(email, currentPassword) {
-    return call<void>("/api/profile/email-change/request", "POST", { email, currentPassword });
-  },
-  confirmEmailChange(code) {
-    return call<AuthSession>("/api/profile/email-change/confirm", "POST", { code });
-  },
-  updateProfile(fullNameEn, fullNameAr, gender) {
-    return call<AuthSession>("/api/profile", "PATCH", { fullNameEn, fullNameAr, gender });
-  },
-  requestContributorAccountDeletionCode(confirmation) {
-    return call<{ expiresAt: string }>("/api/profile/deletion-code/request", "POST", {
-      confirmation,
+    return call<AuthSession>(authSessionSchema, "/api/auth/email-verification/confirm", "POST", {
+      email,
+      code,
     });
   },
+  resendEmailCode(email) {
+    return callForSuccess("/api/auth/email-verification/resend", "POST", { email });
+  },
+  requestPasswordReset(email) {
+    return callForSuccess("/api/auth/password-reset/request", "POST", { email });
+  },
+  confirmPasswordReset(token, password) {
+    return callForSuccess("/api/auth/password-reset/confirm", "POST", { token, password });
+  },
+  requestEmailChange(email, currentPassword) {
+    return callForSuccess("/api/profile/email-change/request", "POST", {
+      email,
+      currentPassword,
+    });
+  },
+  confirmEmailChange(code) {
+    return call<AuthSession>(authSessionSchema, "/api/profile/email-change/confirm", "POST", {
+      code,
+    });
+  },
+  updateProfile(fullNameEn, fullNameAr, gender) {
+    return call<AuthSession>(authSessionSchema, "/api/profile", "PATCH", {
+      fullNameEn,
+      fullNameAr,
+      gender,
+    });
+  },
+  requestContributorAccountDeletionCode(confirmation) {
+    return call(deletionCodeSchema, "/api/profile/deletion-code/request", "POST", { confirmation });
+  },
   deleteContributorAccount(confirmation, code) {
-    return call<void>("/api/profile", "DELETE", { confirmation, code });
+    return callForSuccess("/api/profile", "DELETE", { confirmation, code });
   },
   login(email: string, password: string) {
-    return call<AuthSession>("/api/auth/login", "POST", { email, password });
+    return call<AuthSession>(authSessionSchema, "/api/auth/login", "POST", { email, password });
   },
   logout() {
-    return call<void>("/api/auth/logout", "POST");
+    return callForSuccess("/api/auth/logout", "POST");
   },
   getSession() {
-    return call<AuthSession | null>("/api/auth/session");
+    return call<AuthSession | null>(authSessionSchema.nullable(), "/api/auth/session");
   },
 };

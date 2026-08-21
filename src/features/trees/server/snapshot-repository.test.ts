@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { filterSnapshotMembers, loadRenderableSnapshot } from "./snapshot-reader";
+import {
+  filterSnapshotBranches,
+  filterSnapshotMembers,
+  loadRenderableSnapshot,
+} from "./snapshot-reader";
 
 const now = "2026-07-18T00:00:00.000Z";
 
@@ -123,5 +127,29 @@ describe("tree snapshot projection", () => {
     expect(filtered.members[0].spouse_ids).toEqual([]);
     expect(filtered.members[1]).toMatchObject({ father_id: "father" });
     expect(filtered.members[1].mother_id).toBeUndefined();
+  });
+
+  it("removes branch metadata outside the contributor scope", async () => {
+    const snapshot = await loadRenderableSnapshot(runner(), "tree", 7, true);
+    snapshot.subfamilies.push({
+      ...snapshot.subfamilies[0],
+      id: "hidden-branch",
+      parent_subfamily_id: "branch",
+      notes: "must not cross the scope boundary",
+    });
+
+    const filtered = filterSnapshotBranches(
+      snapshot,
+      new Set(["hidden-branch"]),
+      new Set(["child"]),
+    );
+
+    expect(filtered.subfamilies).toEqual([
+      expect.objectContaining({
+        id: "hidden-branch",
+        linked_male_id: undefined,
+        parent_subfamily_id: undefined,
+      }),
+    ]);
   });
 });

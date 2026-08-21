@@ -1,3 +1,5 @@
+import type { z } from "zod";
+
 export class ApiClientError extends Error {
   constructor(
     readonly code: string,
@@ -11,7 +13,7 @@ export class ApiClientError extends Error {
 
 type ApiRequestOptions = Omit<RequestInit, "body"> & { body?: unknown };
 
-export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+async function apiRequest(path: string, options: ApiRequestOptions = {}): Promise<unknown> {
   const headers = new Headers(options.headers);
   const body = options.body === undefined ? undefined : JSON.stringify(options.body);
   if (body !== undefined && !headers.has("content-type")) {
@@ -34,5 +36,13 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
         : "REQUEST_FAILED";
     throw new ApiClientError(code, response.status, payload);
   }
-  return payload as T;
+  return payload;
+}
+
+export async function validatedApiRequest<Schema extends z.ZodTypeAny>(
+  schema: Schema,
+  path: string,
+  options: ApiRequestOptions = {},
+): Promise<z.output<Schema>> {
+  return schema.parse(await apiRequest(path, options));
 }

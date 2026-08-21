@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Mail } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/features/auth";
+import { useAuth } from "@/features/auth/client";
 import { useI18n } from "@/shared/i18n";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";

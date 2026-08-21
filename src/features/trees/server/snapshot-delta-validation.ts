@@ -3,13 +3,7 @@ import type { SnapshotDeltaInput } from "@/server/snapshot-delta-schema";
 import { ApiError } from "@/server/security";
 import { assertBranchSetUnique, loadTreeBranches } from "./snapshot-branch-uniqueness";
 
-// Reference validation deliberately walks every relationship-bearing field in the wire contract.
-// eslint-disable-next-line complexity
-export async function validateDeltaReferences(
-  client: PoolClient,
-  treeId: string,
-  delta: SnapshotDeltaInput,
-) {
+function memberReferences(delta: SnapshotDeltaInput) {
   const submittedMemberIds = new Set(delta.upsertMembers.map(({ id }) => id));
   const referencedMemberIds = new Set<string>();
   for (const member of delta.upsertMembers)
@@ -24,6 +18,15 @@ export async function validateDeltaReferences(
   for (const branch of delta.upsertSubfamilies)
     if (branch.linked_male_id && !submittedMemberIds.has(branch.linked_male_id))
       referencedMemberIds.add(branch.linked_male_id);
+  return referencedMemberIds;
+}
+
+async function validateMemberReferences(
+  client: PoolClient,
+  treeId: string,
+  delta: SnapshotDeltaInput,
+) {
+  const referencedMemberIds = memberReferences(delta);
   if (delta.deleteMemberIds.some((id) => referencedMemberIds.has(id)))
     throw new ApiError("INVALID_INPUT", 400);
   if (referencedMemberIds.size) {
@@ -34,6 +37,9 @@ export async function validateDeltaReferences(
     );
     if (existing.rowCount !== referencedMemberIds.size) throw new ApiError("INVALID_INPUT", 400);
   }
+}
+
+function branchReferences(delta: SnapshotDeltaInput) {
   const submittedBranchIds = new Set(delta.upsertSubfamilies.map(({ id }) => id));
   const referencedBranchIds = new Set<string>();
   for (const member of delta.upsertMembers)
@@ -42,6 +48,15 @@ export async function validateDeltaReferences(
   for (const branch of delta.upsertSubfamilies)
     if (branch.parent_subfamily_id && !submittedBranchIds.has(branch.parent_subfamily_id))
       referencedBranchIds.add(branch.parent_subfamily_id);
+  return referencedBranchIds;
+}
+
+async function validateBranchReferences(
+  client: PoolClient,
+  treeId: string,
+  delta: SnapshotDeltaInput,
+) {
+  const referencedBranchIds = branchReferences(delta);
   if (delta.deleteSubfamilyIds.some((id) => referencedBranchIds.has(id)))
     throw new ApiError("INVALID_INPUT", 400);
   if (referencedBranchIds.size) {
@@ -52,6 +67,16 @@ export async function validateDeltaReferences(
     );
     if (existing.rowCount !== referencedBranchIds.size) throw new ApiError("INVALID_INPUT", 400);
   }
+}
+
+// Reference validation deliberately walks every relationship-bearing field in the wire contract.
+export async function validateDeltaReferences(
+  client: PoolClient,
+  treeId: string,
+  delta: SnapshotDeltaInput,
+) {
+  await validateMemberReferences(client, treeId, delta);
+  await validateBranchReferences(client, treeId, delta);
 }
 
 export async function validateDeltaBranches(

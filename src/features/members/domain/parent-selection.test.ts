@@ -25,8 +25,6 @@ const member = (
   ...extra,
 });
 
-// The scenarios intentionally share one compact family-member fixture builder.
-// eslint-disable-next-line max-lines-per-function
 describe("parent selection", () => {
   it("filters candidates by role, known older birth date, and excluded relationships", () => {
     const candidates = [

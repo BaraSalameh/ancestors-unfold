@@ -1,4 +1,5 @@
-import { apiRequest } from "@/shared/api/client";
+import { z } from "zod";
+import { validatedApiRequest } from "@/shared/api/client";
 
 export type UploadedMemberImage = {
   image_url: string;
@@ -6,21 +7,25 @@ export type UploadedMemberImage = {
   image_asset_id: string;
 };
 
-type SignedUpload = {
-  cloudName: string;
-  apiKey: string;
-  signature: string;
-  parameters: Record<string, string | number>;
-};
+const signedUploadSchema = z
+  .object({
+    cloudName: z.string().min(1),
+    apiKey: z.string().min(1),
+    signature: z.string().min(1),
+    parameters: z.record(z.union([z.string(), z.number()])),
+  })
+  .strict();
 
-type CloudinaryUploadResponse = {
-  asset_id: string;
-  public_id: string;
-  secure_url: string;
-  version: number;
-  signature: string;
-  error?: { message?: string };
-};
+const cloudinaryUploadSchema = z.object({
+  asset_id: z.string().min(1),
+  public_id: z.string().min(1),
+  secure_url: z.string().url(),
+  version: z.number(),
+  signature: z.string().min(1),
+  error: z.object({ message: z.string().optional() }).optional(),
+});
+const successSchema = z.object({ ok: z.literal(true) }).strict();
+type CloudinaryUploadResponse = z.infer<typeof cloudinaryUploadSchema>;
 
 function postUpload(
   url: string,
@@ -35,13 +40,19 @@ function postUpload(
     };
     request.onerror = () => reject(new Error("IMAGE_UPLOAD_FAILED"));
     request.onload = () => {
-      let payload: CloudinaryUploadResponse;
+      let rawPayload: unknown;
       try {
-        payload = JSON.parse(request.responseText) as CloudinaryUploadResponse;
+        rawPayload = JSON.parse(request.responseText) as unknown;
       } catch {
         reject(new Error("IMAGE_UPLOAD_FAILED"));
         return;
       }
+      const parsed = cloudinaryUploadSchema.safeParse(rawPayload);
+      if (!parsed.success) {
+        reject(new Error("IMAGE_UPLOAD_FAILED"));
+        return;
+      }
+      const payload = parsed.data;
       if (request.status < 200 || request.status >= 300 || payload.error) {
         reject(new Error(payload.error?.message ?? "IMAGE_UPLOAD_FAILED"));
         return;
@@ -59,10 +70,11 @@ export const memberImageClient = {
     file: File,
     onProgress: (progress: number) => void,
   ): Promise<UploadedMemberImage> {
-    const signed = await apiRequest<SignedUpload>(`/api/trees/${treeId}/member-images/sign`, {
-      method: "POST",
-      body: { memberId },
-    });
+    const signed = await validatedApiRequest(
+      signedUploadSchema,
+      `/api/trees/${treeId}/member-images/sign`,
+      { method: "POST", body: { memberId } },
+    );
     const body = new FormData();
     body.set("file", file);
     body.set("api_key", signed.apiKey);
@@ -73,7 +85,7 @@ export const memberImageClient = {
       body,
       onProgress,
     );
-    await apiRequest(`/api/trees/${treeId}/member-images/register`, {
+    await validatedApiRequest(successSchema, `/api/trees/${treeId}/member-images/register`, {
       method: "POST",
       body: {
         assetId: uploaded.asset_id,
@@ -91,7 +103,7 @@ export const memberImageClient = {
     };
   },
   discard(treeId: string, assetId: string) {
-    return apiRequest(`/api/trees/${treeId}/member-images/discard`, {
+    return validatedApiRequest(successSchema, `/api/trees/${treeId}/member-images/discard`, {
       method: "POST",
       body: { assetId },
     });

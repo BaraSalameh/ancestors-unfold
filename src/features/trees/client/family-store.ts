@@ -1,9 +1,6 @@
-/* eslint-disable max-lines -- The external store centralizes atomic tree and import-draft state. */
 import type { FamilyMember, SubFamily } from "@/features/members/domain";
 import { ApiClientError } from "@/shared/api/client";
-import { treeClient, type FamilyCsvPreviewResponse } from "../api/tree-client";
-// eslint-disable-next-line no-restricted-imports -- tree persistence coordinates staged member-image uploads.
-import { memberImageClient } from "@/features/members/api";
+import { treeClient } from "../api/tree-client";
 import { createMemberCommands, type MemberCommandContext } from "./family-store-member-commands";
 import {
   createSubfamilyCommands,
@@ -15,13 +12,19 @@ import {
   type TreeAccessMode,
   type TreeAccessScope,
 } from "../domain/access-policy";
-import { buildFamilyCsvDraft, type FamilyCsvMappingSelections } from "./family-csv-draft";
+import type { TreeSnapshot } from "../domain/tree-snapshot";
+import { createFamilyDraftHistory, type DraftChange } from "./family-draft-history";
+import { persistFamilyDraft, type PendingCsvImport } from "./family-draft-persistence";
+import { createFamilyDraftTracking } from "./family-draft-tracking";
+import { createFamilyStoreSelectors } from "./family-store-selectors";
+import { createFamilyCsvStoreApi } from "./family-csv-store-api";
+import { cloneMembers, cloneSubfamilies, indexFamily } from "./family-draft-entities";
+import { createFamilyImageStaging } from "./family-image-staging";
 import {
-  applyEntityChanges,
-  entityChanges,
-  mapsEqual,
-  type EntityChange,
-} from "./family-store-history";
+  discardRemovedDraftImages,
+  discardUploadedDraftImages,
+} from "./family-draft-image-cleanup";
+import type { FamilyLoadState, PersistenceState } from "./family-store-types";
 
 let activeTreeId = "";
 let activeAccessMode: TreeAccessMode = "edit";
@@ -34,48 +37,17 @@ let accessScope: TreeAccessScope = "preview";
 let assignedBranchId: string | undefined;
 let canImportCsv = false;
 const listeners = new Set<() => void>();
-type DraftChange = {
-  members: EntityChange<FamilyMember>[];
-  subfamilies: EntityChange<SubFamily>[];
-  beforeImages: Map<string, File>;
-  afterImages: Map<string, File>;
-};
-const MAX_HISTORY = 100;
-let past: DraftChange[] = [];
-let future: DraftChange[] = [];
-let stagedImages = new Map<string, File>();
-let stagedImageUrls = new Map<string, string>();
-let baselineMembers: FamilyMember[] = [];
-let baselineSubfamilies: SubFamily[] = [];
+const images = createFamilyImageStaging();
 let memberById = new Map<string, FamilyMember>();
-let baselineMemberById = new Map<string, FamilyMember>();
-let baselineSubfamilyById = new Map<string, SubFamily>();
 let branchRootIds = new Set<string>();
-let dirtyMemberIds = new Set<string>();
-let dirtySubfamilyIds = new Set<string>();
+const tracking = createFamilyDraftTracking();
 let remoteVersion = 1;
 let persistenceError: string | null = null;
 let saveInFlight = false;
 let saveGeneration = 0;
 let pendingBatchId: string | null = null;
 
-type PendingCsvImport = {
-  expectedVersion: number;
-  sourceMemberIds: Map<string, string>;
-  sourceBranchIds: Map<string, string>;
-  protectedMemberIds: Map<string, FamilyMember["gender"]>;
-  protectedBranchIds: Set<string>;
-};
 let pendingCsvImport: PendingCsvImport | null = null;
-
-export type PersistenceState = {
-  dirty: boolean;
-  saving: boolean;
-  error: string | null;
-  conflicted: boolean;
-  importPending: boolean;
-  phase: "idle" | "preparing" | "uploading_images" | "saving" | "refreshing";
-};
 
 type DraftCheckpoint = {
   members: FamilyMember[];
@@ -92,11 +64,18 @@ let cachedPersistenceState: PersistenceState = {
   phase: "idle",
 };
 let savePhase: PersistenceState["phase"] = "idle";
-export type FamilyLoadState = "idle" | "loading" | "ready" | "error";
 let loadState: FamilyLoadState = "idle";
 
 function canEditActiveTree() {
   return treeAccessPolicy(accessScope, activeAccessMode).canEdit;
+}
+
+function clearDraftState() {
+  history.clear();
+  images.replace(new Map());
+  pendingBatchId = null;
+  pendingCsvImport = null;
+  persistenceError = null;
 }
 
 async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
@@ -108,24 +87,7 @@ async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
     // Never let a late hydration response replace edits made while it was loading.
     if (activeTreeId !== treeId || activeAccessMode !== accessMode || saveGeneration !== generation)
       return;
-    remoteVersion = snapshot.version;
-    accessScope = snapshot.access_scope;
-    assignedBranchId = snapshot.assigned_branch_id;
-    canImportCsv = snapshot.capabilities?.can_import_csv ?? false;
-    state = cloneMembers(snapshot.members);
-    subfamilies = cloneSubfamilies(snapshot.subfamilies);
-    baselineMembers = cloneMembers(state);
-    baselineSubfamilies = cloneSubfamilies(subfamilies);
-    rebuildIndexes();
-    resetDirtyTracking();
-    past = [];
-    future = [];
-    replaceStagedImages(new Map());
-    pendingBatchId = null;
-    pendingCsvImport = null;
-    persistenceError = null;
-    loadState = "ready";
-    emit();
+    applySnapshot(snapshot);
   } catch {
     if (activeTreeId !== treeId || activeAccessMode !== accessMode) return;
     state = [];
@@ -135,95 +97,72 @@ async function hydrateFromServer(treeId: string, accessMode: TreeAccessMode) {
   }
 }
 
+function applySnapshot(snapshot: TreeSnapshot) {
+  remoteVersion = snapshot.version;
+  accessScope = snapshot.access_scope;
+  assignedBranchId = snapshot.assigned_branch_id;
+  canImportCsv = snapshot.capabilities?.can_import_csv ?? false;
+  state = cloneMembers(snapshot.members);
+  subfamilies = cloneSubfamilies(snapshot.subfamilies);
+  tracking.setBaseline(cloneMembers(state), cloneSubfamilies(subfamilies));
+  rebuildIndexes();
+  clearDraftState();
+  loadState = "ready";
+  emit();
+}
+
 async function updateRemoteSnapshot() {
   if (saveInFlight || !isDirty() || persistenceError === "VERSION_CONFLICT") return;
   const treeId = activeTreeId;
   const batchId = pendingBatchId ?? crypto.randomUUID();
   pendingBatchId = batchId;
   saveInFlight = true;
-  savePhase = stagedImages.size ? "uploading_images" : "preparing";
   emit();
   try {
-    for (const [memberId, file] of [...stagedImages]) {
-      const uploaded = await memberImageClient.upload(treeId, memberId, file, () => undefined);
-      state = state.map((member) =>
-        member.id === memberId
-          ? { ...member, ...uploaded, updated_at: new Date().toISOString() }
-          : member,
-      );
-      const previewUrl = stagedImageUrls.get(memberId);
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      stagedImages.delete(memberId);
-      stagedImageUrls.delete(memberId);
-    }
-    const members = cloneMembers(state);
-    const currentSubfamilies = cloneSubfamilies(subfamilies);
     const activeImport = pendingCsvImport;
-    savePhase = "saving";
-    emit();
-    let result: { version: number };
-    if (activeImport) {
-      result = await treeClient.applyFamilyCsv(treeId, {
-        batchId,
-        expectedVersion: activeImport.expectedVersion,
-        members,
-        subfamilies: currentSubfamilies,
-        sourceMemberIds: members.map(({ id: targetId }) => ({
-          targetId,
-          sourceId: activeImport.sourceMemberIds.get(targetId) ?? `draft|member|${targetId}`,
-        })),
-        sourceBranchIds: currentSubfamilies.map(({ id: targetId }) => ({
-          targetId,
-          sourceId: activeImport.sourceBranchIds.get(targetId) ?? `draft|branch|${targetId}`,
-        })),
-      });
-    } else if (typeof treeClient.patchSnapshot === "function") {
-      const currentMembersById = new Map(members.map((member) => [member.id, member]));
-      const currentBranchesById = new Map(currentSubfamilies.map((branch) => [branch.id, branch]));
-      result = await treeClient.patchSnapshot(treeId, {
-        batchId,
-        expectedVersion: remoteVersion,
-        upsertMembers: [...dirtyMemberIds]
-          .map((id) => currentMembersById.get(id))
-          .filter((member): member is FamilyMember => member !== undefined),
-        deleteMemberIds: [...dirtyMemberIds].filter((id) => !currentMembersById.has(id)),
-        upsertSubfamilies: [...dirtySubfamilyIds]
-          .map((id) => currentBranchesById.get(id))
-          .filter((branch): branch is SubFamily => branch !== undefined),
-        deleteSubfamilyIds: [...dirtySubfamilyIds].filter((id) => !currentBranchesById.has(id)),
-      });
-    } else {
-      result = await treeClient.saveSnapshot(treeId, {
-        batchId,
-        expectedVersion: remoteVersion,
-        members,
-        subfamilies: currentSubfamilies,
-      });
-    }
+    const result = await persistFamilyDraft({
+      treeId,
+      batchId,
+      remoteVersion,
+      activeImport,
+      stagedImages: images.files,
+      dirtyMemberIds: tracking.dirtyMemberIds,
+      dirtySubfamilyIds: tracking.dirtySubfamilyIds,
+      getMembers: () => state,
+      getSubfamilies: () => subfamilies,
+      onImageUploaded: (memberId, uploaded) => {
+        state = state.map((member) =>
+          member.id === memberId
+            ? { ...member, ...uploaded, updated_at: new Date().toISOString() }
+            : member,
+        );
+        images.uploaded(memberId);
+      },
+      onPhase: (phase) => {
+        savePhase = phase;
+        emit();
+      },
+    });
     if (activeTreeId === treeId) {
       remoteVersion = result.version;
-      if (activeImport) {
+      if (result.imported) {
         pendingCsvImport = null;
         loadState = "loading";
         savePhase = "refreshing";
         emit();
         await hydrateFromServer(treeId, activeAccessMode);
       } else {
-        baselineMembers = members;
-        baselineSubfamilies = currentSubfamilies;
-        past = [];
-        future = [];
+        tracking.setBaseline(result.members, result.subfamilies);
+        history.clear();
         pendingBatchId = null;
         persistenceError = null;
-        rebuildBaselineIndexes();
-        resetDirtyTracking();
       }
     }
   } catch (error) {
     persistenceError =
       error instanceof ApiClientError
         ? error.code
-        : stagedImages.size
+        : images.files.size
           ? "IMAGE_UPLOAD_FAILED"
           : "NETWORK_ERROR";
   } finally {
@@ -244,20 +183,17 @@ function markDraftChanged() {
 function load() {
   if (typeof window === "undefined") {
     state = [];
+    subfamilies = [];
     return;
   }
   state = [];
+  subfamilies = [];
   loadState = "loading";
   void hydrateFromServer(activeTreeId, activeAccessMode);
 }
 
 function isDirty() {
-  return (
-    Boolean(pendingCsvImport) ||
-    stagedImages.size > 0 ||
-    dirtyMemberIds.size > 0 ||
-    dirtySubfamilyIds.size > 0
-  );
+  return Boolean(pendingCsvImport) || images.files.size > 0 || tracking.hasChanges();
 }
 
 function emit() {
@@ -272,135 +208,39 @@ function emit() {
   for (const l of listeners) l();
 }
 
-function cloneMembers(members: FamilyMember[]): FamilyMember[] {
-  return members.map((m) => ({
-    ...m,
-    spouse_ids: m.spouse_ids ? [...m.spouse_ids] : undefined,
-    divorced_from: m.divorced_from ? [...m.divorced_from] : undefined,
-  }));
-}
-
-function cloneSubfamilies(items: SubFamily[]): SubFamily[] {
-  return items.map((item) => ({
-    ...item,
-    attachments: item.attachments?.map((attachment) => ({ ...attachment })) ?? [],
-  }));
-}
-
 function rebuildIndexes() {
-  memberById = new Map(state.map((member) => [member.id, member]));
-  branchRootIds = new Set(
-    subfamilies
-      .filter(({ linked_male_id, status }) => linked_male_id && status !== "inactive")
-      .map(({ linked_male_id }) => linked_male_id!),
-  );
-}
-
-function rebuildBaselineIndexes() {
-  baselineMemberById = new Map(baselineMembers.map((member) => [member.id, member]));
-  baselineSubfamilyById = new Map(baselineSubfamilies.map((branch) => [branch.id, branch]));
-}
-
-function resetDirtyTracking() {
-  dirtyMemberIds = new Set();
-  dirtySubfamilyIds = new Set();
-  rebuildBaselineIndexes();
-}
-
-function recalculateDirtyTracking() {
-  resetDirtyTracking();
-  const currentBranches = new Map(subfamilies.map((branch) => [branch.id, branch]));
-  for (const id of new Set([...memberById.keys(), ...baselineMemberById.keys()]))
-    if (!entityMatchesBaseline(memberById.get(id), baselineMemberById.get(id)))
-      dirtyMemberIds.add(id);
-  for (const id of new Set([...currentBranches.keys(), ...baselineSubfamilyById.keys()]))
-    if (!entityMatchesBaseline(currentBranches.get(id), baselineSubfamilyById.get(id)))
-      dirtySubfamilyIds.add(id);
-}
-
-function entityMatchesBaseline<T>(entity: T | undefined, baseline: T | undefined) {
-  return entity === baseline || JSON.stringify(entity) === JSON.stringify(baseline);
-}
-
-function refreshDirtyTracking(change: DraftChange) {
-  for (const { id } of change.members) {
-    if (entityMatchesBaseline(memberById.get(id), baselineMemberById.get(id)))
-      dirtyMemberIds.delete(id);
-    else dirtyMemberIds.add(id);
-  }
-  const currentBranches = new Map(subfamilies.map((branch) => [branch.id, branch]));
-  for (const { id } of change.subfamilies) {
-    if (entityMatchesBaseline(currentBranches.get(id), baselineSubfamilyById.get(id)))
-      dirtySubfamilyIds.delete(id);
-    else dirtySubfamilyIds.add(id);
-  }
-}
-
-function loadSubfamilies() {
-  if (typeof window === "undefined") {
-    subfamilies = [];
-    return;
-  }
-  subfamilies = [];
-}
-
-function replaceStagedImages(next: ReadonlyMap<string, File>) {
-  for (const url of stagedImageUrls.values()) URL.revokeObjectURL(url);
-  stagedImages = new Map(next);
-  stagedImageUrls = new Map(
-    [...stagedImages].map(([memberId, file]) => [memberId, URL.createObjectURL(file)]),
-  );
+  ({ memberById, branchRootIds } = indexFamily(state, subfamilies));
 }
 
 function discardUploadedDraftAssets() {
-  for (const member of state) {
-    const baseline = baselineMemberById.get(member.id);
-    if (member.image_asset_id && member.image_asset_id !== baseline?.image_asset_id)
-      void memberImageClient.discard(activeTreeId, member.image_asset_id).catch(() => undefined);
-  }
+  discardUploadedDraftImages(activeTreeId, state, tracking.baselineMember);
 }
 
-function commit(mutator: () => void) {
-  if (!canEditActiveTree()) return;
-  const beforeMembers = state;
-  const beforeSubfamilies = subfamilies;
-  const beforeImages = new Map(stagedImages);
-  mutator();
-  const change: DraftChange = {
-    members: entityChanges(beforeMembers, state),
-    subfamilies: entityChanges(beforeSubfamilies, subfamilies),
-    beforeImages,
-    afterImages: new Map(stagedImages),
-  };
-  if (!change.members.length && !change.subfamilies.length && mapsEqual(beforeImages, stagedImages))
-    return;
+function afterHistoryChange(change: DraftChange) {
   rebuildIndexes();
-  refreshDirtyTracking(change);
-  past = [...past, change].slice(-MAX_HISTORY);
-  future = [];
-  markDraftChanged();
-  emit();
+  tracking.refresh(change, state, subfamilies);
 }
 
-function applyChange(change: DraftChange, direction: "before" | "after") {
-  if (!canEditActiveTree()) return;
-  const nextMembers = applyEntityChanges(state, change.members, direction);
-  for (const member of state) {
-    if (
-      member.image_asset_id &&
-      !nextMembers.some((candidate) => candidate.image_asset_id === member.image_asset_id) &&
-      !baselineMembers.some((candidate) => candidate.image_asset_id === member.image_asset_id)
-    )
-      void memberImageClient.discard(activeTreeId, member.image_asset_id).catch(() => undefined);
-  }
-  state = nextMembers;
-  subfamilies = applyEntityChanges(subfamilies, change.subfamilies, direction);
-  replaceStagedImages(direction === "before" ? change.beforeImages : change.afterImages);
-  rebuildIndexes();
-  refreshDirtyTracking(change);
-  markDraftChanged();
-  emit();
-}
+const history = createFamilyDraftHistory({
+  canEdit: canEditActiveTree,
+  getMembers: () => state,
+  setMembers: (next) => {
+    state = next;
+  },
+  getSubfamilies: () => subfamilies,
+  setSubfamilies: (next) => {
+    subfamilies = next;
+  },
+  getImages: () => images.files,
+  replaceImages: images.replace,
+  discardRemovedImages: (current, next) =>
+    discardRemovedDraftImages(activeTreeId, current, next, tracking.baselineAssetIds()),
+  afterChange: afterHistoryChange,
+  markChanged: () => {
+    markDraftChanged();
+    emit();
+  },
+});
 
 const memberCommandContext: MemberCommandContext = {
   get state() {
@@ -410,13 +250,13 @@ const memberCommandContext: MemberCommandContext = {
     state = next;
   },
   get stagedImages() {
-    return stagedImages;
+    return images.files;
   },
   set stagedImages(next) {
-    stagedImages = next;
+    images.files = next;
   },
-  commit,
-  replaceStagedImages,
+  commit: history.commit,
+  replaceStagedImages: images.replace,
   emit,
   protectedGender(id) {
     return pendingCsvImport?.protectedMemberIds.get(id);
@@ -439,55 +279,88 @@ const subfamilyCommandContext: SubfamilyCommandContext = {
   set subfamilies(next) {
     subfamilies = next;
   },
-  commit,
+  commit: history.commit,
   emit,
   canDeleteSubfamily(id) {
     return !pendingCsvImport?.protectedBranchIds.has(id);
   },
 };
 
+const selectors = createFamilyStoreSelectors({
+  activeTreeId: () => activeTreeId,
+  persistenceError: () => persistenceError,
+  persistenceState: () => cachedPersistenceState,
+  loadState: () => loadState,
+  members: () => state,
+  canManageSubfamilies: () => treeAccessPolicy(accessScope, activeAccessMode).canManageSubfamilies,
+  accessScope: () => accessScope,
+  assignedBranchId: () => assignedBranchId,
+  canEdit: canEditActiveTree,
+  member: (id) => memberById.get(id),
+  stagedImage: images.file,
+  memberImageSrc: (id) => images.url(id) ?? memberById.get(id)?.image_url,
+  branchRoot: (id) => memberCommandContext.isBranchRoot?.(id) ?? false,
+  subscribe: (listener) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
+});
+
+const familyCsvApi = createFamilyCsvStoreApi({
+  canImport: () => canImportCsv,
+  canEdit: canEditActiveTree,
+  isDirty,
+  remoteVersion: () => remoteVersion,
+  members: () => state,
+  subfamilies: () => subfamilies,
+  pendingImport: () => pendingCsvImport,
+  applyDraft: (members, branches, pending) => {
+    images.replace(new Map());
+    state = members;
+    subfamilies = branches;
+    rebuildIndexes();
+    pendingCsvImport = pending;
+    history.clear();
+    pendingBatchId = crypto.randomUUID();
+    markDraftChanged();
+    emit();
+  },
+});
+
 export const familyStore = {
-  getActiveTreeId(): string {
-    return activeTreeId;
-  },
-  getPersistenceError(): string | null {
-    return persistenceError;
-  },
-  getPersistenceState(): PersistenceState {
-    return cachedPersistenceState;
-  },
-  getLoadState(): FamilyLoadState {
-    return loadState;
-  },
+  ...selectors,
+  ...familyCsvApi,
   reloadAfterConflict(): void {
     discardUploadedDraftAssets();
-    replaceStagedImages(new Map());
-    persistenceError = null;
-    pendingBatchId = null;
-    pendingCsvImport = null;
+    clearDraftState();
     canImportCsv = false;
     loadState = "loading";
     void hydrateFromServer(activeTreeId, activeAccessMode);
     emit();
   },
-  activateTree(treeId: string, accessMode: TreeAccessMode = "edit"): void {
-    if (!treeId || (activeTreeId === treeId && activeAccessMode === accessMode)) return;
+  activateTree(
+    treeId: string,
+    accessMode: TreeAccessMode = "edit",
+    initialSnapshot?: TreeSnapshot,
+  ): void {
+    if (!treeId) return;
+    if (activeTreeId === treeId && activeAccessMode === accessMode) {
+      if (initialSnapshot && loadState !== "ready" && !isDirty()) applySnapshot(initialSnapshot);
+      return;
+    }
     discardUploadedDraftAssets();
-    replaceStagedImages(new Map());
+    clearDraftState();
     activeTreeId = treeId;
     activeAccessMode = accessMode;
     accessScope = "preview";
     assignedBranchId = undefined;
-    past = [];
-    future = [];
     remoteVersion = 1;
-    persistenceError = null;
-    pendingBatchId = null;
-    pendingCsvImport = null;
     canImportCsv = false;
-    load();
-    loadSubfamilies();
-    emit();
+    if (initialSnapshot) applySnapshot(initialSnapshot);
+    else {
+      load();
+      emit();
+    }
   },
   initializeTree(treeId: string, accessMode: TreeAccessMode = "edit"): void {
     familyStore.activateTree(treeId, accessMode);
@@ -500,13 +373,12 @@ export const familyStore = {
   discardDraft(): void {
     if (saveInFlight) return;
     discardUploadedDraftAssets();
-    replaceStagedImages(new Map());
-    state = cloneMembers(baselineMembers);
-    subfamilies = cloneSubfamilies(baselineSubfamilies);
+    images.replace(new Map());
+    state = cloneMembers(tracking.baselineMembers);
+    subfamilies = cloneSubfamilies(tracking.baselineSubfamilies);
     rebuildIndexes();
-    resetDirtyTracking();
-    past = [];
-    future = [];
+    tracking.reset();
+    history.clear();
     pendingBatchId = null;
     pendingCsvImport = null;
     persistenceError = null;
@@ -517,7 +389,7 @@ export const familyStore = {
     return {
       members: cloneMembers(state),
       subfamilies: cloneSubfamilies(subfamilies),
-      stagedImages: new Map(stagedImages),
+      stagedImages: new Map(images.files),
     };
   },
   restoreDraftCheckpoint(checkpoint: DraftCheckpoint): void {
@@ -525,107 +397,27 @@ export const familyStore = {
     state = cloneMembers(checkpoint.members);
     subfamilies = cloneSubfamilies(checkpoint.subfamilies);
     rebuildIndexes();
-    recalculateDirtyTracking();
-    replaceStagedImages(checkpoint.stagedImages);
-    past = [];
-    future = [];
+    tracking.recalculate(state, subfamilies);
+    images.replace(checkpoint.stagedImages);
+    history.clear();
     markDraftChanged();
     emit();
   },
   deleteTreeData(treeId: string): void {
     void treeClient.deleteTree(treeId);
   },
-  getAll: (): FamilyMember[] => state,
-  canManageSubfamilies(): boolean {
-    return treeAccessPolicy(accessScope, activeAccessMode).canManageSubfamilies;
-  },
-  canImportFamilyCsv(): boolean {
-    return canImportCsv && canEditActiveTree();
-  },
-  isFamilyCsvImportPending(): boolean {
-    return Boolean(pendingCsvImport);
-  },
-  protectedImportGender(id: string): FamilyMember["gender"] | undefined {
-    return pendingCsvImport?.protectedMemberIds.get(id);
-  },
-  isBranchRoot(id: string): boolean {
-    return memberCommandContext.isBranchRoot?.(id) ?? false;
-  },
-  isProtectedImportBranch(id: string): boolean {
-    return pendingCsvImport?.protectedBranchIds.has(id) ?? false;
-  },
-  stageFamilyCsvImport(
-    preview: FamilyCsvPreviewResponse,
-    selections: FamilyCsvMappingSelections,
-  ): void {
-    if (!canImportCsv || !canEditActiveTree()) throw new ApiClientError("FORBIDDEN", 403);
-    if (isDirty()) throw new ApiClientError("UNSAVED_CHANGES", 409);
-    if (preview.expectedVersion !== remoteVersion)
-      throw new ApiClientError("VERSION_CONFLICT", 409);
-    const draft = buildFamilyCsvDraft(preview, selections, state, subfamilies);
-    replaceStagedImages(new Map());
-    state = draft.members;
-    subfamilies = draft.subfamilies;
-    rebuildIndexes();
-    pendingCsvImport = {
-      expectedVersion: preview.expectedVersion,
-      sourceMemberIds: draft.sourceMemberIds,
-      sourceBranchIds: draft.sourceBranchIds,
-      protectedMemberIds: draft.protectedMemberIds,
-      protectedBranchIds: draft.protectedBranchIds,
-    };
-    past = [];
-    future = [];
-    pendingBatchId = crypto.randomUUID();
-    markDraftChanged();
-    emit();
-  },
-  getAccessScope: (): TreeAccessScope => accessScope,
-  getAssignedBranchId: (): string | undefined => assignedBranchId,
-  canEditActiveTree(): boolean {
-    return canEditActiveTree();
-  },
-  get(id: string): FamilyMember | undefined {
-    return memberById.get(id);
-  },
-  getStagedMemberImage(id: string): File | undefined {
-    return stagedImages.get(id);
-  },
-  getMemberImageSrc(id: string): string | undefined {
-    return stagedImageUrls.get(id) ?? memberById.get(id)?.image_url;
-  },
   ...createMemberCommands(memberCommandContext),
-  undo(): void {
-    if (!past.length) return;
-    const previous = past[past.length - 1];
-    future = [previous, ...future].slice(0, MAX_HISTORY);
-    past = past.slice(0, -1);
-    applyChange(previous, "before");
-  },
-  redo(): void {
-    if (!future.length) return;
-    const next = future[0];
-    past = [...past, next].slice(-MAX_HISTORY);
-    future = future.slice(1);
-    applyChange(next, "after");
-  },
-  canUndo(): boolean {
-    return past.length > 0;
-  },
-  canRedo(): boolean {
-    return future.length > 0;
-  },
+  undo: history.undo,
+  redo: history.redo,
+  canUndo: history.canUndo,
+  canRedo: history.canRedo,
 
   reset() {
     if (pendingCsvImport) return;
-    commit(() => {
+    history.commit(() => {
       state = SAMPLE;
     });
   },
 
   ...createSubfamilyCommands(subfamilyCommandContext),
-  subscribe(l: () => void) {
-    listeners.add(l);
-    return () => listeners.delete(l);
-  },
 };

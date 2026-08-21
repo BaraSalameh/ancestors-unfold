@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
   vi.doUnmock("../api/tree-client");
-  vi.doUnmock("@/features/members/api");
+  vi.doUnmock("@/features/members/client");
   vi.unstubAllGlobals();
   vi.resetModules();
 });
@@ -39,7 +39,7 @@ describe("family store activation", () => {
         deleteTree: vi.fn(),
       },
     }));
-    vi.doMock("@/features/members/api", () => ({
+    vi.doMock("@/features/members/client", () => ({
       memberImageClient: { upload, discard: vi.fn() },
     }));
     vi.stubGlobal("window", {});
@@ -90,7 +90,7 @@ describe("family store activation", () => {
         deleteTree: vi.fn(),
       },
     }));
-    vi.doMock("@/features/members/api", () => ({
+    vi.doMock("@/features/members/client", () => ({
       memberImageClient: { upload, discard: vi.fn() },
     }));
     vi.stubGlobal("window", {});
@@ -144,6 +144,33 @@ describe("family store loading and rejected updates", () => {
 
     familyStore.activateTree("tree-id", "edit");
     expect(readSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("hydrates loader data synchronously without a duplicate browser request", async () => {
+    const readSnapshot = vi.fn();
+    vi.doMock("../api/tree-client", () => ({
+      treeClient: {
+        readSnapshot,
+        readPublicSnapshot: vi.fn(),
+        saveSnapshot: vi.fn(),
+        deleteTree: vi.fn(),
+      },
+    }));
+    vi.stubGlobal("window", {});
+
+    const { familyStore } = await import("./family-store");
+    familyStore.activateTree("loader-tree", "edit", {
+      version: 9,
+      access_scope: "tree",
+      capabilities: { can_import_csv: true },
+      members: [{ ...editableMember("loader-member"), citizen_status: "resident" }],
+      subfamilies: [],
+    });
+
+    expect(familyStore.getLoadState()).toBe("ready");
+    expect(familyStore.get("loader-member")?.name_en).toBe("loader-member");
+    expect(familyStore.canImportFamilyCsv()).toBe(true);
+    expect(readSnapshot).not.toHaveBeenCalled();
   });
 
   it("keeps a rejected explicit update as a local draft", async () => {

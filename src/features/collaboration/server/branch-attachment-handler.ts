@@ -149,26 +149,32 @@ async function signAttachment(
   });
 }
 
-// Registration deliberately validates every provider and client field at one trust boundary.
-// eslint-disable-next-line complexity
-async function registerAttachment(
-  request: Request,
-  treeId: string,
-  branchId: string,
-  session: CollaborationSession,
-  requestId: string,
-) {
-  const body = await parseBody(request, schemas.branchAttachmentRegister);
-  validateExtension(body.fileName, body.mediaType);
-  const { cloudName, apiSecret } = cloudinaryConfig();
-  const expectedSignature = cloudinary.utils.api_sign_request(
-    { public_id: body.publicId, version: body.version },
-    apiSecret,
+type AttachmentRegistration = {
+  fileName: string;
+  mediaType: keyof typeof allowedExtensions;
+  byteSize: number;
+  checksumSha256: string;
+  assetId: string;
+  publicId: string;
+  secureUrl: string;
+  version: number;
+  signature: string;
+  resourceType: "image" | "raw";
+};
+
+function validateProviderSignature(body: AttachmentRegistration, apiSecret: string) {
+  const expected = Buffer.from(
+    cloudinary.utils.api_sign_request(
+      { public_id: body.publicId, version: body.version },
+      apiSecret,
+    ),
   );
   const received = Buffer.from(body.signature);
-  const expected = Buffer.from(expectedSignature);
   if (received.length !== expected.length || !timingSafeEqual(received, expected))
     throw new ApiError("INVALID_UPLOAD_SIGNATURE", 400);
+}
+
+function validateProviderUrl(body: AttachmentRegistration, cloudName: string) {
   const secureUrl = new URL(body.secureUrl);
   if (
     secureUrl.protocol !== "https:" ||
@@ -176,6 +182,14 @@ async function registerAttachment(
     !secureUrl.pathname.startsWith(`/${cloudName}/`)
   )
     throw new ApiError("INVALID_UPLOAD_RESPONSE", 400);
+}
+
+async function validateProviderResource(
+  body: AttachmentRegistration,
+  treeId: string,
+  branchId: string,
+  userId: string,
+) {
   const resource = (await cloudinary.api.resource(body.publicId, {
     resource_type: body.resourceType,
     type: "authenticated",
@@ -187,18 +201,36 @@ async function registerAttachment(
     context?: { custom?: Record<string, string> };
   };
   const context = resource.context?.custom ?? {};
-  const allowedFormats = allowedExtensions[body.mediaType];
-  if (
-    resource.asset_id !== body.assetId ||
-    resource.bytes !== body.byteSize ||
-    !resource.format ||
-    !allowedFormats.includes(resource.format.toLocaleLowerCase()) ||
-    context.tree_id !== treeId ||
-    context.branch_id !== branchId ||
-    context.uploaded_by !== session.user_id ||
-    context.checksum_sha256 !== body.checksumSha256
-  )
-    throw new ApiError("INVALID_UPLOAD_RESPONSE", 400);
+  const invalid = [
+    resource.asset_id !== body.assetId,
+    resource.bytes !== body.byteSize,
+    !resource.format,
+    Boolean(
+      resource.format &&
+      !allowedExtensions[body.mediaType].includes(resource.format.toLocaleLowerCase()),
+    ),
+    context.tree_id !== treeId,
+    context.branch_id !== branchId,
+    context.uploaded_by !== userId,
+    context.checksum_sha256 !== body.checksumSha256,
+  ].some(Boolean);
+  if (invalid) throw new ApiError("INVALID_UPLOAD_RESPONSE", 400);
+}
+
+// Registration validates provider and client fields before entering the persistence transaction.
+async function registerAttachment(
+  request: Request,
+  treeId: string,
+  branchId: string,
+  session: CollaborationSession,
+  requestId: string,
+) {
+  const body = await parseBody(request, schemas.branchAttachmentRegister);
+  validateExtension(body.fileName, body.mediaType);
+  const { cloudName, apiSecret } = cloudinaryConfig();
+  validateProviderSignature(body, apiSecret);
+  validateProviderUrl(body, cloudName);
+  await validateProviderResource(body, treeId, branchId, session.user_id);
   const result = await transaction(session.user_id, session.id, requestId, async (client) => {
     const access = await branchAccess(client, treeId, branchId, session.user_id);
     if (access.status !== "active") throw new ApiError("BRANCH_UNAVAILABLE", 409);

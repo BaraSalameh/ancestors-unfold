@@ -1,0 +1,147 @@
+import type { AuthenticityLevel, EarnedAuthenticityLevel } from "../domain/authenticity-progress";
+
+export interface CurrentTree {
+  id: string;
+  name_en: string | null;
+  name_ar: string | null;
+  description_en: string | null;
+  description_ar: string | null;
+  country_code: string | null;
+  visibility: "private" | "public";
+  created_at: string;
+  version: number;
+  role: "owner" | "contributor";
+  affiliation_status: "active" | "read_only" | "removed";
+  assigned_branch_id: string | null;
+  analysis_enabled?: boolean;
+}
+
+export interface Statistics {
+  total_members: number;
+  active_contributors: number;
+  managed_branches: number;
+  total_branches: number;
+  serious_complaints: number;
+  authenticity_level: AuthenticityLevel;
+  earned_authenticity_level: EarnedAuthenticityLevel;
+  growing_contributors: number;
+  growing_branches: number;
+  backed_contributors: number;
+  backed_branches: number;
+  established_contributors: number;
+  established_branches: number;
+  established_min_days: number;
+  recent_activity_days: number;
+  tree_age_days: number;
+  recent_activity_met: boolean;
+  tree_created_at: string;
+  last_contribution_at: string | null;
+  owner_name_en: string;
+  owner_name_ar: string;
+}
+
+export interface Branch {
+  id: string;
+  name_en: string;
+  name_ar: string | null;
+  root_family_member_id: string | null;
+  parent_branch_id: string | null;
+  status: string;
+  member_ids: string[];
+  member_count: number;
+  contributor_user_id: string | null;
+  contributor_name_en: string | null;
+  contributor_name_ar: string | null;
+  contributor_email: string | null;
+}
+
+export interface Invitation {
+  id: string;
+  branch_id: string;
+  invited_name_en: string;
+  invited_name_ar: string;
+  invited_email: string;
+  status: string;
+  expires_at: string;
+  branch_name_en: string;
+  branch_name_ar: string | null;
+}
+
+export interface OwnershipTransfer {
+  id: string;
+  tree_id: string;
+  tree_name_en: string | null;
+  tree_name_ar: string | null;
+  current_owner_user_id: string;
+  proposed_owner_user_id: string;
+  current_owner_name_en: string;
+  current_owner_name_ar: string;
+  proposed_owner_name_en: string;
+  proposed_owner_name_ar: string;
+  branch_id: string;
+  branch_name_en: string;
+  branch_name_ar: string | null;
+  verified: boolean;
+  status: "pending";
+  verification_expires_at: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface DashboardResource<Value> {
+  data: Value | undefined;
+  pending: boolean;
+  fetching: boolean;
+  error: boolean;
+  retry: () => void;
+}
+
+export interface DashboardQualityInsights {
+  total: number;
+  missing_name_en: number;
+  missing_name_ar: number;
+  missing_birth_date: number;
+  missing_branch: number;
+  missing_image: number;
+  unknown_placeholders: number;
+  no_parents_recorded: number;
+  missing_parent: number;
+  possible_duplicate_groups: number;
+  contradictory_dates: number;
+  graph_cycles: number;
+}
+
+export interface DashboardBranchHealth {
+  id: string;
+  name_en: string;
+  name_ar: string | null;
+  total: number;
+  completeness_percent: number;
+}
+
+export interface DashboardInsights {
+  quality?: DashboardQualityInsights;
+  branches: DashboardBranchHealth[];
+  qualityPending: boolean;
+  qualityError: boolean;
+  retryQuality: () => void;
+  branchesPending: boolean;
+  branchesError: boolean;
+  retryBranches: () => void;
+}
+
+export interface SearchOption {
+  id: string;
+  name_en: string | null;
+  name_ar: string | null;
+  birth_year?: number | null;
+  father_id?: string | null;
+  father_name_en?: string | null;
+  father_name_ar?: string | null;
+  grandfather_id?: string | null;
+  grandfather_name_en?: string | null;
+  grandfather_name_ar?: string | null;
+  great_grandfather_id?: string | null;
+  great_grandfather_name_en?: string | null;
+  great_grandfather_name_ar?: string | null;
+}

@@ -83,6 +83,7 @@ export function StagedSpousesEditor({
           query={query}
           onQueryChange={setQuery}
           results={results}
+          members={members}
           linkedIds={linkedIds}
           onSelect={(memberId) => {
             onChange([...value, existingStagedSpouse(memberId)]);

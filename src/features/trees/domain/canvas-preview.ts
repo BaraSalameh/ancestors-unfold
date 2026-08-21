@@ -12,7 +12,7 @@ export function canvasDetailForZoom(zoom: number): CanvasDetail {
   return "full";
 }
 
-export interface ChronologicalBand {
+interface ChronologicalBand {
   start: number;
   end: number;
 }
@@ -51,6 +51,15 @@ export function chronologicalBandsForMembers(
     unique.set(`${band.start}-${band.end}`, band);
   }
   return [...unique.values()].sort((first, second) => first.start - second.start);
+}
+
+export function membersForCanvasPreview<T extends Pick<FamilyMember, "birth_date">>(
+  members: readonly T[],
+  previewType: TreePreviewType,
+): T[] {
+  return previewType === "chronological"
+    ? members.filter((member) => Boolean(member.birth_date?.trim()))
+    : [...members];
 }
 
 interface CanvasCapabilities {

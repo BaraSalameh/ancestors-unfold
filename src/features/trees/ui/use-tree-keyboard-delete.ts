@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Edge, Node } from "reactflow";
 import type { useI18n } from "@/shared/i18n";
-import { memberDeletionPlan, type MemberDeletionPlan } from "@/features/members";
+import { memberDeletionPlan, type MemberDeletionPlan } from "@/features/members/domain";
 import { familyStore } from "../client/family-store";
 
 type SetNodes = React.Dispatch<React.SetStateAction<Node[]>>;

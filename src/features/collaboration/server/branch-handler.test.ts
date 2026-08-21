@@ -26,8 +26,6 @@ const session = {
   email: "owner@example.com",
 };
 
-// The mocked transaction sequences cover the complete branch mutation policy in one suite.
-// eslint-disable-next-line max-lines-per-function
 describe("branch lifecycle handler", () => {
   beforeEach(() => {
     query.mockReset();

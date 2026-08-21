@@ -164,19 +164,36 @@ export function DashboardPageSkeleton({
 
 export function TreeLoadingIndicator({ label }: { label: string }) {
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] w-full items-center justify-center bg-muted/20">
-      <div role="status" aria-live="polite" className="flex flex-col items-center gap-3">
-        <span
-          aria-hidden="true"
-          className="h-9 w-9 animate-spin rounded-full border-4 border-primary/20 border-t-primary motion-reduce:animate-none"
-        />
-        <span className="text-sm font-medium text-muted-foreground">{label}</span>
+    <div
+      className="relative h-[calc(100vh-3.5rem)] w-full overflow-hidden bg-muted/20"
+      data-tree-skeleton
+    >
+      <LoadingStatus label={label} />
+      <div className="absolute inset-x-0 top-0 z-10 p-4">
+        <Skeleton className="h-10 w-full max-w-sm rounded-xl" />
+      </div>
+      <div className="absolute end-4 top-16 z-10 flex max-w-[calc(100%-2rem)] flex-col items-end gap-2">
+        <Skeleton className="h-11 w-72 max-w-full rounded-xl" />
+        <Skeleton className="h-52 w-72 max-w-full rounded-xl" />
+      </div>
+      <div className="absolute inset-0" aria-hidden="true">
+        {[
+          ["start-[12%]", "top-[30%]"],
+          ["start-[38%]", "top-[52%]"],
+          ["start-[64%]", "top-[26%]"],
+          ["start-[24%]", "top-[72%]"],
+        ].map(([horizontal, vertical], index) => (
+          <Skeleton
+            key={index}
+            className={`absolute h-24 w-44 rounded-xl border ${horizontal} ${vertical}`}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-function SubfamiliesPageSkeleton({ label }: { label: string }) {
+export function BranchesPageSkeleton({ label }: { label: string }) {
   return (
     <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-6xl flex-col gap-4 px-4 py-6">
       <LoadingStatus label={label} />
@@ -334,7 +351,8 @@ export function RoutePageSkeleton({
     case "settings":
       return <SettingsPageSkeleton label={label} />;
     case "subfamilies":
-      return <SubfamiliesPageSkeleton label={label} />;
+    case "branches":
+      return <BranchesPageSkeleton label={label} />;
     case "add-member":
       return <MemberFormPageSkeleton label={label} />;
     case "edit-member":

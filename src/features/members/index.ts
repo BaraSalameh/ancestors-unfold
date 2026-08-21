@@ -1,18 +1,7 @@
-export type { FamilyMember, Gender, SubFamily } from "./domain/types";
-export { isMemberDeceased } from "./domain/member-status";
-export { descendantIds } from "./domain/relationships";
-export { memberDeletionPlan, type MemberDeletionPlan } from "./domain/member-deletion";
-export {
-  memberNameWithBirthYear,
-  memberPaternalSearchLabel,
-  memberSearchLabel,
-} from "./domain/member-display";
-export { memberDetailsSearch, parseMemberNavigationSearch } from "./domain/member-navigation";
-export { MemberForm } from "./ui/member-form";
-export { ExpandableProfileImage } from "./ui/expandable-profile-image";
+export type { FamilyMember, Gender } from "./domain/types";
+export { parseMemberNavigationSearch } from "./domain/member-navigation";
 export { AddMemberPage, AddPage } from "./pages/add-member-page";
 export { addMemberSearchSchema } from "./domain/add-member-search";
-export { MemberSearchPicker } from "./components/member-search-picker";
-export { MemberDeletionDialog } from "./components/member-deletion-dialog";
 export { EditPage } from "./pages/edit-member-page";
 export { MemberPage } from "./pages/member-page";
+export { TreeMemberDetailsPage } from "./pages/tree-member-details-page";

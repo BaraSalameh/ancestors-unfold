@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { familyStore, invalidateDashboardQueries } from "@/features/trees";
+import { invalidateDashboardQueries } from "@/features/collaboration";
+import { familyStore } from "@/features/trees";
 import { Button } from "@/shared/ui/button";
 import type { TranslationKey } from "@/locales";
 import { ApiClientError } from "@/shared/api/client";

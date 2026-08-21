@@ -1,4 +1,3 @@
-import type { TreeAccessMode } from "../domain/access-policy";
 import {
   canvasDetailForZoom,
   type ChronologicalPeriod,
@@ -11,7 +10,6 @@ import { useTreeLayoutProjection } from "./use-tree-layout-projection";
 import { useTreeMemberActions } from "./use-tree-member-actions";
 
 interface Params {
-  accessMode: TreeAccessMode;
   chronologicalPeriod: ChronologicalPeriod;
   previewType: TreePreviewType;
   state: FamilyTreeState;
@@ -22,7 +20,6 @@ export function useFamilyTreeProjection(params: Params) {
   const canEdit = core.capabilities.canMutate;
   const collapsed = selection.collapsedByPreview[params.previewType];
   const actions = useTreeMemberActions({
-    accessMode: params.accessMode,
     canEdit,
     navigate: core.navigate,
     previewType: params.previewType,

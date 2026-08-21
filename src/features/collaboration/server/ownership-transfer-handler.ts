@@ -50,6 +50,14 @@ async function listTransfers(
   session: CollaborationSession,
   requestId: string,
 ): Promise<Response> {
+  return json(await readPendingOwnershipTransfer(treeId, session, requestId));
+}
+
+export async function readPendingOwnershipTransfer(
+  treeId: string,
+  session: CollaborationSession,
+  requestId: string,
+) {
   const pending = await transaction(session.user_id, session.id, requestId, async (client) => {
     await client.query(
       `UPDATE app.ownership_transfers SET status='expired',updated_at=now()
@@ -78,7 +86,7 @@ async function listTransfers(
       [treeId, session.user_id],
     );
   });
-  return json(pending.rows[0] ?? null);
+  return pending.rows[0] ?? null;
 }
 
 async function createTransfer(

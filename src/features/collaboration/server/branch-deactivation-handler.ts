@@ -1,12 +1,11 @@
-import { randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { transaction } from "@/shared/server/database";
 import { branchDeactivationCodeMail, sendMail } from "@/shared/server/email";
 import { jsonResponse as json } from "@/shared/http/response";
 import { ApiError, enforceRateLimit, parseBody, schemas } from "@/server/security";
-import { deleteContributorIdentity } from "./account-deletion";
 import { requireTreeOwner } from "./authorization";
-import { beginTreeMutation, finishTreeMutation } from "./branch-handler";
 import { branchDeactivationCodeHash } from "./collaboration-crypto";
+import { confirmBranchDeactivation } from "./branch-deactivation-transaction";
 import type { CollaborationSession } from "./types";
 
 export async function handleBranchDeactivationRequest(
@@ -114,8 +113,6 @@ async function requestDeactivation(
   return json({ id: created.id, expires_at: created.expires_at }, 201);
 }
 
-// The complete destructive workflow stays in one serialized transaction.
-// eslint-disable-next-line max-lines-per-function
 async function confirmDeactivation(
   request: Request,
   challengeId: string,
@@ -123,139 +120,8 @@ async function confirmDeactivation(
   requestId: string,
 ) {
   const body = await parseBody(request, schemas.branchDeactivationConfirm);
-  // The verified operation intentionally remains one transaction across every selected branch.
-  // eslint-disable-next-line max-lines-per-function
   const result = await transaction(session.user_id, session.id, requestId, async (client) => {
-    const challenge = (
-      await client.query<{
-        tree_id: string;
-        branch_id: string;
-        branch_ids: string[] | null;
-        verification_code_hash: Buffer;
-        expires_at: string;
-      }>(
-        `SELECT tree_id,branch_id,branch_ids,verification_code_hash,expires_at
-         FROM app.branch_deactivation_challenges
-         WHERE id=$1 AND owner_user_id=$2 AND consumed_at IS NULL AND cancelled_at IS NULL
-         FOR UPDATE`,
-        [challengeId, session.user_id],
-      )
-    ).rows[0];
-    const received = branchDeactivationCodeHash(challengeId, body.code);
-    if (
-      !challenge ||
-      new Date(challenge.expires_at).getTime() <= Date.now() ||
-      challenge.verification_code_hash.length !== received.length ||
-      !timingSafeEqual(challenge.verification_code_hash, received)
-    )
-      throw new ApiError("INVALID_OR_EXPIRED_CODE", 400);
-    await beginTreeMutation(
-      client,
-      challenge.tree_id,
-      session.user_id,
-      body.expectedVersion,
-      body.batchId,
-    );
-    const branchIds = challenge.branch_ids ?? [challenge.branch_id];
-    const branches = await client.query<{
-      id: string;
-      name_en: string;
-      name_ar: string | null;
-      contributor_user_id: string | null;
-      contributor_name_en: string | null;
-      contributor_name_ar: string | null;
-    }>(
-      `SELECT b.id,b.name_en,b.name_ar,g.user_id contributor_user_id,
-                COALESCE(f.name_en,u.full_name_en) contributor_name_en,
-                COALESCE(f.name_ar,u.full_name_ar) contributor_name_ar
-         FROM app.subfamilies b
-         LEFT JOIN app.branch_grants g ON g.tree_id=b.tree_id AND g.root_subfamily_id=b.id
-           AND g.role='branch_editor' AND g.revoked_at IS NULL
-         LEFT JOIN app.users u ON u.id=g.user_id AND u.status='active'
-         LEFT JOIN app.tree_memberships m ON m.tree_id=b.tree_id AND m.user_id=g.user_id
-           AND m.revoked_at IS NULL
-         LEFT JOIN app.family_members f ON f.id=m.family_member_id
-         WHERE b.tree_id=$1 AND b.id=ANY($2::uuid[])
-           AND b.status='active' AND b.deleted_at IS NULL
-         FOR UPDATE OF b`,
-      [challenge.tree_id, branchIds],
-    );
-    if (branches.rowCount !== branchIds.length) throw new ApiError("BRANCH_UNAVAILABLE", 404);
-    const contributors = new Map(
-      branches.rows.flatMap((branch) =>
-        branch.contributor_user_id ? [[branch.contributor_user_id, branch] as const] : [],
-      ),
-    );
-    for (const [contributorId] of contributors) {
-      await client.query(
-        `SELECT 1 FROM app.branch_grants g
-         JOIN app.tree_memberships m ON m.tree_id=g.tree_id AND m.user_id=g.user_id
-         WHERE g.tree_id=$1 AND g.root_subfamily_id=ANY($2::uuid[]) AND g.user_id=$3
-           AND g.revoked_at IS NULL AND m.revoked_at IS NULL FOR UPDATE OF g,m`,
-        [challenge.tree_id, branchIds, contributorId],
-      );
-      const allowed = await client.query<{ allowed: boolean }>(
-        "SELECT app.owner_can_delete_contributor($1,$2) allowed",
-        [challenge.tree_id, contributorId],
-      );
-      if (!allowed.rows[0]?.allowed) throw new ApiError("CONTRIBUTOR_ACCOUNT_DELETE_CONFLICT", 409);
-    }
-    for (const branch of branches.rows) {
-      if (!branch.contributor_user_id) continue;
-      await client.query(
-        `INSERT INTO app.tree_activity(
-           tree_id,branch_id,actor_user_id,subject_user_id,subject_name_en,subject_name_ar,
-           action_type,target_type,target_id
-         ) VALUES($1,$2,$3,$4,$5,$6,'contributor_removed','user',$4)`,
-        [
-          challenge.tree_id,
-          branch.id,
-          session.user_id,
-          branch.contributor_user_id,
-          branch.contributor_name_en,
-          branch.contributor_name_ar,
-        ],
-      );
-    }
-    for (const [contributorId] of contributors)
-      await deleteContributorIdentity(client, contributorId, session.user_id);
-    await client.query(
-      `UPDATE app.subfamilies SET status='inactive',linked_male_id=NULL,
-         parent_subfamily_id=NULL,version=version+1,updated_at=now()
-       WHERE tree_id=$1 AND id=ANY($2::uuid[])`,
-      [challenge.tree_id, branchIds],
-    );
-    await client.query(
-      `UPDATE app.contributor_invitations SET status='cancelled',updated_at=now()
-       WHERE tree_id=$1 AND branch_id=ANY($2::uuid[]) AND status='pending'`,
-      [challenge.tree_id, branchIds],
-    );
-    await client.query(
-      `UPDATE app.branch_grants SET revoked_at=now(),revoked_by=$3
-       WHERE tree_id=$1 AND root_subfamily_id=ANY($2::uuid[]) AND revoked_at IS NULL`,
-      [challenge.tree_id, branchIds, session.user_id],
-    );
-    await client.query("SELECT app.reconcile_branch_structure($1)", [challenge.tree_id]);
-    await client.query(
-      `INSERT INTO app.tree_activity(
-         tree_id,branch_id,actor_user_id,action_type,target_type,target_id,
-         target_name_en,target_name_ar
-       ) SELECT $1,branch.id,$2,'branch_deactivated','branch',branch.id,
-                branch.name_en,branch.name_ar
-         FROM app.subfamilies branch WHERE branch.tree_id=$1 AND branch.id=ANY($3::uuid[])`,
-      [challenge.tree_id, session.user_id, branchIds],
-    );
-    await client.query(
-      `UPDATE app.branch_deactivation_challenges
-       SET consumed_at=now(),verification_code_hash=$2,updated_at=now() WHERE id=$1`,
-      [challengeId, received],
-    );
-    const version = await finishTreeMutation(
-      client,
-      challenge.tree_id,
-      body.expectedVersion,
-      body.batchId,
-    );
+    const version = await confirmBranchDeactivation(client, challengeId, session.user_id, body);
     return { ok: true, version };
   });
   return json(result);

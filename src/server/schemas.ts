@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { branchBulkDeactivationRequestSchema, branchBulkDeleteSchema } from "./bulk-branch-schemas";
 import { COUNTRY_CODES } from "@/shared/domain/countries";
+import { treeSnapshotPayloadSchema } from "@/features/trees/contracts";
 
 export const schemas = {
   register: z
@@ -246,91 +247,10 @@ export const schemas = {
       isPrimary: z.boolean().default(false),
     })
     .strict(),
-  snapshot: z
-    .object({
+  snapshot: treeSnapshotPayloadSchema
+    .extend({
       batchId: z.string().uuid().optional(),
       expectedVersion: z.number().int().positive(),
-      members: z
-        .array(
-          z
-            .object({
-              id: z.string().min(1).max(200),
-              name_en: z.string().trim().max(200),
-              name_ar: z.string().trim().max(200),
-              gender: z.enum(["male", "female"]),
-              birth_date: z.string().max(50).optional(),
-              death_date: z.string().max(50).optional(),
-              is_deceased: z.boolean().optional(),
-              citizen_status: z
-                .enum(["resident", "non_resident"])
-                .nullish()
-                .transform((value) => value ?? "resident"),
-              image_url: z
-                .string()
-                .trim()
-                .url()
-                .max(2048)
-                .refine((value) => new URL(value).protocol === "https:")
-                .optional(),
-              image_public_id: z.string().min(1).max(255).optional(),
-              image_asset_id: z.string().min(1).max(255).optional(),
-              notes: z.string().max(10_000).optional(),
-              father_id: z.string().max(200).optional(),
-              mother_id: z.string().max(200).optional(),
-              spouse_id: z.string().max(200).optional(),
-              spouse_ids: z.array(z.string().max(200)).max(100).optional(),
-              divorced_from: z.array(z.string().max(200)).max(100).optional(),
-              is_unknown: z.boolean().optional(),
-              external_children: z
-                .array(
-                  z
-                    .object({
-                      id: z.string().min(1).max(200),
-                      name: z.string().trim().min(1).max(200),
-                      other_parent_name: z.string().max(200).optional(),
-                      birth_year: z
-                        .string()
-                        .regex(/^\d{1,4}$/)
-                        .optional(),
-                      notes: z.string().max(5000).optional(),
-                    })
-                    .strict(),
-                )
-                .max(500)
-                .optional(),
-              subfamily_id: z.string().max(200).optional(),
-              pos_x: z.number().finite().optional(),
-              pos_y: z.number().finite().optional(),
-              created_at: z.string().max(50),
-              updated_at: z.string().max(50),
-            })
-            .strict()
-            .refine((member) => !!member.name_en || !!member.name_ar, {
-              message: "At least one member name is required",
-            })
-            .refine((member) => !member.death_date || member.is_deceased !== false, {
-              message: "A member with a death date must be deceased",
-            }),
-        )
-        .max(10_000),
-      subfamilies: z
-        .array(
-          z
-            .object({
-              id: z.string().min(1).max(200),
-              name_en: z.string().trim().min(1).max(200),
-              name_ar: z.string().trim().max(200),
-              linked_male_id: z.string().max(200).optional(),
-              parent_subfamily_id: z.string().max(200).optional(),
-              status: z.enum(["active", "inactive"]).optional(),
-              notes: z.string().max(10_000).optional(),
-              attachments: z.array(z.unknown()).max(100).optional(),
-              created_at: z.string().max(50),
-              updated_at: z.string().max(50),
-            })
-            .strict(),
-        )
-        .max(2000),
     })
     .strict(),
 };

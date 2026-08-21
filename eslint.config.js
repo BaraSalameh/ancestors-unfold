@@ -6,7 +6,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  { ignores: ["dist", ".output", ".vinxi", "knowledge-output"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -39,6 +39,8 @@ export default tseslint.config(
               group: [
                 "@/features/*/**",
                 "!@/features/*/client",
+                "!@/features/*/components",
+                "!@/features/*/contracts",
                 "!@/features/*/domain",
                 "!@/features/*/server",
               ],
@@ -81,6 +83,8 @@ export default tseslint.config(
               group: [
                 "@/features/*/**",
                 "!@/features/*/client",
+                "!@/features/*/components",
+                "!@/features/*/contracts",
                 "!@/features/*/domain",
                 "!@/features/*/server",
               ],
@@ -123,6 +127,12 @@ export default tseslint.config(
           ],
         },
       ],
+    },
+  },
+  {
+    files: ["src/**/*.test.{ts,tsx}"],
+    rules: {
+      "max-lines-per-function": ["error", { max: 300, skipBlankLines: true, skipComments: true }],
     },
   },
   eslintPluginPrettier,

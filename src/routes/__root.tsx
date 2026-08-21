@@ -7,15 +7,22 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { I18nProvider } from "@/shared/i18n";
 import { ThemeProvider } from "@/app/providers/theme-provider";
+import { PerformanceProvider } from "@/app/providers/performance-provider";
 import { themeBootstrapScript } from "@/app/providers/theme";
 import { Header } from "@/app/components/header";
 import { Toaster } from "@/shared/ui/sonner";
-import { AuthProvider } from "@/features/auth";
+import {
+  AuthProvider,
+  authSessionQueryKey,
+  authSessionQueryOptions,
+  readRequestLocale,
+  type HydratedAuthSession,
+} from "@/features/auth";
 import { AuthGuard } from "@/app/components/auth-guard";
 import TawkToWidget from "@/shared/ui/tawk-to-widget";
 
@@ -42,7 +49,7 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+  console.error("Route error", { name: error.name });
   const router = useRouter();
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -76,6 +83,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  loader: async ({ context }) => {
+    const session = await context.queryClient.ensureQueryData(authSessionQueryOptions());
+    return { session, locale: session?.locale ?? (await readRequestLocale()) };
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -101,12 +112,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         media: "(prefers-color-scheme: dark)",
       },
       { rel: "stylesheet", href: appCss },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Amiri:wght@400;700&display=swap",
-      },
     ],
   }),
   shellComponent: RootShell,
@@ -116,8 +121,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  const { locale } = Route.useLoaderData();
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} dir={locale === "ar" ? "rtl" : "ltr"} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
         <HeadContent />
@@ -133,22 +139,33 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const { locale, session } = Route.useLoaderData();
+  const handleLangChange = useCallback(
+    (locale: HydratedAuthSession["locale"]) => {
+      queryClient.setQueryData<HydratedAuthSession | null>(authSessionQueryKey, (current) =>
+        current ? { ...current, locale } : current,
+      );
+    },
+    [queryClient],
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <I18nProvider>
-          <AuthProvider>
-            <div className="min-h-screen bg-background text-foreground">
-              <Header />
-              <AuthGuard>
-                <Outlet />
-              </AuthGuard>
-            </div>
-          </AuthProvider>
-          <Toaster richColors position="top-center" />
-        </I18nProvider>
-      </ThemeProvider>
+      <PerformanceProvider>
+        <ThemeProvider>
+          <I18nProvider initialLang={locale} onLangChange={handleLangChange}>
+            <AuthProvider initialSession={session}>
+              <div className="min-h-screen bg-background text-foreground">
+                <Header />
+                <AuthGuard>
+                  <Outlet />
+                </AuthGuard>
+              </div>
+            </AuthProvider>
+            <Toaster richColors position="top-center" />
+          </I18nProvider>
+        </ThemeProvider>
+      </PerformanceProvider>
     </QueryClientProvider>
   );
 }

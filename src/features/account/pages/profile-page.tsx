@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { useAuth } from "@/features/auth";
+import { useAuth } from "@/features/auth/client";
 import { useI18n } from "@/shared/i18n";
 import { Button } from "@/shared/ui/button";
 import { EmailChangeCard } from "../components/email-change-card";
@@ -9,20 +8,9 @@ import { TwoFactorCard } from "../components/two-factor-card";
 
 export function ProfilePage() {
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { session, user } = useAuth();
   const profileComplete = user?.gender != null;
-  const [role, setRole] = useState<"owner" | "contributor">();
-
-  useEffect(() => {
-    if (!profileComplete) return;
-    void fetch("/api/tree/current", { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) return;
-        const current = (await response.json()) as { role: "owner" | "contributor" };
-        setRole(current.role);
-      })
-      .catch(() => undefined);
-  }, [profileComplete]);
+  const role = session?.currentTree?.role;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">

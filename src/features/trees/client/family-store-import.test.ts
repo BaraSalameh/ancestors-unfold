@@ -3,7 +3,7 @@ import type { FamilyCsvPreviewResponse } from "../api/tree-client";
 
 afterEach(() => {
   vi.doUnmock("../api/tree-client");
-  vi.doUnmock("@/features/members/api");
+  vi.doUnmock("@/features/members/client");
   vi.unstubAllGlobals();
   vi.resetModules();
 });
@@ -11,8 +11,6 @@ afterEach(() => {
 const ownerId = "00000000-0000-4000-8000-000000000001";
 const now = "2026-08-01T00:00:00.000Z";
 
-// The store is stateful by design; keeping both phases in one suite verifies the complete lifecycle.
-// eslint-disable-next-line max-lines-per-function
 describe("family store CSV import draft", () => {
   it("saves an imported family beside the current editable tree", async () => {
     const baselineOwner = {
@@ -60,7 +58,7 @@ describe("family store CSV import draft", () => {
         deleteTree: vi.fn(),
       },
     }));
-    vi.doMock("@/features/members/api", () => ({
+    vi.doMock("@/features/members/client", () => ({
       memberImageClient: { upload: vi.fn(), discard: vi.fn() },
     }));
     vi.stubGlobal("window", {});
@@ -164,7 +162,7 @@ describe("family store CSV import draft", () => {
         deleteTree: vi.fn(),
       },
     }));
-    vi.doMock("@/features/members/api", () => ({
+    vi.doMock("@/features/members/client", () => ({
       memberImageClient: { upload: vi.fn(), discard: vi.fn() },
     }));
     vi.stubGlobal("window", {});

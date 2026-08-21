@@ -195,13 +195,7 @@ export function AnalysisReport({
   const query = useQuery({
     queryKey: ["analysis", treeId, branchId, report, appliedExcludeWives],
     queryFn: ({ signal }) =>
-      getAnalysisReport<BranchReportRow[] | RelationshipReportData | QualityReportData>(
-        treeId,
-        branchId,
-        report,
-        appliedExcludeWives,
-        signal,
-      ),
+      getAnalysisReport(treeId, branchId, report, appliedExcludeWives, signal),
     staleTime: 60_000,
   });
   if (query.isLoading)

@@ -11,6 +11,7 @@ describe("page skeleton routing", () => {
     ["/profile", "profile"],
     ["/settings", "settings"],
     ["/subfamilies", "subfamilies"],
+    ["/branches", "branches"],
     ["/add", "add-member"],
     ["/tree/tree-1/add", "add-member"],
     ["/edit/member-1", "edit-member"],
@@ -40,7 +41,7 @@ describe("page skeleton routing", () => {
     expect(contributor).toContain("lg:grid-cols-3");
   });
 
-  it("uses the tree spinner without skeleton placeholders", () => {
+  it("reserves the tree canvas geometry while the editor loads", () => {
     const direct = renderToStaticMarkup(
       createElement(TreeLoadingIndicator, { label: "Loading tree" }),
     );
@@ -52,10 +53,11 @@ describe("page skeleton routing", () => {
     );
 
     for (const markup of [direct, routed]) {
-      expect(markup).toContain("animate-spin");
+      expect(markup).toContain("data-tree-skeleton");
       expect(markup).toContain('role="status"');
       expect(markup).toContain("Loading tree");
-      expect(markup).not.toContain("animate-pulse");
+      expect(markup).toContain("animate-pulse");
+      expect(markup).toContain("h-[calc(100vh-3.5rem)]");
     }
   });
 });

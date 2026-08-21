@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   memberDeleteDestination,
+  memberDetailsDestination,
   memberDetailsSearch,
   memberReturnDestination,
   parseMemberNavigationSearch,
@@ -51,6 +52,33 @@ describe("member detail navigation", () => {
         returnPreview: "lineage",
       }).search,
     ).toEqual({ mode: "view" });
+  });
+
+  it("keeps relationship navigation inside the tree modal with all tree search state", () => {
+    const treeSearch = {
+      mode: "preview" as const,
+      preview: "chronological" as const,
+      period: 25,
+      branchId: "branch-id",
+    };
+    const context = {
+      treeId: "tree-id",
+      returnMode: "preview" as const,
+      returnPreview: "chronological" as const,
+      presentation: "tree-modal" as const,
+      treeSearch,
+    };
+
+    expect(memberDetailsDestination("father-id", context)).toEqual({
+      to: "/tree/$id/member/$memberId",
+      params: { id: "tree-id", memberId: "father-id" },
+      search: treeSearch,
+    });
+    expect(memberReturnDestination(context)).toEqual({
+      to: "/tree/$id",
+      params: { id: "tree-id" },
+      search: treeSearch,
+    });
   });
 });
 

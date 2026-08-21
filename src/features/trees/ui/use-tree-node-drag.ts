@@ -59,6 +59,7 @@ export function useTreeNodeDrag({
 
   const onNodeDrag = useCallback(
     (_event: unknown, lead: Node, dragged: Node[]) => {
+      if (previewType !== "chronological") return;
       const selection = draggedSelection(lead, dragged);
       const draggedById = new Map(selection.map((node) => [node.id, node]));
       const draggedIds = new Set(draggedById.keys());

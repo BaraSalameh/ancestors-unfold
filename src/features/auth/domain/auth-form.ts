@@ -50,7 +50,7 @@ export type AuthMode = "login" | "register";
 export type AuthView = "auth" | "verify" | "forgot" | "forgot-sent";
 export type AuthBusyAction = "verify" | "resend" | "forgot";
 
-export interface InvitationPrefill {
+interface InvitationPrefill {
   invited_email: string;
   invited_name_en: string;
   invited_name_ar: string;

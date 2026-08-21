@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Cake, User, UserPlus } from "lucide-react";
-import { ExpandableProfileImage, isMemberDeceased, type FamilyMember } from "@/features/members";
+import { ExpandableProfileImage } from "@/features/members/components";
+import { isMemberDeceased, type FamilyMember } from "@/features/members/domain";
 import { displayName, useI18n } from "@/shared/i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 import { familyStore } from "../client/family-store";

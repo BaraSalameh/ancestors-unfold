@@ -24,6 +24,7 @@ import { Route as MemberIdRouteImport } from './routes/member.$id'
 import { Route as InvitationTokenRouteImport } from './routes/invitation.$token'
 import { Route as EditIdRouteImport } from './routes/edit.$id'
 import { Route as TreeIdAddRouteImport } from './routes/tree.$id_.add'
+import { Route as TreeIdMemberMemberIdRouteImport } from './routes/tree.$id.member.$memberId'
 
 const SubfamiliesRoute = SubfamiliesRouteImport.update({
   id: '/subfamilies',
@@ -100,6 +101,11 @@ const TreeIdAddRoute = TreeIdAddRouteImport.update({
   path: '/tree/$id/add',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TreeIdMemberMemberIdRoute = TreeIdMemberMemberIdRouteImport.update({
+  id: '/member/$memberId',
+  path: '/member/$memberId',
+  getParentRoute: () => TreeIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -115,8 +121,9 @@ export interface FileRoutesByFullPath {
   '/edit/$id': typeof EditIdRoute
   '/invitation/$token': typeof InvitationTokenRoute
   '/member/$id': typeof MemberIdRoute
-  '/tree/$id': typeof TreeIdRoute
+  '/tree/$id': typeof TreeIdRouteWithChildren
   '/tree/$id/add': typeof TreeIdAddRoute
+  '/tree/$id/member/$memberId': typeof TreeIdMemberMemberIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -132,8 +139,9 @@ export interface FileRoutesByTo {
   '/edit/$id': typeof EditIdRoute
   '/invitation/$token': typeof InvitationTokenRoute
   '/member/$id': typeof MemberIdRoute
-  '/tree/$id': typeof TreeIdRoute
+  '/tree/$id': typeof TreeIdRouteWithChildren
   '/tree/$id/add': typeof TreeIdAddRoute
+  '/tree/$id/member/$memberId': typeof TreeIdMemberMemberIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -150,8 +158,9 @@ export interface FileRoutesById {
   '/edit/$id': typeof EditIdRoute
   '/invitation/$token': typeof InvitationTokenRoute
   '/member/$id': typeof MemberIdRoute
-  '/tree/$id': typeof TreeIdRoute
+  '/tree/$id': typeof TreeIdRouteWithChildren
   '/tree/$id_/add': typeof TreeIdAddRoute
+  '/tree/$id/member/$memberId': typeof TreeIdMemberMemberIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/member/$id'
     | '/tree/$id'
     | '/tree/$id/add'
+    | '/tree/$id/member/$memberId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/member/$id'
     | '/tree/$id'
     | '/tree/$id/add'
+    | '/tree/$id/member/$memberId'
   id:
     | '__root__'
     | '/'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/member/$id'
     | '/tree/$id'
     | '/tree/$id_/add'
+    | '/tree/$id/member/$memberId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -221,7 +233,7 @@ export interface RootRouteChildren {
   EditIdRoute: typeof EditIdRoute
   InvitationTokenRoute: typeof InvitationTokenRoute
   MemberIdRoute: typeof MemberIdRoute
-  TreeIdRoute: typeof TreeIdRoute
+  TreeIdRoute: typeof TreeIdRouteWithChildren
   TreeIdAddRoute: typeof TreeIdAddRoute
 }
 
@@ -332,8 +344,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TreeIdAddRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tree/$id/member/$memberId': {
+      id: '/tree/$id/member/$memberId'
+      path: '/member/$memberId'
+      fullPath: '/tree/$id/member/$memberId'
+      preLoaderRoute: typeof TreeIdMemberMemberIdRouteImport
+      parentRoute: typeof TreeIdRoute
+    }
   }
 }
+
+interface TreeIdRouteChildren {
+  TreeIdMemberMemberIdRoute: typeof TreeIdMemberMemberIdRoute
+}
+
+const TreeIdRouteChildren: TreeIdRouteChildren = {
+  TreeIdMemberMemberIdRoute: TreeIdMemberMemberIdRoute,
+}
+
+const TreeIdRouteWithChildren =
+  TreeIdRoute._addFileChildren(TreeIdRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -349,7 +379,7 @@ const rootRouteChildren: RootRouteChildren = {
   EditIdRoute: EditIdRoute,
   InvitationTokenRoute: InvitationTokenRoute,
   MemberIdRoute: MemberIdRoute,
-  TreeIdRoute: TreeIdRoute,
+  TreeIdRoute: TreeIdRouteWithChildren,
   TreeIdAddRoute: TreeIdAddRoute,
 }
 export const routeTree = rootRouteImport

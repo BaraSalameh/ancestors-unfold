@@ -4,19 +4,22 @@ import { handleBranchRequest } from "./branch-handler";
 import { handleBranchDeactivationRequest } from "./branch-deactivation-handler";
 import { handleBranchAttachmentRequest } from "./branch-attachment-handler";
 import { handleInvitationRequest } from "./invitation-handler";
-import { handleActivityRequest } from "./activity-handler";
+import { handleActivityRequest } from "@/features/activity/server";
 import { handleModerationRequest } from "./moderation-handler";
 import { handleMemberChangeRequest } from "./member-change-handler";
 import { handleAuthenticityConfigRequest } from "./authenticity-config-handler";
 import { handleContributorRemovalRequest } from "./contributor-removal-handler";
 import { handleOwnershipTransferRequest } from "./ownership-transfer-handler";
 import type { CollaborationSession as Session } from "./types";
+import { handleDashboardBootstrapRequest } from "./dashboard-bootstrap-handler";
 
 export async function handleCollaborationRequest(
   request: Request,
   session: Session,
   requestId: string,
 ): Promise<Response | undefined> {
+  const dashboardResponse = await handleDashboardBootstrapRequest(request, session, requestId);
+  if (dashboardResponse) return dashboardResponse;
   const url = new URL(request.url);
   const overviewResponse = await handleTreeOverviewRequest(request, url, session, requestId);
   if (overviewResponse) return overviewResponse;

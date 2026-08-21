@@ -1,11 +1,18 @@
-import type {
-  AnalysisBranch,
-  AnalysisEnvelope,
-  AnalysisMember,
-  AnalysisQueryDefinition,
-  SavedAnalysisView,
-  SummaryData,
-} from "../domain/types";
+import type { z } from "zod";
+import { ApiClientError, validatedApiRequest } from "@/shared/api/client";
+import type { AnalysisBranch, AnalysisQueryDefinition } from "../domain/types";
+import {
+  analysisCatalogSchema,
+  analysisEnvelopeSchema,
+  analysisMemberPageSchema,
+  analysisSummarySchema,
+  analysisTreeSchema,
+  branchReportRowSchema,
+  qualityReportSchema,
+  relationshipReportSchema,
+  savedAnalysisViewSchema,
+  successResponseSchema,
+} from "./analysis-response-schemas";
 
 export type AnalysisTree = {
   id: string;
@@ -25,23 +32,13 @@ export type AnalysisCatalog = {
   maximum_export_rows: number;
 };
 
-type MemberPage = {
-  items: AnalysisMember[];
-  total: number;
-  applied_filters: AnalysisQueryDefinition["filters"];
-  next_cursor: string | null;
-};
+type AnalysisRequestInit = Omit<RequestInit, "body"> & { body?: unknown };
 
-async function responseError(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as { code?: string };
-  return new Error(body.code ?? "REQUEST_FAILED");
-}
-
-async function analysisJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { credentials: "include", ...init });
-  if (!response.ok) throw await responseError(response);
-  return response.json() as Promise<T>;
-}
+const analysisJson = <Schema extends z.ZodTypeAny>(
+  schema: Schema,
+  url: string,
+  init?: AnalysisRequestInit,
+) => validatedApiRequest(schema, url, init);
 
 export function analysisScopeQuery(branchId: string | null, excludeWives = false) {
   const parameters = new URLSearchParams();
@@ -54,37 +51,51 @@ export function analysisScopeQuery(branchId: string | null, excludeWives = false
 const branchQuery = (branchId: string | null) => analysisScopeQuery(branchId);
 
 export const getAnalysisTree = (signal?: AbortSignal) =>
-  analysisJson<AnalysisTree>("/api/tree/current", { signal });
+  analysisJson(analysisTreeSchema, "/api/tree/current", { signal });
 export const getAnalysisCatalog = (treeId: string, signal?: AbortSignal) =>
-  analysisJson<AnalysisEnvelope<AnalysisCatalog>>(`/api/trees/${treeId}/analysis/catalog`, {
-    signal,
-  });
+  analysisJson(
+    analysisEnvelopeSchema(analysisCatalogSchema),
+    `/api/trees/${treeId}/analysis/catalog`,
+    { signal },
+  );
 export const getAnalysisSummary = (
   treeId: string,
   branchId: string | null,
   excludeWives = false,
   signal?: AbortSignal,
 ) =>
-  analysisJson<AnalysisEnvelope<SummaryData>>(
+  analysisJson(
+    analysisEnvelopeSchema(analysisSummarySchema),
     `/api/trees/${treeId}/analysis/summary${analysisScopeQuery(branchId, excludeWives)}`,
     { signal },
   );
-export const getAnalysisReport = <T>(
+export const getAnalysisReport = (
   treeId: string,
   branchId: string | null,
   report: "branches" | "relationships" | "quality",
   excludeWives = false,
   signal?: AbortSignal,
-) =>
-  analysisJson<AnalysisEnvelope<T>>(
+) => {
+  const schema =
+    report === "branches"
+      ? zArrayEnvelope(branchReportRowSchema)
+      : analysisEnvelopeSchema(
+          report === "relationships" ? relationshipReportSchema : qualityReportSchema,
+        );
+  return analysisJson(
+    schema,
     `/api/trees/${treeId}/analysis/query${analysisScopeQuery(branchId, excludeWives)}`,
     {
       method: "POST",
       signal,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ report }),
+      body: { report },
     },
   );
+};
+
+const zArrayEnvelope = <Schema extends z.ZodTypeAny>(schema: Schema) =>
+  analysisEnvelopeSchema(schema.array());
 
 export const getAnalysisMembers = (
   treeId: string,
@@ -93,34 +104,43 @@ export const getAnalysisMembers = (
   cursor: string | null,
   signal?: AbortSignal,
 ) =>
-  analysisJson<AnalysisEnvelope<MemberPage>>(
+  analysisJson(
+    analysisEnvelopeSchema(analysisMemberPageSchema),
     `/api/trees/${treeId}/analysis/members${branchQuery(branchId)}`,
     {
       method: "POST",
       signal,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...definition, cursor, limit: 50 }),
+      body: { ...definition, cursor, limit: 50 },
     },
   );
 
 export const getSavedAnalysisViews = (treeId: string) =>
-  analysisJson<AnalysisEnvelope<SavedAnalysisView[]>>(`/api/trees/${treeId}/analysis/views`);
+  analysisJson(
+    analysisEnvelopeSchema(savedAnalysisViewSchema.array()),
+    `/api/trees/${treeId}/analysis/views`,
+  );
 
 export const createAnalysisView = (
   treeId: string,
   name: string,
   definition: AnalysisQueryDefinition,
 ) =>
-  analysisJson<AnalysisEnvelope<SavedAnalysisView>>(`/api/trees/${treeId}/analysis/views`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name, definition }),
-  });
+  analysisJson(
+    analysisEnvelopeSchema(savedAnalysisViewSchema),
+    `/api/trees/${treeId}/analysis/views`,
+    {
+      method: "POST",
+      body: { name, definition },
+    },
+  );
 
 export const deleteAnalysisView = (treeId: string, viewId: string) =>
-  analysisJson<AnalysisEnvelope<{ ok: true }>>(`/api/trees/${treeId}/analysis/views/${viewId}`, {
-    method: "DELETE",
-  });
+  analysisJson(
+    analysisEnvelopeSchema(successResponseSchema),
+    `/api/trees/${treeId}/analysis/views/${viewId}`,
+    { method: "DELETE" },
+  );
 
 export async function downloadAnalysis(
   treeId: string,
@@ -134,7 +154,17 @@ export async function downloadAnalysis(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ ...definition, format }),
   });
-  if (!response.ok) throw await responseError(response);
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as unknown;
+    const code =
+      payload &&
+      typeof payload === "object" &&
+      "code" in payload &&
+      typeof payload.code === "string"
+        ? payload.code
+        : "REQUEST_FAILED";
+    throw new ApiClientError(code, response.status, payload);
+  }
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = url;

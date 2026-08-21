@@ -31,6 +31,14 @@ async function listInvitations(
   session: CollaborationSession,
   requestId: string,
 ): Promise<Response> {
+  return json(await readTreeInvitations(treeId, session, requestId));
+}
+
+export async function readTreeInvitations(
+  treeId: string,
+  session: CollaborationSession,
+  requestId: string,
+) {
   const result = await transaction(session.user_id, session.id, requestId, async (client) => {
     await requireTreeOwner(client, treeId, session.user_id);
     return client.query(
@@ -41,7 +49,7 @@ async function listInvitations(
       [treeId],
     );
   });
-  return json(result.rows);
+  return result.rows;
 }
 
 async function createInvitation(
