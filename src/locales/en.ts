@@ -744,6 +744,9 @@ export const en = {
   name_english: "Name",
   under_review: "Under Review",
   family_csv_import: "Import CSV",
+  family_csv_export: "Export CSV",
+  family_csv_exported: "Family tree CSV downloaded",
+  family_csv_export_failed: "The family tree CSV could not be downloaded. Try again.",
   family_csv_import_title: "Import a complete family tree",
   family_csv_import_description:
     "Validate members, spouses, parents, and branches, then add the imported family beside the current tree as an editable draft. You can connect them afterward.",

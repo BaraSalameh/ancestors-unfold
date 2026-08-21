@@ -4,6 +4,7 @@ import { handleTreeCatalogRequest } from "./tree-catalog-handler";
 import { handleTreeMetadataRequest } from "./tree-metadata-handler";
 import { handleTreeSnapshotRequest } from "./tree-snapshot-handler";
 import { handleFamilyCsvImportRequest } from "./family-csv-import-handler";
+import { handleFamilyCsvExportRequest } from "./family-csv-export-handler";
 
 type TreeHandler = (
   request: Request,
@@ -14,6 +15,7 @@ type TreeHandler = (
 
 const handlers: TreeHandler[] = [
   handleTreeCatalogRequest,
+  handleFamilyCsvExportRequest,
   handleFamilyCsvImportRequest,
   handleTreeSnapshotRequest,
   handleTreeAccessRequest,

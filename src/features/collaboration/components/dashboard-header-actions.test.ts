@@ -16,6 +16,21 @@ vi.mock("@tanstack/react-router", () => ({
   }) => createElement("a", { "data-dashboard-action": dashboardAction }, children),
 }));
 
+vi.mock("@/shared/ui/dropdown-menu", async () => {
+  const { createElement, Fragment } = await import("react");
+  const container = ({ children }: { children?: ReactNode }) =>
+    createElement(Fragment, null, children);
+  const child = ({ children }: { children?: ReactNode }) => children;
+  return {
+    DropdownMenu: container,
+    DropdownMenuContent: container,
+    DropdownMenuItem: container,
+    DropdownMenuLabel: container,
+    DropdownMenuSeparator: () => null,
+    DropdownMenuTrigger: child,
+  };
+});
+
 function renderActions(
   role: "owner" | "contributor",
   lang: Lang,
@@ -82,5 +97,10 @@ describe("dashboard header action order", () => {
     const markup = renderActions("contributor", "en", "read_only");
     expect(markup).toMatch(/data-dashboard-action="edit"[^>]*disabled/);
     expect(markup).not.toMatch(/data-dashboard-action="preview"[^>]*disabled/);
+  });
+
+  it("shows CSV export only in owner tree actions", () => {
+    expect(renderActions("owner", "en")).toContain("Export CSV");
+    expect(renderActions("contributor", "en")).not.toContain("Export CSV");
   });
 });

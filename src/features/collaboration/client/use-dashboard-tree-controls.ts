@@ -9,6 +9,7 @@ import {
 import { copyTreePreviewUrl } from "../pages/dashboard-share";
 import type { CurrentTree } from "../pages/dashboard-types";
 import { treeMetadataResponseSchema } from "./response-schemas";
+import { downloadFamilyCsv } from "@/features/trees";
 
 export function useDashboardTreeControls(
   tree: CurrentTree | undefined,
@@ -23,6 +24,7 @@ export function useDashboardTreeControls(
   const [countryCode, setCountryCode] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<"private" | "public">("private");
   const [managing, setManaging] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const openManage = () => {
     if (!tree || !canUseOwnerTreeControls(tree.role)) return;
     setNameEn(tree.name_en ?? "");
@@ -70,6 +72,18 @@ export function useDashboardTreeControls(
       toast.error(t("preview_link_copy_failed"));
     }
   };
+  const exportCsv = async () => {
+    if (exportingCsv || !tree || !canUseOwnerTreeControls(tree.role)) return;
+    setExportingCsv(true);
+    try {
+      await downloadFamilyCsv(tree.id, tree.name_en ?? tree.name_ar);
+      toast.success(t("family_csv_exported"));
+    } catch {
+      toast.error(t("family_csv_export_failed"));
+    } finally {
+      setExportingCsv(false);
+    }
+  };
   return {
     manageOpen,
     setManageOpen,
@@ -89,6 +103,8 @@ export function useDashboardTreeControls(
     openManage,
     manage,
     copyPreview,
+    exportingCsv,
+    exportCsv,
   };
 }
 

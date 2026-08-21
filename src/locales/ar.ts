@@ -726,6 +726,9 @@ export const ar = {
   citizenship_status: "حالة المواطنة",
   name_english: "الاسم",
   family_csv_import: "استيراد CSV",
+  family_csv_export: "تصدير CSV",
+  family_csv_exported: "تم تنزيل ملف CSV لشجرة العائلة",
+  family_csv_export_failed: "تعذر تنزيل ملف CSV لشجرة العائلة. حاول مجدداً.",
   family_csv_import_title: "استيراد شجرة عائلة كاملة",
   family_csv_import_description:
     "تحقق من الأفراد والأزواج والآباء والفروع، ثم أضف العائلة المستوردة بجانب الشجرة الحالية كمسودة قابلة للتعديل. يمكنك ربطهما لاحقًا.",

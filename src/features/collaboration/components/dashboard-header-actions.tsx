@@ -10,6 +10,7 @@ import {
   ChartNoAxesCombined,
   Eye,
   FileUp,
+  Download,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
@@ -79,6 +80,13 @@ function OwnerTreeActions({
             <FileUp aria-hidden="true" />
             {t("family_csv_import")}
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={treeControls.exportingCsv}
+          onSelect={() => void treeControls.exportCsv()}
+        >
+          <Download aria-hidden="true" />
+          {t("family_csv_export")}
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={Boolean(ownershipTransfer?.verified)}

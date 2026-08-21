@@ -9,48 +9,16 @@ import {
 } from "react";
 import { type Node, type Viewport, useReactFlow } from "reactflow";
 import type { useI18n } from "@/shared/i18n";
+import { canvasMapTransform, type CanvasMapTransform } from "../domain/canvas-navigation-map";
 
 type Translate = ReturnType<typeof useI18n>["t"];
-interface MapTransform {
-  minX: number;
-  minY: number;
-  offsetX: number;
-  offsetY: number;
-  scale: number;
-}
 const MAP_HEIGHT = 156;
 const NODE_WIDTH = 260;
 const NODE_HEIGHT = 150;
 
-function mapTransform(nodes: Node[], width: number, height: number): MapTransform | undefined {
-  if (nodes.length === 0 || width <= 0 || height <= 0) return undefined;
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (const node of nodes) {
-    minX = Math.min(minX, node.position.x);
-    minY = Math.min(minY, node.position.y);
-    maxX = Math.max(maxX, node.position.x + (node.width ?? NODE_WIDTH));
-    maxY = Math.max(maxY, node.position.y + (node.height ?? NODE_HEIGHT));
-  }
-  const padding = 12;
-  const scale = Math.min(
-    (width - padding * 2) / Math.max(1, maxX - minX),
-    (height - padding * 2) / Math.max(1, maxY - minY),
-  );
-  return {
-    minX,
-    minY,
-    scale,
-    offsetX: (width - (maxX - minX) * scale) / 2,
-    offsetY: (height - (maxY - minY) * scale) / 2,
-  };
-}
-
 function useDrawNavigationMap(
   mapRef: RefObject<HTMLCanvasElement | null>,
-  transformRef: MutableRefObject<MapTransform | undefined>,
+  transformRef: MutableRefObject<CanvasMapTransform | undefined>,
   canvasRef: RefObject<HTMLDivElement | null>,
   nodes: Node[],
   viewport: Viewport,
@@ -66,7 +34,7 @@ function useDrawNavigationMap(
     if (!context) return;
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, MAP_HEIGHT);
-    const transform = mapTransform(nodes, width, MAP_HEIGHT);
+    const transform = canvasMapTransform(nodes, width, MAP_HEIGHT);
     transformRef.current = transform;
     if (!transform) return;
     const color = getComputedStyle(map).color;
@@ -110,7 +78,7 @@ export function CanvasNavigationWidget({
   viewport: Viewport;
 }) {
   const mapRef = useRef<HTMLCanvasElement>(null);
-  const transformRef = useRef<MapTransform | undefined>(undefined);
+  const transformRef = useRef<CanvasMapTransform | undefined>(undefined);
   const draggingRef = useRef(false);
   const { setCenter, setViewport } = useReactFlow();
   useDrawNavigationMap(mapRef, transformRef, canvasRef, nodes, viewport);
